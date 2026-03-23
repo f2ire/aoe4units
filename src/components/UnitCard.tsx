@@ -1,5 +1,5 @@
 import React from 'react';
-import { AoE4Unit, getPrimaryWeapon, getArmorValue, getTotalCost, getTotalCostFromVariation } from '@/data/unified-units';
+import { AoE4Unit, getPrimaryWeapon, getArmorValue, getResistanceValue, getTotalCost } from '@/data/unified-units';
 import type { UnifiedVariation } from '@/data/unified-units';
 import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card';
 import { cn, formatClassNames } from '@/lib/utils';
@@ -87,7 +87,8 @@ export const UnitCard = ({
   const primaryWeapon = getPrimaryWeapon(displayData);
   const meleeArmor = getArmorValue(displayData, 'melee');
   const rangedArmor = getArmorValue(displayData, 'ranged');
-  const totalCost = variation ? getTotalCostFromVariation(variation) : (unit ? getTotalCost(unit) : 0);
+  const rangedResistance = getResistanceValue(displayData, 'ranged');
+  const totalCost = variation ? getTotalCost(variation) : (unit ? getTotalCost(unit) : 0);
   const costs = variation ? variation.costs : unit!.costs;
   const productionTime = (costs as unknown as { time?: number })?.time;
   const movement = 'movement' in displayData ? displayData.movement : undefined;
@@ -113,51 +114,20 @@ export const UnitCard = ({
   if (mode === 'versus' && versusMetrics?.opponentClasses && primaryWeapon?.modifiers?.length) {
     const opp = versusMetrics.opponentClasses.map(c => c.toLowerCase());
     const expandedOpp = new Set<string>(opp);
-    
-    // Log: Afficher les classes de l'unité ennemie
-    console.log(`%c[BONUS] Unité ennemie: ${displayData.name}`, 'color: #ff6b6b; font-weight: bold;');
-    console.log('Classes ennemies:', Array.from(expandedOpp));
-    
-    // Log: Afficher les classes ciblées par les bonus
-    const targetedClasses = new Set<string>();
-    
+
     for (const mod of primaryWeapon.modifiers as any[]) { // eslint-disable-line @typescript-eslint/no-explicit-any
       const spec = mod.target?.class;
       if (!spec) continue;
-      
-      // Ajouter les classes ciblées à l'ensemble
+
       const groups: string[][] = Array.isArray(spec) && spec.some(v => Array.isArray(v)) ? (spec as unknown as string[][]) : [spec as unknown as string[]];
-      groups.forEach(group => {
-        if (Array.isArray(group)) {
-          group.forEach(cls => {
-            const clsLower = cls.toLowerCase();
-            targetedClasses.add(clsLower);
-          });
-        }
-      });
-      
-      const applies = groups.some(group => {
-        if (!Array.isArray(group)) return false;
-        return group.every(req => {
-          const reqLower = req.toLowerCase();
-          const exists = expandedOpp.has(reqLower);
-          console.log(`  Vérification: "${reqLower}" existe? ${exists ? '✓' : '✗'}`);
-          return exists;
-        });
-      });
-      
+      const applies = groups.some(group =>
+        Array.isArray(group) && group.every(req => expandedOpp.has(req.toLowerCase()))
+      );
+
       if (applies) {
-        const val = (mod.value ?? mod.amount ?? 0) as number;
-        const targetName = formatClassNames(groups.flat());
-        console.log(`%c✓ Bonus appliqué: +${val} vs ${targetName}`, 'color: #51cf66; font-weight: bold;');
-        applicableBonus += val;
-      } else {
-        const targetName = formatClassNames(groups.flat());
-        console.log(`%c✗ Bonus NON appliqué: vs ${targetName}`, 'color: #ffa94d;');
+        applicableBonus += (mod.value ?? mod.amount ?? 0) as number;
       }
     }
-    
-    console.log('Classes ciblées par bonus:', Array.from(targetedClasses));
   }
 
   return (
@@ -306,7 +276,11 @@ export const UnitCard = ({
               <span className="text-muted-foreground">Ranged Armor</span>
               <span className={cn('flex items-center gap-1', getComparisonColor(rangedArmor, compareRangedArmor).color)}>
                 {getComparisonColor(rangedArmor, compareRangedArmor).symbol && <span className="text-xs">{getComparisonColor(rangedArmor, compareRangedArmor).symbol}</span>}
-                {Math.round(rangedArmor)}
+                <span
+                    title={rangedResistance > 0 ? `${rangedResistance}% damage resistance vs ranged attacks (applied after armor)` : undefined}
+                    className={rangedResistance > 0 ? 'underline decoration-dotted cursor-help' : undefined}>
+                  {Math.round(rangedArmor)}
+                </span>
               </span>
             </div>
             {movement && (
@@ -499,7 +473,14 @@ export const UnitCard = ({
               <div>
                 <div className="flex justify-between"><span className="text-muted-foreground">HP</span><span>{Math.round(displayData.hitpoints)}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Melee Armor</span><span>{Math.round(meleeArmor)}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Ranged Armor</span><span>{Math.round(rangedArmor)}</span></div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Ranged Armor</span>
+                  <span
+                    title={rangedResistance > 0 ? `${rangedResistance}% damage resistance vs ranged attacks (applied after armor)` : undefined}
+                    className={rangedResistance > 0 ? 'underline decoration-dotted cursor-help' : undefined}>
+                    {Math.round(rangedArmor)}
+                  </span>
+                </div>
               </div>
             </div>
 

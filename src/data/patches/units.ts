@@ -40,9 +40,10 @@ function transformMultiClassTargets(value: unknown): unknown {
 }
 
 export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
-  // Culverin: Transform multi-class targets to underscored single classes
   {
     id: 'culverin',
+    reason: 'aoe4world encodes composite class targets as nested string arrays (["naval","unit"]) instead of underscored identifiers ("naval_unit"). Applies transformMultiClassTargets to the whole unit, then fixes the remaining edge cases (naval_unit, war_elephant) on the age-4 variation.',
+    after: (unit: unknown) => transformMultiClassTargets(unit),
     variations: [
       {
         match: { age: 4 },
@@ -87,12 +88,10 @@ export function applyUnitPatches(unifiedUnits: unknown[]): unknown[] {
 
   return unifiedUnits.map((unit) => {
     const u = unit as Record<string, unknown>;
-    
-    // Appliquer la transformation globale des multi-class targets
-    let updated = transformMultiClassTargets(u);
-    
     const patch = unitPatches.find(p => p.id === u.id);
-    if (!patch) return updated;
+    if (!patch) return u;
+
+    let updated: unknown = u;
 
     updated = patch.update ? (deepMerge(updated, patch.update) as Record<string, unknown>) : { ...updated as Record<string, unknown> };
 

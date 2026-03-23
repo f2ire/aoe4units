@@ -19,6 +19,7 @@ export interface UnitVariationPatch<UnifiedVariation> {
 
 export interface UnitUnifiedPatch<UnifiedUnit, UnifiedVariation> {
   id: string; // id de l'unité (ex: 'spearman')
+  reason: string; // pourquoi ce patch existe (bug source, version concernée, comportement modélisé)
   update?: DeepPartial<UnifiedUnit>;
   variations?: UnitVariationPatch<UnifiedVariation>[];
   after?: (unit: UnifiedUnit) => UnifiedUnit; // échappatoire custom au besoin
@@ -39,6 +40,7 @@ export interface TechVariationPatch<TechnologyVariation> {
 
 export interface TechnologyPatch<Technology, TechnologyVariation> {
   id: string; // id de la technologie
+  reason: string; // pourquoi ce patch existe (bug source, version concernée, comportement modélisé)
   update?: DeepPartial<Technology>;
   variations?: TechVariationPatch<TechnologyVariation>[];
   after?: (tech: Technology) => Technology;

@@ -50,6 +50,11 @@ interface UnifiedArmor {
   value: number;
 }
 
+interface UnifiedResistance {
+  type: string;
+  value: number; // percentage (0-100): reduces incoming damage of that type by value%
+}
+
 interface UnifiedCosts {
   food: number;
   wood: number;
@@ -81,6 +86,7 @@ interface UnifiedVariation {
   hitpoints: number;
   weapons: UnifiedWeapon[];
   armor?: UnifiedArmor[];
+  resistance?: UnifiedResistance[];
   sight?: {
     line: number;
     height: number;
@@ -135,6 +141,7 @@ export interface AoE4Unit {
     oliveoil?: number;    // Huile d'olive (Byzantins) ou Silver (Macédoniens)
   };
   armor: UnifiedArmor[];
+  resistance?: UnifiedResistance[];
   weapons: UnifiedWeapon[];
   type: string;
   civs: string[];
@@ -171,6 +178,7 @@ export const aoe4Units: AoE4Unit[] = allUnits.map(unit => {
       oliveoil: baseVariation.costs.oliveoil,
     },
     armor: baseVariation.armor || [],
+    resistance: baseVariation.resistance,
     weapons: baseVariation.weapons,
     type: unit.type,
     civs: unit.civs,
@@ -185,10 +193,6 @@ export const aoe4Units: AoE4Unit[] = allUnits.map(unit => {
   };
 });
 
-// Log de chargement
-console.log(`✅ ${aoe4Units.length} unités AoE4 chargées depuis all-unified.json`);
-console.log(`📊 Dont ${aoe4Units.filter(u => u.unique).length} unités uniques`);
-console.log(`🏰 Total variations: ${allUnits.reduce((sum, u) => sum + u.variations.length, 0)}`);
 
 /**
  * Récupère une unité par son ID
@@ -283,12 +287,12 @@ export function getMaxAge(unitId: string, civAbbr: string): number {
 }
 
 /**
- * Calcule le coût total d'une unité (incluant les ressources secondaires)
+ * Calcule le coût total d'une unité ou variation (incluant les ressources secondaires)
  */
-export function getTotalCost(unit: AoE4Unit): number {
-  return unit.costs.food + 
-         unit.costs.wood + 
-         unit.costs.gold + 
+export function getTotalCost(unit: AoE4Unit | UnifiedVariation): number {
+  return unit.costs.food +
+         unit.costs.wood +
+         unit.costs.gold +
          unit.costs.stone +
          (unit.costs.oliveoil || 0);
 }
@@ -302,50 +306,21 @@ export function getArmorValue(unit: AoE4Unit | UnifiedVariation, armorType: stri
 }
 
 /**
+ * Récupère la résistance (%) pour un type de dégât donné
+ * Ex: getResistanceValue(ram, "ranged") → 95
+ */
+export function getResistanceValue(unit: AoE4Unit | UnifiedVariation, damageType: string): number {
+  const entry = unit.resistance?.find(r => r.type.toLowerCase() === damageType.toLowerCase());
+  return entry?.value || 0;
+}
+
+/**
  * Récupère l'arme principale de l'unité ou variation
  */
 export function getPrimaryWeapon(unit: AoE4Unit | UnifiedVariation): UnifiedWeapon | undefined {
   return unit.weapons[0];
 }
 
-/**
- * Calcule le coût total d'une variation
- */
-export function getTotalCostFromVariation(variation: UnifiedVariation): number {
-  return variation.costs.food + 
-         variation.costs.wood + 
-         variation.costs.gold + 
-         variation.costs.stone +
-         (variation.costs.oliveoil || 0);
-}
-
-/**
- * Détermine le gagnant d'un matchup simplifié
- * Calcul basé sur HP, dégâts, armure et vitesse d'attaque
- */
-export function determineWinner(unit1: AoE4Unit, unit2: AoE4Unit): string {
-  const weapon1 = getPrimaryWeapon(unit1);
-  const weapon2 = getPrimaryWeapon(unit2);
-  
-  if (!weapon1 || !weapon2) return 'draw';
-  
-  // Calcul simplifié basé sur HP, dégâts et armure
-  const armor1Type = weapon2.type === 'ranged' ? 'ranged' : 'melee';
-  const armor2Type = weapon1.type === 'ranged' ? 'ranged' : 'melee';
-  
-  const armor1 = getArmorValue(unit1, armor1Type);
-  const armor2 = getArmorValue(unit2, armor2Type);
-  
-  const effective1 = (unit1.hitpoints / 10) + weapon1.damage - (armor2 / 2);
-  const effective2 = (unit2.hitpoints / 10) + weapon2.damage - (armor1 / 2);
-  
-  if (Math.abs(effective1 - effective2) < 3) {
-    return 'draw';
-  }
-  
-  return effective1 > effective2 ? unit1.id : unit2.id;
-}
-
 // Exporter aussi les données brutes pour accès avancé
 export { allUnits as unifiedUnits };
-export type { UnifiedUnit, UnifiedVariation, UnifiedWeapon, UnifiedArmor, UnifiedCosts };
+export type { UnifiedUnit, UnifiedVariation, UnifiedWeapon, UnifiedArmor, UnifiedResistance, UnifiedCosts };

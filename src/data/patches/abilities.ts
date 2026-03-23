@@ -4,6 +4,7 @@ import { Ability, AbilityVariation } from "../unified-abilities";
 export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   {
     id: 'ability-camel-unease',
+    reason: 'Synthetic gameplay rule: aoe4world does not model the Camel Unease debuff. In-game, camel units passively reduce the attack of nearby horse cavalry by 20%. Modelled here as a versusOpponentDamageDebuff effect (×0.8).',
     uiTooltip: 'Versus mode: Reduces enemy horse cavalry damage by 20%',
     update: {
       effects: [
@@ -31,21 +32,20 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   },
   {
     id: 'ability-conversion',
-    after: (ability: Ability) => ({
-      ...ability,
-      hidden: true
-    })
+    reason: 'UI-only: Conversion is a monk ability that has no direct impact on unit combat stats. Hidden to avoid confusion in the ability selector.',
+    after: (ability: Ability) => ({ ...ability, hidden: true })
   },
   {
     id: 'ability-proselytize',
-    after: (ability: Ability) => ({
-      ...ability,
-      hidden: true
-    })
+    reason: 'UI-only: Proselytize is a monk ability that has no direct impact on unit combat stats. Hidden to avoid confusion in the ability selector.',
+    after: (ability: Ability) => ({ ...ability, hidden: true })
   }
 ];
 
-// Créer la nouvelle ability de charge
+// Synthetic ability — not a patch on existing data.
+// aoe4world does not model the charge attack mechanic. In-game, knights and ghulams
+// deal bonus damage on their first attack after a charge. The bonus scales with age
+// (knight: +10/+12/+14, ghulam: +5/+6) and is applied separately in combat.ts.
 function createChargeAttackAbility(): Ability {
   return {
     id: 'charge-attack',

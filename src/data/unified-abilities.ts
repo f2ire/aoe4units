@@ -30,8 +30,6 @@ const typedData = allAbilitiesData as AllAbilitiesData;
 const allAbilitiesRaw: Ability[] = typedData.data as Ability[];
 export const allAbilities: Ability[] = applyAbilityPatches(allAbilitiesRaw);
 
-console.log(`✅ ${allAbilities.length} abilities AoE4 chargées depuis all-optimized_abi.json`);
-
 // Propriétés de combat (réutilise la même liste que les technologies)
 const combatProperties = [
   'meleeAttack',

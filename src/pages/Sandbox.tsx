@@ -1,95 +1,18 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { aoe4Units, AoE4Unit, getUnitVariation, getAvailableAges, getMaxAge, getPrimaryWeapon, getArmorValue, getTotalCost, getTotalCostFromVariation } from "@/data/unified-units";
+import { aoe4Units, AoE4Unit, getAvailableAges, getPrimaryWeapon, getTotalCost } from "@/data/unified-units";
 import type { UnifiedVariation } from "@/data/unified-units";
-import { getTechnologiesForUnit, getActiveTechnologyVariationsWithTiers, applyTechnologyEffects, getAllTiersFromSameLine, allTechnologies, type UnitStats } from "@/data/unified-technologies";
-import { getAbilitiesForUnit, getActiveAbilityVariations } from "@/data/unified-abilities";
-import type { Ability, AbilityVariation } from "@/data/unified-abilities";
-import { CIVILIZATIONS, Civilization } from "@/data/civilizations";
+import { CIVILIZATIONS } from "@/data/civilizations";
 import { UnitCard } from "@/components/UnitCard";
-import { computeVersus, calculateEqualCostMultipliers, computeVersusAtEqualCost, getVersusDebuffMultiplier } from "@/lib/combat";
+import { computeVersus, computeVersusAtEqualCost, getVersusDebuffMultiplier } from "@/lib/combat";
 import { AgeSelector } from "@/components/AgeSelector";
 import { TechnologySelector } from "@/components/TechnologySelector";
 import { AbilitySelector } from "@/components/AbilitySelector";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { motion } from "framer-motion";
+import { useUnitSlot } from "@/hooks/useUnitSlot";
 
-// Fonction helper pour gérer le toggle exclusif des technologies à paliers
-// Helper: vérifier si une unité est disponible pour une civilisation donnée
-const isUnitAvailableForCiv = (unit: AoE4Unit, civ: string) => {
-  if (!unit) return false;
-  if (civ === "all") return true;
-  return unit.civs.includes(civ);
-};
-
-// Fonction helper pour gérer le toggle exclusif des technologies à paliers
-const handleTieredTechnologyToggle = (
-  techId: string,
-  activeTechnologies: Set<string>,
-  setActiveTechnologies: React.Dispatch<React.SetStateAction<Set<string>>>
-) => {
-  const tech = allTechnologies.find(t => t.id === techId);
-  if (!tech) return;
-  
-  // Obtenir tous les paliers de la même ligne
-  const allTiers = getAllTiersFromSameLine(tech);
-  const allTierIds = allTiers.map(t => t.id);
-  
-  const newSet = new Set(activeTechnologies);
-  
-  // Si la technologie cliquée est déjà active, la désactiver
-  if (newSet.has(techId)) {
-    newSet.delete(techId);
-  } else {
-    // Sinon, désactiver tous les autres paliers de la même ligne
-    allTierIds.forEach(id => newSet.delete(id));
-    // Et activer seulement celui cliqué
-    newSet.add(techId);
-  }
-  
-  setActiveTechnologies(newSet);
-};
-
-// Fonction pour catégoriser les unités
-const categorizeUnit = (unit: AoE4Unit): string => {
-  const classes = unit.classes.map(c => c.toLowerCase());
-  
-  // Cas spéciaux pour les éléphants
-  if (classes.includes('worker_elephant')) {
-    return 'other';
-  }
-  if (classes.includes('ballista_elephant')) {
-    return 'siege';
-  }
-  
-  // 1. Melee Infantry
-  if (classes.includes('infantry') && classes.includes('melee')) {
-    return 'melee_infantry';
-  }
-  // 2. Ranged Units (ranged mais pas siege ni ship)
-  if (classes.includes('ranged') && !classes.includes('siege') && !classes.includes('ship') && !classes.includes('naval_unit')) {
-    return 'ranged';
-  }
-  // 3. Monks (avant cavalry car certains moines sont montés)
-  if (classes.includes('monk') || classes.includes('religious') || classes.includes('healer_elephant')) {
-    return 'monk';
-  }
-  // 4. Cavalry
-  if (classes.includes('cavalry')) {
-    return 'cavalry';
-  }
-  // 5. Siege
-  if (classes.includes('siege')) {
-    return 'siege';
-  }
-  // 6. Ships
-  if (classes.includes('ship') || classes.includes('naval_unit')) {
-    return 'ship';
-  }
-  
-  return 'other';
-};
 
 const categoryNames: Record<string, string> = {
   melee_infantry: 'Melee Infantry',
@@ -150,296 +73,45 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
 
 const Sandbox = () => {
   const navigate = useNavigate();
-  const [isVersus, setIsVersus] = useState<boolean>(false); // toggle Versus vs Comparative
-  const [atEqualCost, setAtEqualCost] = useState<boolean>(false); // toggle At Equal Cost (versus only)
-  
-  // Filtres de civilisation indépendants
-  const [selectedCivAlly, setSelectedCivAlly] = useState<string>("all");
-  const [selectedCivEnemy, setSelectedCivEnemy] = useState<string>("all");
-  
-  // Âges sélectionnés (initialisés plus tard)
-  const [selectedAgeAlly, setSelectedAgeAlly] = useState<number>(4);
-  const [selectedAgeEnemy, setSelectedAgeEnemy] = useState<number>(4);
-  
-  // État d'ouverture/fermeture des catégories
-  const [openCategoriesAlly, setOpenCategoriesAlly] = useState<Record<string, boolean>>({
-    melee_infantry: true,
-    ranged: true,
-    cavalry: true,
-    siege: true,
-    monk: true,
-    ship: true,
-    other: true
-  });
-  
-  const [openCategoriesEnemy, setOpenCategoriesEnemy] = useState<Record<string, boolean>>({
-    melee_infantry: true,
-    ranged: true,
-    cavalry: true,
-    siege: true,
-    monk: true,
-    ship: true,
-    other: true
-  });
-  
-  // Toggle category visibility
-  const toggleCategoryAlly = (category: string) => {
-    setOpenCategoriesAlly(prev => ({ ...prev, [category]: !prev[category] }));
-  };
-  
-  const toggleCategoryEnemy = (category: string) => {
-    setOpenCategoriesEnemy(prev => ({ ...prev, [category]: !prev[category] }));
-  };
-  
-  // Filtrer les unités alliées par civilisation
-  const filteredUnitsAlly = useMemo(() => {
-    if (selectedCivAlly === "all") {
-      return aoe4Units;
-    }
-    return aoe4Units.filter(unit => unit.civs.includes(selectedCivAlly));
-  }, [selectedCivAlly]);
-  
-  // Filtrer les unités ennemies par civilisation
-  const filteredUnitsEnemy = useMemo(() => {
-    if (selectedCivEnemy === "all") {
-      return aoe4Units;
-    }
-    return aoe4Units.filter(unit => unit.civs.includes(selectedCivEnemy));
-  }, [selectedCivEnemy]);
-  
-  // Catégoriser les unités alliées
-  const categorizedUnitsAlly = useMemo(() => {
-    const categories: Record<string, AoE4Unit[]> = {};
-    filteredUnitsAlly.forEach(unit => {
-      const category = categorizeUnit(unit);
-      if (!categories[category]) {
-        categories[category] = [];
-      }
-      categories[category].push(unit);
-    });
-    return categories;
-  }, [filteredUnitsAlly]);
-  
-  // Catégoriser les unités ennemies
-  const categorizedUnitsEnemy = useMemo(() => {
-    const categories: Record<string, AoE4Unit[]> = {};
-    filteredUnitsEnemy.forEach(unit => {
-      const category = categorizeUnit(unit);
-      if (!categories[category]) {
-        categories[category] = [];
-      }
-      categories[category].push(unit);
-    });
-    return categories;
-  }, [filteredUnitsEnemy]);
-  
-  // Aucune unité sélectionnée par défaut
-  const [unit1, setUnit1] = useState<AoE4Unit | null>(null);
-  const [unit2, setUnit2] = useState<AoE4Unit | null>(null);
-  
-  // Variations actuelles selon l'âge sélectionné
-  const [variationAlly, setVariationAlly] = useState<UnifiedVariation | null>(null);
-  const [variationEnemy, setVariationEnemy] = useState<UnifiedVariation | null>(null);
-  
-  // Technologies actives
-  const [activeTechnologiesAlly, setActiveTechnologiesAlly] = useState<Set<string>>(new Set());
-  const [activeTechnologiesEnemy, setActiveTechnologiesEnemy] = useState<Set<string>>(new Set());
-  
-  // Abilities actives
-  const [activeAbilitiesAlly, setActiveAbilitiesAlly] = useState<Set<string>>(new Set());
-  const [activeAbilitiesEnemy, setActiveAbilitiesEnemy] = useState<Set<string>>(new Set());
-  
-  // Si la civilisation change et que l'unité sélectionnée n'est pas disponible, réinitialiser (Allié)
-  useEffect(() => {
-    if (unit1 && !isUnitAvailableForCiv(unit1, selectedCivAlly)) {
-      setUnit1(null);
-      setVariationAlly(null);
-      setActiveTechnologiesAlly(new Set());
-      setActiveAbilitiesAlly(new Set());
-    }
-  }, [selectedCivAlly, unit1]);
-  
-  // Si la civilisation change et que l'unité sélectionnée n'est pas disponible, réinitialiser (Ennemi)
-  useEffect(() => {
-    if (unit2 && !isUnitAvailableForCiv(unit2, selectedCivEnemy)) {
-      setUnit2(null);
-      setVariationEnemy(null);
-      setActiveTechnologiesEnemy(new Set());
-      setActiveAbilitiesEnemy(new Set());
-    }
-  }, [selectedCivEnemy, unit2]);
-  
-  // Mettre à jour l'âge maximum quand l'unité ou la civ change (Ally)
-  useEffect(() => {
-    if (unit1) {
-      const maxAge = getMaxAge(unit1.id, selectedCivAlly);
-      setSelectedAgeAlly(maxAge);
-    }
-  }, [unit1, selectedCivAlly]);
-  
-  // Mettre à jour l'âge maximum quand l'unité ou la civ change (Enemy)
-  useEffect(() => {
-    if (unit2) {
-      const maxAge = getMaxAge(unit2.id, selectedCivEnemy);
-      setSelectedAgeEnemy(maxAge);
-    }
-  }, [unit2, selectedCivEnemy]);
-  
-  // Mettre à jour la variation Ally quand l'unité, la civ ou l'âge change
-  useEffect(() => {
-    if (unit1) {
-      const variation = getUnitVariation(unit1.id, selectedCivAlly, selectedAgeAlly);
-      setVariationAlly(variation || null);
-    }
-  }, [unit1, selectedCivAlly, selectedAgeAlly]);
-  
-  // Mettre à jour la variation Enemy quand l'unité, la civ ou l'âge change
-  useEffect(() => {
-    if (unit2) {
-      const variation = getUnitVariation(unit2.id, selectedCivEnemy, selectedAgeEnemy);
-      setVariationEnemy(variation || null);
-    }
-  }, [unit2, selectedCivEnemy, selectedAgeEnemy]);
-  
-  // Calculer les technologies disponibles
-  const techsAlly = unit1 ? getTechnologiesForUnit(unit1.classes, selectedCivAlly, selectedAgeAlly, unit1.id) : [];
-  const techsEnemy = unit2 ? getTechnologiesForUnit(unit2.classes, selectedCivEnemy, selectedAgeEnemy, unit2.id) : [];
+  const [isVersus, setIsVersus] = useState<boolean>(false);
+  const [atEqualCost, setAtEqualCost] = useState<boolean>(false);
 
-  // Calculer les abilities disponibles (memoisées pour stabilité des dépendances)
-  const abilitiesAlly = useMemo<Ability[]>(() => {
-    return unit1 ? getAbilitiesForUnit(unit1.classes, selectedCivAlly, selectedAgeAlly, unit1.id) : [];
-  }, [unit1, selectedCivAlly, selectedAgeAlly]);
+  const ally = useUnitSlot();
+  const enemy = useUnitSlot();
 
-  const abilitiesEnemy = useMemo<Ability[]>(() => {
-    return unit2 ? getAbilitiesForUnit(unit2.classes, selectedCivEnemy, selectedAgeEnemy, unit2.id) : [];
-  }, [unit2, selectedCivEnemy, selectedAgeEnemy]);
+  const {
+    unit: unit1, setUnit: setUnit1,
+    selectedCiv: selectedCivAlly, setSelectedCiv: setSelectedCivAlly,
+    selectedAge: selectedAgeAlly, setSelectedAge: setSelectedAgeAlly,
+    variation: variationAlly,
+    activeTechnologies: activeTechnologiesAlly,
+    activeAbilities: activeAbilitiesAlly,
+    openCategories: openCategoriesAlly, toggleCategory: toggleCategoryAlly,
+    filteredUnits: filteredUnitsAlly,
+    categorizedUnits: categorizedUnitsAlly,
+    techs: techsAlly,
+    abilities: abilitiesAlly,
+    modifiedStats: modifiedAllyStats,
+    toggleTechnology: toggleTechnologyAlly,
+    toggleAbility: toggleAbilityAlly,
+  } = ally;
 
-  // Ajouter automatiquement aux sets les abilities dont active === 'always' (mais permettre de les désactiver)
-  useEffect(() => {
-    if (!unit1) return;
-    const defaults = abilitiesAlly
-      .filter(a => a.active === 'always' || a.variations?.some((v: AbilityVariation) => v.active === 'always'))
-      .map(a => a.id);
-    if (defaults.length === 0) return;
-    // N'ajouter les defaults que si l'utilisateur n'a encore rien sélectionné
-    setActiveAbilitiesAlly(prev => {
-      if (prev.size > 0) return prev; // l'utilisateur a déjà choisi, ne pas écraser
-      const merged = new Set(prev);
-      for (const id of defaults) merged.add(id);
-      return merged;
-    });
-  }, [unit1, selectedCivAlly, selectedAgeAlly, abilitiesAlly]);
-
-  useEffect(() => {
-    if (!unit2) return;
-    const defaults = abilitiesEnemy
-      .filter(a => a.active === 'always' || a.variations?.some((v: AbilityVariation) => v.active === 'always'))
-      .map(a => a.id);
-    if (defaults.length === 0) return;
-    // N'ajouter les defaults que si l'utilisateur n'a encore rien sélectionné
-    setActiveAbilitiesEnemy(prev => {
-      if (prev.size > 0) return prev;
-      const merged = new Set(prev);
-      for (const id of defaults) merged.add(id);
-      return merged;
-    });
-  }, [unit2, selectedCivEnemy, selectedAgeEnemy, abilitiesEnemy]);
-  
-  const modifiedAllyStats = useMemo(() => {
-    const allyData = variationAlly || unit1;
-    if (!allyData) return {
-      hitpoints: 0,
-      meleeAttack: 0,
-      rangedAttack: 0,
-      meleeArmor: 0,
-      rangedArmor: 0,
-      moveSpeed: 0,
-      attackSpeed: 0,
-      bonusDamage: []
-    };
-    
-    const allyWeapon = getPrimaryWeapon(allyData);
-    
-    // Stats de base (toujours recalculées depuis la source)
-    const baseStats: UnitStats = {
-      hitpoints: allyData.hitpoints,
-      meleeAttack: allyWeapon?.type === 'melee' ? (allyWeapon.damage || 0) : 0,
-      rangedAttack: (allyWeapon?.type === 'ranged' || allyWeapon?.type === 'siege') ? (allyWeapon.damage || 0) : 0,
-      meleeArmor: getArmorValue(allyData, "melee"),
-      rangedArmor: getArmorValue(allyData, "ranged"),
-      moveSpeed: 'movement' in allyData ? allyData.movement?.speed || 0 : 0,
-      attackSpeed: allyWeapon?.speed || 0,
-      maxRange: allyWeapon?.range?.max || 0,
-      burst: allyWeapon?.burst?.count || 1,
-      bonusDamage: allyWeapon?.modifiers || []
-    };
-    
-    // Obtenir les variations des technologies actives (incluant les paliers précédents automatiquement)
-    const techVariations = getActiveTechnologyVariationsWithTiers(
-      activeTechnologiesAlly,
-      selectedCivAlly,
-      selectedAgeAlly
-    );
-    
-    // Obtenir les variations des abilities actives
-    const abilityVariations = getActiveAbilityVariations(
-      activeAbilitiesAlly,
-      selectedCivAlly,
-      selectedAgeAlly
-    );
-    
-    // Appliquer les technologies + abilities depuis zéro
-    const withTechs = applyTechnologyEffects(baseStats, unit1?.classes || [], techVariations, unit1?.id);
-    return applyTechnologyEffects(withTechs, unit1?.classes || [], abilityVariations, unit1?.id);
-  }, [unit1, variationAlly, activeTechnologiesAlly, activeAbilitiesAlly, selectedCivAlly, selectedAgeAlly]);
-  
-  const modifiedEnemyStats = useMemo(() => {
-    const enemyData = variationEnemy || unit2;
-    if (!enemyData) return {
-      hitpoints: 0,
-      meleeAttack: 0,
-      rangedAttack: 0,
-      meleeArmor: 0,
-      rangedArmor: 0,
-      moveSpeed: 0,
-      attackSpeed: 0,
-      bonusDamage: []
-    };
-    
-    const enemyWeapon = getPrimaryWeapon(enemyData);
-    
-    // Stats de base (toujours recalculées depuis la source)
-    const baseStats: UnitStats = {
-      hitpoints: enemyData.hitpoints,
-      meleeAttack: enemyWeapon?.type === 'melee' ? (enemyWeapon.damage || 0) : 0,
-      rangedAttack: (enemyWeapon?.type === 'ranged' || enemyWeapon?.type === 'siege') ? (enemyWeapon.damage || 0) : 0,
-      meleeArmor: getArmorValue(enemyData, "melee"),
-      rangedArmor: getArmorValue(enemyData, "ranged"),
-      moveSpeed: 'movement' in enemyData ? enemyData.movement?.speed || 0 : 0,
-      attackSpeed: enemyWeapon?.speed || 0,
-      maxRange: enemyWeapon?.range?.max || 0,
-      burst: enemyWeapon?.burst?.count || 1,
-      bonusDamage: enemyWeapon?.modifiers || []
-    };
-    
-    // Obtenir les variations des technologies actives (incluant les paliers précédents automatiquement)
-    const techVariations = getActiveTechnologyVariationsWithTiers(
-      activeTechnologiesEnemy,
-      selectedCivEnemy,
-      selectedAgeEnemy
-    );
-    
-    // Obtenir les variations des abilities actives
-    const abilityVariations = getActiveAbilityVariations(
-      activeAbilitiesEnemy,
-      selectedCivEnemy,
-      selectedAgeEnemy
-    );
-    
-    // Appliquer les technologies + abilities depuis zéro
-    const withTechs = applyTechnologyEffects(baseStats, unit2?.classes || [], techVariations, unit2?.id);
-    return applyTechnologyEffects(withTechs, unit2?.classes || [], abilityVariations, unit2?.id);
-  }, [unit2, variationEnemy, activeTechnologiesEnemy, activeAbilitiesEnemy, selectedCivEnemy, selectedAgeEnemy]);
+  const {
+    unit: unit2, setUnit: setUnit2,
+    selectedCiv: selectedCivEnemy, setSelectedCiv: setSelectedCivEnemy,
+    selectedAge: selectedAgeEnemy, setSelectedAge: setSelectedAgeEnemy,
+    variation: variationEnemy,
+    activeTechnologies: activeTechnologiesEnemy,
+    activeAbilities: activeAbilitiesEnemy,
+    openCategories: openCategoriesEnemy, toggleCategory: toggleCategoryEnemy,
+    filteredUnits: filteredUnitsEnemy,
+    categorizedUnits: categorizedUnitsEnemy,
+    techs: techsEnemy,
+    abilities: abilitiesEnemy,
+    modifiedStats: modifiedEnemyStats,
+    toggleTechnology: toggleTechnologyEnemy,
+    toggleAbility: toggleAbilityEnemy,
+  } = enemy;
 
   // Créer les variations avec les technologies appliquées
   const modifiedVariationAlly = variationAlly ? (() => {
@@ -590,7 +262,7 @@ const Sandbox = () => {
     maxRange: modifiedAllyStats.maxRange || 0,
     bonusDamage: modifiedAllyStats.bonusDamage || [],
     chargeBonus: getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly),
-    cost: variationAlly ? getTotalCostFromVariation(variationAlly) : (unit1 ? getTotalCost(unit1) : 0),
+    cost: variationAlly ? getTotalCost(variationAlly) : (unit1 ? getTotalCost(unit1) : 0),
     costs: variationAlly ? variationAlly.costs : (unit1 ? unit1.costs : undefined),
     population: 'costs' in (variationAlly || unit1 || {}) ? (variationAlly || unit1 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
     productionTime: 'costs' in (variationAlly || unit1 || {}) ? (variationAlly || unit1 as any)?.costs?.time : undefined // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -617,7 +289,7 @@ const Sandbox = () => {
     maxRange: modifiedEnemyStats.maxRange || 0,
     bonusDamage: modifiedEnemyStats.bonusDamage || [],
     chargeBonus: getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy),
-    cost: variationEnemy ? getTotalCostFromVariation(variationEnemy) : (unit2 ? getTotalCost(unit2) : 0),
+    cost: variationEnemy ? getTotalCost(variationEnemy) : (unit2 ? getTotalCost(unit2) : 0),
     costs: variationEnemy ? variationEnemy.costs : (unit2 ? unit2.costs : undefined),
     population: 'costs' in (variationEnemy || unit2 || {}) ? (variationEnemy || unit2 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
     productionTime: 'costs' in (variationEnemy || unit2 || {}) ? (variationEnemy || unit2 as any)?.costs?.time : undefined // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -1005,23 +677,13 @@ const Sandbox = () => {
                     <TechnologySelector
                       technologies={techsAlly}
                       activeTechnologies={activeTechnologiesAlly}
-                      onToggle={(techId) => {
-                        handleTieredTechnologyToggle(techId, activeTechnologiesAlly, setActiveTechnologiesAlly);
-                      }}
+                      onToggle={toggleTechnologyAlly}
                       orientation="left"
                     />
                     <AbilitySelector
                       abilities={abilitiesAlly}
                       activeAbilities={activeAbilitiesAlly}
-                      onToggle={(abilityId) => {
-                        const newSet = new Set(activeAbilitiesAlly);
-                        if (newSet.has(abilityId)) {
-                          newSet.delete(abilityId);
-                        } else {
-                          newSet.add(abilityId);
-                        }
-                        setActiveAbilitiesAlly(newSet);
-                      }}
+                      onToggle={toggleAbilityAlly}
                       orientation="left"
                     />
                   </div>
@@ -1096,22 +758,12 @@ const Sandbox = () => {
                       technologies={techsEnemy}
                       activeTechnologies={activeTechnologiesEnemy}
                       orientation="right"
-                      onToggle={(techId) => {
-                        handleTieredTechnologyToggle(techId, activeTechnologiesEnemy, setActiveTechnologiesEnemy);
-                      }}
+                      onToggle={toggleTechnologyEnemy}
                     />
                     <AbilitySelector
                       abilities={abilitiesEnemy}
                       activeAbilities={activeAbilitiesEnemy}
-                      onToggle={(abilityId) => {
-                        const newSet = new Set(activeAbilitiesEnemy);
-                        if (newSet.has(abilityId)) {
-                          newSet.delete(abilityId);
-                        } else {
-                          newSet.add(abilityId);
-                        }
-                        setActiveAbilitiesEnemy(newSet);
-                      }}
+                      onToggle={toggleAbilityEnemy}
                       orientation="right"
                     />
                   </div>
@@ -1177,8 +829,8 @@ const Sandbox = () => {
               } else if (allyHasWeapon && enemyHasWeapon) {
                 // Les deux ont une arme -> utiliser la logique normale de versus
                 isDraw = versusData.winner === 'draw';
-                leftIsWinner = !isDraw && versusData.winner === versusData.attacker.id && versusData.attacker.timeToKill !== null && versusData.defender.timeToKill !== null && versusData.attacker.timeToKill < versusData.defender.timeToKill;
-                rightIsWinner = !isDraw && versusData.winner === versusData.defender.id && versusData.attacker.timeToKill !== null && versusData.defender.timeToKill !== null && versusData.defender.timeToKill < versusData.attacker.timeToKill;
+                leftIsWinner = !isDraw && versusData.winner === versusData.attacker.id;
+                rightIsWinner = !isDraw && versusData.winner === versusData.defender.id;
               } else {
                 // Les deux n'ont pas d'arme -> Draw
                 isDraw = true;
@@ -1252,23 +904,13 @@ const Sandbox = () => {
                         <TechnologySelector
                           technologies={techsAlly}
                           activeTechnologies={activeTechnologiesAlly}
-                          onToggle={(techId) => {
-                            handleTieredTechnologyToggle(techId, activeTechnologiesAlly, setActiveTechnologiesAlly);
-                          }}
+                          onToggle={toggleTechnologyAlly}
                           orientation="left"
                         />
                         <AbilitySelector
                           abilities={abilitiesAlly}
                           activeAbilities={activeAbilitiesAlly}
-                          onToggle={(abilityId) => {
-                            const newSet = new Set(activeAbilitiesAlly);
-                            if (newSet.has(abilityId)) {
-                              newSet.delete(abilityId);
-                            } else {
-                              newSet.add(abilityId);
-                            }
-                            setActiveAbilitiesAlly(newSet);
-                          }}
+                          onToggle={toggleAbilityAlly}
                           orientation="left"
                         />
                       </div>
@@ -1311,23 +953,13 @@ const Sandbox = () => {
                         <TechnologySelector
                           technologies={techsEnemy}
                           activeTechnologies={activeTechnologiesEnemy}
-                          onToggle={(techId) => {
-                            handleTieredTechnologyToggle(techId, activeTechnologiesEnemy, setActiveTechnologiesEnemy);
-                          }}
+                          onToggle={toggleTechnologyEnemy}
                           orientation="right"
                         />
                         <AbilitySelector
                           abilities={abilitiesEnemy}
                           activeAbilities={activeAbilitiesEnemy}
-                          onToggle={(abilityId) => {
-                            const newSet = new Set(activeAbilitiesEnemy);
-                            if (newSet.has(abilityId)) {
-                              newSet.delete(abilityId);
-                            } else {
-                              newSet.add(abilityId);
-                            }
-                            setActiveAbilitiesEnemy(newSet);
-                          }}
+                          onToggle={toggleAbilityEnemy}
                           orientation="right"
                         />
                       </div>

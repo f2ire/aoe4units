@@ -3,9 +3,9 @@ import { deepMerge } from './types';
 import type { Technology, TechnologyVariation } from '../unified-technologies';
 
 export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>[] = [
-  // camel-support: ensure both meleeArmor and rangedArmor are present on the variation
   {
     id: 'camel-support',
+    reason: 'aoe4world only lists one armor type for this tech; the actual in-game effect grants +2 melee AND +2 ranged armor to infantry. Both effects are declared explicitly here.',
     variations: [
       {
         match: { id: 'camel-support-4' },
@@ -31,9 +31,9 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     ]
   },
 
-  // adjustable-crossbars: augmente le burst de +1 pour Mangonel
   {
     id: 'adjustable-crossbars',
+    reason: 'aoe4world does not model the burst projectile increase for Mangonel. This tech adds +1 projectile per volley in-game, represented here as a burst +1 effect.',
     update: {
       effects: [
         {
@@ -47,9 +47,9 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     }
   },
 
-  // ability-quick-strike: reduce attackSpeed by 0.5 but augment attackSpeed multiply 0.5 for ghulam (preserve unknown effect)
   {
     id: 'ability-quick-strike',
+    reason: 'aoe4world reports this ability with incomplete effects for Ghulam. In-game it reduces attack cycle time by 0.5s then multiplies it by 0.5 — both effects are required to match observed DPS.',
     variations: [
       {
         match: { id: 'ability-quick-strike-1' },
@@ -75,9 +75,9 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     ]
   },
 
-  // composite-bows: keep user-selected multiplier and tooltip
   {
     id: 'composite-bows',
+    reason: 'aoe4world reports the attack speed multiplier as 0.75 (−25%) but in-game testing shows the actual reduction is ~−23% (×0.76923). The tooltip in-game is also misleading (claims −33%).',
     uiTooltip: '⚠️ The actual attack speed reduction is -30%, not -33% as shown in the tooltip.',
     variations: [
       {
@@ -97,9 +97,9 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     ]
   },
 
-  // geometry: add effects targeting trebuchets (+20% base damage and bonus damage)
   {
     id: 'geometry',
+    reason: 'aoe4world does not include trebuchets in the effect targets for this tech. In-game, Geometry grants +20% ranged attack and +20% bonus damage vs buildings/naval to all trebuchet variants.',
     update: {
       effects: [
         {
@@ -129,9 +129,9 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     }
   },
 
-  // chemistry: add effects targeting gunpowder siege/warship units (+25% bonus damage)
   {
     id: 'chemistry',
+    reason: 'aoe4world does not list the bonus damage targets for Chemistry on gunpowder units. In-game, Chemistry grants +25% bonus damage vs war elephants, buildings, naval units and infantry to gunpowder siege and warships.',
     update: {
       effects: [
         {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { aoe4Units, determineWinner, AoE4Unit } from "@/data/unified-units";
+import { aoe4Units, AoE4Unit } from "@/data/unified-units";
+import { computeVersus } from "@/lib/combat";
 import { UnitCard } from "@/components/UnitCard";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
@@ -47,10 +48,12 @@ const Quiz = () => {
 
   if (!matchup) return <div className="min-h-screen flex items-center justify-center">Chargement...</div>;
 
+  const matchupWinner = computeVersus(matchup.unit1, matchup.unit2).winner;
+
   const handleChoice = (chosenUnitId: string) => {
     if (!matchup || feedback) return;
 
-    const winner = determineWinner(matchup.unit1, matchup.unit2);
+    const winner = matchupWinner;
     const isCorrect = winner === chosenUnitId || winner === "draw";
 
     setFeedback(isCorrect ? "correct" : "wrong");
@@ -73,6 +76,7 @@ const Quiz = () => {
   };
 
   if (!matchup) return null;
+
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-8">
@@ -103,7 +107,7 @@ const Quiz = () => {
                 side="left"
                 onClick={() => handleChoice(matchup.unit1.id)}
                 className={
-                  feedback === "correct" && determineWinner(matchup.unit1, matchup.unit2) === matchup.unit1.id
+                  feedback === "correct" && matchupWinner === matchup.unit1.id
                     ? "border-success"
                     : feedback === "wrong"
                     ? "opacity-50"
@@ -126,7 +130,7 @@ const Quiz = () => {
                 side="right"
                 onClick={() => handleChoice(matchup.unit2.id)}
                 className={
-                  feedback === "correct" && determineWinner(matchup.unit1, matchup.unit2) === matchup.unit2.id
+                  feedback === "correct" && matchupWinner === matchup.unit2.id
                     ? "border-success"
                     : feedback === "wrong"
                     ? "opacity-50"
