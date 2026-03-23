@@ -55,7 +55,7 @@ export interface Technology {
   icon: string;
   description: string;
   variations: TechnologyVariation[];
-  effects?: TechnologyEffect[]; // Effects au niveau de la technologie (all-optimized_tec.json)
+  effects?: TechnologyEffect[]; // Effects at the technology level (all-optimized_tec.json)
 }
 import allTechnologiesData from './all-optimized_tec.json';
 import { applyTechnologyPatches } from './patches/technologies';
@@ -64,7 +64,7 @@ import { applyTechnologyPatches } from './patches/technologies';
 const allTechnologiesRaw: Technology[] = allTechnologiesData.data as Technology[];
 export const allTechnologies: Technology[] = applyTechnologyPatches(allTechnologiesRaw) as Technology[];
 
-// Filtrer les technologies qui affectent les stats de combat
+// Filter technologies that affect combat stats
 const combatProperties = [
   'meleeAttack',
   'rangedAttack', 
@@ -72,58 +72,58 @@ const combatProperties = [
   'rangedArmor',
   'hitpoints',
   'moveSpeed',
-  'maxRange',         // Portée maximale
-  'attackSpeed',      // Vitesse d'attaque
-  'bonusDamage',      // Dégâts bonus
-  'siegeAttack',      // Dégâts de siège (propriété spéciale aux armes siege)
-  'gunpowderAttack',  // Dégâts de poudre à canon (propriété spéciale aux armes gunpowder)
-  'burst'             // Nombre de projectiles
+  'maxRange',         // Maximum range
+  'attackSpeed',      // Attack speed
+  'bonusDamage',      // Bonus damage
+  'siegeAttack',      // Siege damage (special property for siege weapons)
+  'gunpowderAttack',  // Gunpowder damage (special property for gunpowder weapons)
+  'burst'             // Number of projectiles
 ];
 
-// Classes de cibles non-combattantes à exclure
+// Non-combatant target classes to exclude
 const nonCombatTargets = [
-  'hunt',           // Animaux sauvages
-  'herdable',       // Moutons, etc.
-  'wildlife',       // Faune
-  'gaia',           // Entités neutres
-  'building',       // Bâtiments (sauf si c'est une unité de siège)
-  'economic'        // Unités économiques
+  'hunt',           // Wild animals
+  'herdable',       // Sheep, etc.
+  'wildlife',       // Fauna
+  'gaia',           // Neutral entities
+  'building',       // Buildings (unless it is a siege unit)
+  'economic'        // Economic units
 ];
 
 export function isCombatTechnology(tech: Technology): boolean {
-  // Vérifier les effects au niveau de la technologie (all-optimized_tec.json)
+  // Check effects at the technology level (all-optimized_tec.json)
   const techLevelEffects = tech.effects;
   if (techLevelEffects && techLevelEffects.length > 0) {
     const hasCombatEffect = techLevelEffects.some(effect => {
-      // Vérifier si c'est une propriété de combat
+      // Check whether it is a combat property
       if (!combatProperties.includes(effect.property)) return false;
-      
-      // Exclure les effets qui ciblent uniquement des non-combattants
+
+      // Exclude effects that target only non-combatants
       if (effect.target?.class) {
         const targetClasses = effect.target.class.flat();
-        // Si toutes les cibles sont non-combattantes, ignorer cet effet
-        const allNonCombat = targetClasses.every((cls: string) => 
+        // If all targets are non-combatants, ignore this effect
+        const allNonCombat = targetClasses.every((cls: string) =>
           nonCombatTargets.some(nonCombat => cls.includes(nonCombat))
         );
         if (allNonCombat) return false;
       }
-      
+
       return true;
     });
     if (hasCombatEffect) return true;
   }
 
-  // Aussi vérifier les effects au niveau des variations (fichiers individuels unified_tec/)
-  return tech.variations.some(variation => 
+  // Also check effects at the variation level (individual unified_tec/ files)
+  return tech.variations.some(variation =>
     variation.effects?.some(effect => {
-      // Vérifier si c'est une propriété de combat
+      // Check whether it is a combat property
       if (!combatProperties.includes(effect.property)) return false;
-      
-      // Exclure les effets qui ciblent uniquement des non-combattants
+
+      // Exclude effects that target only non-combatants
       if (effect.target?.class) {
         const targetClasses = effect.target.class.flat();
-        // Si toutes les cibles sont non-combattantes, ignorer cet effet
-        const allNonCombat = targetClasses.every((cls: string) => 
+        // If all targets are non-combatants, ignore this effect
+        const allNonCombat = targetClasses.every((cls: string) =>
           nonCombatTargets.some(nonCombat => cls.includes(nonCombat))
         );
         if (allNonCombat) return false;
@@ -134,10 +134,10 @@ export function isCombatTechnology(tech: Technology): boolean {
   );
 }
 
-// Obtenir les technologies de combat filtrées
+// Get filtered combat technologies
 export const combatTechnologies = allTechnologies.filter(isCombatTechnology);
 
-// Vérifier si une technologie affecte une unité
+// Check whether a technology affects a unit
 export function technologyAffectsUnit(
   tech: TechnologyVariation,
   unitClasses: string[],
@@ -150,14 +150,14 @@ export function technologyAffectsUnit(
     let matchesByClass = false;
     let matchesByIdAsClass = false;
     
-    // Vérifier la sélection par ID (exact match avec l'ID de l'unité)
+    // Check selection by ID (exact match with the unit ID)
     if (effect.select?.id && unitId) {
-      matchesById = effect.select.id.some(id => 
+      matchesById = effect.select.id.some(id =>
         id.toLowerCase() === unitId.toLowerCase()
       );
-      
-      // NOUVEAU: Vérifier aussi si un ID de la tech correspond à une classe de l'unité
-      // (ex: tech a id="archer", unité a classe="archer")
+
+      // NEW: Also check whether a tech ID matches a unit class
+      // (e.g. tech has id="archer", unit has class="archer")
       matchesByIdAsClass = effect.select.id.some(id =>
         unitClasses.some(unitClass => 
           unitClass.toLowerCase() === id.toLowerCase()
@@ -165,9 +165,9 @@ export function technologyAffectsUnit(
       );
     }
     
-    // Vérifier par classe
+    // Check by class
     if (effect.select?.class) {
-      // Pour chaque groupe de classes, vérifier si l'unité a TOUTES les classes du groupe (AND)
+      // For each class group, check whether the unit has ALL classes in the group (AND)
       matchesByClass = effect.select.class.some(classGroup =>
         classGroup.every(className => 
           unitClasses.some(unitClass => 
@@ -177,12 +177,12 @@ export function technologyAffectsUnit(
       );
     }
     
-    // Retourner vrai si l'unité correspond par ID OU par classe OU par ID-comme-classe (logique OR)
+    // Return true if the unit matches by ID OR by class OR by ID-as-class (OR logic)
     return matchesById || matchesByClass || matchesByIdAsClass;
   });
 }
 
-// Obtenir les technologies disponibles pour une unité
+// Get available technologies for a unit
 export function getTechnologiesForUnit(
   unitClasses: string[],
   civAbbr: string,
@@ -190,14 +190,14 @@ export function getTechnologiesForUnit(
   unitId?: string
 ): Technology[] {
   const techs = combatTechnologies.filter(tech => {
-    // Vérifier si la civ a accès à cette techno
+    // Check whether the civ has access to this tech
     if (!tech.civs.includes(civAbbr) && civAbbr !== 'all') {
       return false;
     }
     
-    // Ne plus filtrer par âge minimum - toutes les technologies sont sélectionnables
+    // No longer filter by minimum age - all technologies are selectable
     
-    // Vérifier si les effects au niveau de la technologie affectent cette unité (all-optimized_tec.json)
+    // Check whether the technology-level effects affect this unit (all-optimized_tec.json)
     if (tech.effects && tech.effects.length > 0) {
       const affectsUnit = tech.effects.some(effect => {
         let matchesById = false;
@@ -225,7 +225,7 @@ export function getTechnologiesForUnit(
       if (affectsUnit) return true;
     }
     
-    // Vérifier si au moins une variation affecte cette unité (fichiers individuels)
+    // Check whether at least one variation affects this unit (individual files)
     return tech.variations.some(variation => {
       if (civAbbr !== 'all' && !variation.civs.includes(civAbbr)) return false;
       return technologyAffectsUnit(variation, unitClasses, unitId);
@@ -235,7 +235,7 @@ export function getTechnologiesForUnit(
   return techs;
 }
 
-// Obtenir la variation correcte d'une technologie
+// Get the correct variation of a technology
 export function getTechnologyVariation(
   techId: string,
   civAbbr: string,
@@ -244,18 +244,18 @@ export function getTechnologyVariation(
   const tech = allTechnologies.find(t => t.id === techId);
   if (!tech) return null;
 
-  // Vérifier que la technologie est disponible à cet âge
+  // Check that the technology is available at this age
   if (tech.minAge > age) return null;
 
-  // Trouver la variation pour cette civ
-  // Note: Dans all-optimized_tec.json, les variations n'ont pas de champ "age"
-  // L'âge est déterminé par tech.minAge
+  // Find the variation for this civ
+  // Note: In all-optimized_tec.json, variations have no "age" field
+  // The age is determined by tech.minAge
   const variation = tech.variations.find(v => {
     if (civAbbr !== 'all' && !v.civs.includes(civAbbr)) return false;
     return true;
   });
 
-  // Si pas de variation trouvée, essayer de prendre la première qui a des effects
+  // If no variation found, try to take the first one that has effects
   let finalVariation = variation;
   if (!finalVariation) {
     finalVariation = tech.variations.find(v => v.effects && v.effects.length > 0) || tech.variations[0] || null;
@@ -263,8 +263,8 @@ export function getTechnologyVariation(
 
   if (!finalVariation) return null;
 
-  // Si les effects sont au niveau de la technologie (all-optimized_tec.json),
-  // fusionner avec la variation
+  // If effects are at the technology level (all-optimized_tec.json),
+  // merge with the variation
   if (tech.effects && tech.effects.length > 0) {
     return {
       ...finalVariation,
@@ -275,7 +275,7 @@ export function getTechnologyVariation(
   return finalVariation;
 }
 
-// Appliquer les effets des technologies aux stats
+// Apply technology effects to stats
 export interface UnitStats {
   hitpoints: number;
   meleeAttack: number;
@@ -295,11 +295,11 @@ export function applyTechnologyEffects(
   activeTechnologies: TechnologyVariation[],
   unitId?: string
 ): UnitStats {
-  // Faire une copie profonde des bonusDamage pour éviter les mutations
+  // Deep-copy bonusDamage to avoid mutations
   const modifiedStats = { 
     ...baseStats,
     bonusDamage: baseStats.bonusDamage ? baseStats.bonusDamage.map((bonus: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-      // Copie profonde en gérant les structures différentes
+      // Deep copy handling different structures
       const copy = { ...bonus };
       if (bonus.classes) copy.classes = [...bonus.classes];
       if (bonus.target?.class) {
@@ -312,7 +312,7 @@ export function applyTechnologyEffects(
     }) : []
   };
 
-  // Collecter tous les effets applicables
+  // Collect all applicable effects
   interface ApplicableEffect {
     statKey: keyof UnitStats;
     effectType: 'change' | 'multiply';
@@ -334,18 +334,18 @@ export function applyTechnologyEffects(
     if (!tech.effects) continue;
 
     for (const effect of tech.effects) {
-      // Vérifier si l'effet s'applique à cette unité
+      // Check whether the effect applies to this unit
       let matchesById = false;
       let matchesByClass = false;
       let matchesByIdAsClass = false;
       
-      // Vérifier par ID (exact match avec l'ID de l'unité)
+      // Check by ID (exact match with the unit ID)
       if (effect.select?.id && unitId) {
-        matchesById = effect.select.id.some(id => 
+        matchesById = effect.select.id.some(id =>
           id.toLowerCase() === unitId.toLowerCase()
         );
-        
-        // Vérifier aussi si un ID de la tech correspond à une classe de l'unité
+
+        // Also check whether a tech ID matches a unit class
         matchesByIdAsClass = effect.select.id.some(id =>
           unitClasses.some(unitClass => 
             unitClass.toLowerCase() === id.toLowerCase()
@@ -353,7 +353,7 @@ export function applyTechnologyEffects(
         );
       }
       
-      // Vérifier par classe
+      // Check by class
       if (effect.select?.class) {
         matchesByClass = effect.select.class.some(classGroup =>
           classGroup.every(className => 
@@ -364,15 +364,15 @@ export function applyTechnologyEffects(
         );
       }
       
-      // L'effet s'applique si l'unité correspond par ID OU par classe OU par ID-comme-classe
+      // The effect applies if the unit matches by ID OR by class OR by ID-as-class
       const matches = matchesById || matchesByClass || matchesByIdAsClass;
       if (!matches) continue;
 
-      // Déterminer la propriété concernée
+      // Determine the relevant property
       const property = effect.property;
       if (!combatProperties.includes(property)) continue;
 
-      // Traiter les propriétés spéciales
+      // Handle special properties
       if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst') {
         specialEffects.push({
           property,
@@ -382,7 +382,7 @@ export function applyTechnologyEffects(
         continue;
       }
 
-      // Traiter les bonus de dégâts (type: 'bonus')
+      // Handle damage bonuses (type: 'bonus')
       if ((property === 'meleeAttack' || property === 'rangedAttack' || property === 'siegeAttack' || property === 'gunpowderAttack') && effect.type === 'bonus') {
         specialEffects.push({
           property,
@@ -418,7 +418,7 @@ export function applyTechnologyEffects(
           continue;
       }
 
-      // Ajouter l'effet à la liste
+      // Add the effect to the list
       applicableEffects.push({
         statKey,
         effectType: effect.effect as 'change' | 'multiply',
@@ -427,39 +427,39 @@ export function applyTechnologyEffects(
     }
   }
 
-  // IMPORTANT: Appliquer les effets dans le bon ordre
-  // 1. D'abord tous les "change" (additions)
-  // 2. Ensuite tous les "multiply" (pourcentages)
-  
-  // Phase 1: Appliquer les additions (change)
+  // IMPORTANT: Apply effects in the correct order
+  // 1. First all "change" (additions)
+  // 2. Then all "multiply" (percentages)
+
+  // Phase 1: Apply additions (change)
   for (const effect of applicableEffects) {
     if (effect.effectType === 'change') {
-      // Exclure attackSpeed et bonusDamage qui ne sont pas modifiables ici
+      // Exclude attackSpeed and bonusDamage which are not modifiable here
       if (effect.statKey === 'attackSpeed' || effect.statKey === 'bonusDamage') continue;
-      
-      // Pour moveSpeed, "change" représente un pourcentage
+
+      // For moveSpeed, "change" represents a percentage
       if (effect.statKey === 'moveSpeed') {
         (modifiedStats[effect.statKey] as number) *= (1 + effect.value / 100);
       } else {
-        // Pour les autres stats, "change" est une addition pure
+        // For other stats, "change" is a pure addition
         (modifiedStats[effect.statKey] as number) += effect.value;
       }
     }
   }
   
-  // Phase 2: Appliquer les multiplications (multiply)
+  // Phase 2: Apply multiplications (multiply)
   for (const effect of applicableEffects) {
     if (effect.effectType === 'multiply') {
-      // Exclure attackSpeed et bonusDamage qui ne sont pas modifiables ici
+      // Exclude attackSpeed and bonusDamage which are not modifiable here
       if (effect.statKey === 'attackSpeed' || effect.statKey === 'bonusDamage') continue;
-      
+
       (modifiedStats[effect.statKey] as number) *= effect.value;
     }
   }
 
-  // Phase 3: Appliquer les effets spéciaux (maxRange, attackSpeed, bonus damage)
-  
-  // Appliquer maxRange
+  // Phase 3: Apply special effects (maxRange, attackSpeed, bonus damage)
+
+  // Apply maxRange
   for (const effect of specialEffects) {
     if (effect.property === 'maxRange' && typeof modifiedStats.maxRange === 'number') {
       if (effect.effectType === 'change') {
@@ -470,7 +470,7 @@ export function applyTechnologyEffects(
     }
   }
   
-  // Appliquer attackSpeed
+  // Apply attackSpeed
   for (const effect of specialEffects) {
     if (effect.property === 'attackSpeed' && typeof modifiedStats.attackSpeed === 'number') {
       if (effect.effectType === 'change') {
@@ -481,7 +481,7 @@ export function applyTechnologyEffects(
     }
   }
   
-  // Appliquer burst
+  // Apply burst
   for (const effect of specialEffects) {
     if (effect.property === 'burst' && typeof modifiedStats.burst === 'number') {
       if (effect.effectType === 'change') {
@@ -492,26 +492,26 @@ export function applyTechnologyEffects(
     }
   }
 
-  // Appliquer les bonus de dégâts
+  // Apply damage bonuses
   if (modifiedStats.bonusDamage && Array.isArray(modifiedStats.bonusDamage)) {
     for (const effect of specialEffects) {
       if (effect.type === 'bonus' && effect.target?.class) {
-        // Flatten et normaliser les cibles de l'effect
+        // Flatten and normalise the effect targets
         const effectTargetClasses = effect.target.class.flat().map((c: string) => c.toLowerCase());
         
         const existingBonus = modifiedStats.bonusDamage.find((bonus: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-          // Chercher par classes (pour les bonus créés par les technologies)
+          // Search by classes (for bonuses created by technologies)
           if (bonus.classes && Array.isArray(bonus.classes)) {
             const bonusClasses = bonus.classes.map((c: string) => c.toLowerCase());
-            // Les sets doivent être identiques
+            // Sets must be identical
             return effectTargetClasses.length === bonusClasses.length &&
               effectTargetClasses.every(tc => bonusClasses.includes(tc));
           }
-          
-          // Chercher par property et target.class (pour les modifiers de weapon originaux)
+
+          // Search by property and target.class (for original weapon modifiers)
           if (bonus.property && bonus.target?.class) {
             const bonusTargetClasses = bonus.target.class.flat().map((c: string) => c.toLowerCase());
-            // Les sets doivent être identiques
+            // Sets must be identical
             return effectTargetClasses.length === bonusTargetClasses.length &&
               effectTargetClasses.every(tc => bonusTargetClasses.includes(tc));
           }
@@ -519,14 +519,14 @@ export function applyTechnologyEffects(
         });
 
         if (existingBonus) {
-          // Modifier le bonus existant
+          // Modify the existing bonus
           if (effect.effectType === 'change') {
             existingBonus.value += effect.value;
           } else if (effect.effectType === 'multiply') {
             existingBonus.value *= effect.value;
           }
         } else {
-          // Ajouter un nouveau bonus (seulement si c'est une addition, pas une multiplication)
+          // Add a new bonus (only if it is an addition, not a multiplication)
           if (effect.effectType === 'change') {
             modifiedStats.bonusDamage.push({
               value: effect.value,
@@ -544,15 +544,15 @@ export function applyTechnologyEffects(
   return modifiedStats;
 }
 
-// Obtenir toutes les technologies de la même ligne (tous les paliers)
+// Get all technologies from the same line (all tiers)
 export function getAllTiersFromSameLine(tech: Technology): Technology[] {
   const tierInfo = getTechnologyTier(tech);
-  if (!tierInfo) return [tech]; // Pas une technologie à paliers, retourner juste elle-même
+  if (!tierInfo) return [tech]; // Not a tiered technology, return it alone
   
   const baseName = getTechnologyBaseName(tech.displayClasses[0]);
   const allTiers: Technology[] = [];
   
-  // Chercher tous les paliers de 1 à maxTier
+  // Search for all tiers from 1 to maxTier
   for (let tier = 1; tier <= tierInfo.maxTier; tier++) {
     const targetPattern = `${baseName} ${tier}/${tierInfo.maxTier}`;
     const tierTech = allTechnologies.find(t => t.displayClasses[0] === targetPattern);
@@ -565,12 +565,12 @@ export function getAllTiersFromSameLine(tech: Technology): Technology[] {
   return allTiers.length > 0 ? allTiers : [tech];
 }
 
-// Détecter si une technologie fait partie d'une ligne à paliers
+// Detect whether a technology belongs to a tiered line
 export function getTechnologyTier(tech: Technology): { tier: number; maxTier: number } | null {
   const displayClass = tech.displayClasses[0];
   if (!displayClass) return null;
   
-  // Rechercher le pattern "X/Y" dans displayClasses (ex: "Melee Damage Technology 2/3")
+  // Search for the "X/Y" pattern in displayClasses (e.g. "Melee Damage Technology 2/3")
   const match = displayClass.match(/(\d+)\/(\d+)/);
   if (!match) return null;
   
@@ -580,13 +580,13 @@ export function getTechnologyTier(tech: Technology): { tier: number; maxTier: nu
   };
 }
 
-// Extraire la catégorie de base d'une technologie (sans le palier)
+// Extract the base category of a technology (without the tier)
 export function getTechnologyBaseName(displayClass: string): string {
-  // Enlever le pattern "X/Y" pour obtenir le nom de base
+  // Remove the "X/Y" pattern to obtain the base name
   return displayClass.replace(/\s*\d+\/\d+\s*$/, '').trim();
 }
 
-// Obtenir toutes les technologies précédentes de la même ligne (cumul automatique)
+// Get all preceding technologies from the same line (automatic cumulation)
 export function getPreviousTierTechnologies(
   tech: Technology,
   activeTechnologies: Set<string>
@@ -597,8 +597,8 @@ export function getPreviousTierTechnologies(
   const baseName = getTechnologyBaseName(tech.displayClasses[0]);
   const previousTechs: Technology[] = [];
   
-  // Chercher toutes les technologies de tiers inférieurs de la même ligne
-  // IMPORTANT : On ne vérifie PAS si elles sont actives, car le palier supérieur les inclut automatiquement
+  // Search for all lower-tier technologies from the same line
+  // IMPORTANT: We do NOT check whether they are active, because a higher tier includes them automatically
   for (let tier = 1; tier < tierInfo.tier; tier++) {
     const targetPattern = `${baseName} ${tier}/${tierInfo.maxTier}`;
     
@@ -614,7 +614,7 @@ export function getPreviousTierTechnologies(
   return previousTechs;
 }
 
-// Obtenir toutes les variations actives incluant les paliers précédents
+// Get all active variations including preceding tiers
 export function getActiveTechnologyVariationsWithTiers(
   activeTechnologies: Set<string>,
   civAbbr: string,
@@ -627,13 +627,13 @@ export function getActiveTechnologyVariationsWithTiers(
     const tech = allTechnologies.find(t => t.id === techId);
     if (!tech || processedTechs.has(techId)) continue;
     
-    // Obtenir les technologies de paliers inférieurs
+    // Get lower-tier technologies
     const previousTierTechs = getPreviousTierTechnologies(tech, activeTechnologies);
     
-    // Ajouter les paliers précédents d'abord
+    // Add preceding tiers first
     for (const prevTech of previousTierTechs) {
       if (!processedTechs.has(prevTech.id)) {
-        // Utiliser l'âge minimum de la technologie précédente, pas l'âge actuel
+        // Use the minimum age of the preceding technology, not the current age
         const variation = getTechnologyVariation(prevTech.id, civAbbr, prevTech.minAge);
         if (variation) {
           variations.push(variation);
@@ -642,7 +642,7 @@ export function getActiveTechnologyVariationsWithTiers(
       }
     }
     
-    // Puis ajouter la technologie actuelle
+    // Then add the current technology
     const variation = getTechnologyVariation(techId, civAbbr, tech.minAge);
     if (variation) {
       variations.push(variation);
@@ -653,28 +653,28 @@ export function getActiveTechnologyVariationsWithTiers(
   return variations;
 }
 
-// Catégoriser les technologies par type d'effet principal
+// Categorise technologies by main effect type
 export function categorizeTechnology(tech: Technology): string {
-  // Utiliser les effects au niveau de la technologie (all-optimized_tec.json) ou au niveau de la variation
+  // Use effects at the technology level (all-optimized_tec.json) or at the variation level
   const effects = tech.effects || tech.variations[0]?.effects || [];
   
-  // Vérifier si la tech fait partie d'une séquence à paliers (X/Y dans displayClasses)
+  // Check whether the tech belongs to a tiered sequence (X/Y in displayClasses)
   const tierInfo = getTechnologyTier(tech);
   const hasTier = !!tierInfo;
 
-  // Une tech est sur une ligne séparée si:
-  // - Elle est unique: true OU
-  // - Elle n'a pas de palier (pas de X/Y) et est unique: false (standalone)
+  // A tech is on a separate line if:
+  // - It is unique: true OR
+  // - It has no tier (no X/Y) and unique: false (standalone)
   const isSeparateTech = tech.unique || !hasTier;
 
-  // Si la technologie a plusieurs propriétés différentes, la mettre dans "Other"
-  // SAUF si toutes les propriétés sont des attaques (meleeAttack, rangedAttack, siegeAttack, gunpowderAttack)
+  // If the technology has several different properties, put it in "Other"
+  // UNLESS all properties are attacks (meleeAttack, rangedAttack, siegeAttack, gunpowderAttack)
   const uniqueProperties = new Set(effects.map(e => e.property));
   const attackProps = new Set(['meleeAttack', 'rangedAttack', 'siegeAttack', 'gunpowderAttack']);
   const allAttacks = [...uniqueProperties].every(p => attackProps.has(p));
   
-  // Si la techno fait partie d'une famille X/Y, utiliser la catégorie du premier palier
-  // pour assurer que toute la famille reste dans la même catégorie
+  // If the tech belongs to an X/Y family, use the category of the first tier
+  // to ensure the entire family stays in the same category
   if (hasTier && tierInfo.tier > 1) {
     const baseName = getTechnologyBaseName(tech.displayClasses[0]);
     const firstTier = allTechnologies.find(t => 
@@ -685,9 +685,9 @@ export function categorizeTechnology(tech: Technology): string {
     }
   }
   
-  // Si la techno n'affecte que des propriétés d'armure (meleeArmor et/ou rangedArmor),
-  // la catégoriser dans Armor (plutôt que Other). On choisit Armor-Ranged si rangedArmor
-  // est présent, sinon Armor-Melee.
+  // If the tech only affects armor properties (meleeArmor and/or rangedArmor),
+  // categorise it as Armor (rather than Other). Armor-Ranged is chosen if rangedArmor
+  // is present, otherwise Armor-Melee.
   const armorProps = new Set(['meleeArmor', 'rangedArmor']);
   const allArmor = [...uniqueProperties].every(p => armorProps.has(p));
   if (allArmor) {
@@ -696,7 +696,7 @@ export function categorizeTechnology(tech: Technology): string {
       : (uniqueProperties.has('rangedArmor') ? 'Armor-Ranged' : 'Armor-Melee');
   }
 
-  // Si plusieurs propriétés et que ce ne sont pas toutes des attaques
+  // If multiple properties and not all of them are attacks
   if (uniqueProperties.size > 1 && !allAttacks) {
     return 'Other';
   }

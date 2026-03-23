@@ -1,7 +1,7 @@
 /**
- * Chargement et parsing des abilities d'AoE4
+ * Loading and parsing of AoE4 abilities
  * Source: all-optimized_abi.json
- * Les abilities sont traitées comme des technologies spéciales (onglet séparé)
+ * Abilities are treated as special technologies (separate tab)
  */
 
 import allAbilitiesData from './all-optimized_abi.json';
@@ -9,7 +9,7 @@ import { applyAbilityPatches } from './patches/abilities';
 import type { Technology, TechnologyVariation, TechnologyEffect } from './unified-technologies';
 import { getTechnologiesForUnit } from './unified-technologies';
 
-// Les abilities ont la même structure que les technologies
+// Abilities share the same structure as technologies
 export interface Ability extends Technology {
   active?: string;
 }
@@ -26,11 +26,11 @@ interface AllAbilitiesData {
 
 const typedData = allAbilitiesData as AllAbilitiesData;
 
-// Appliquer les patchs spécifiques aux abilités
+// Apply patches specific to abilities
 const allAbilitiesRaw: Ability[] = typedData.data as Ability[];
 export const allAbilities: Ability[] = applyAbilityPatches(allAbilitiesRaw);
 
-// Propriétés de combat (réutilise la même liste que les technologies)
+// Combat properties (reuses the same list as technologies)
 const combatProperties = [
   'meleeAttack',
   'rangedAttack', 
@@ -54,10 +54,10 @@ const nonCombatTargets = [
 ];
 
 /**
- * Filtre les abilities qui affectent les stats de combat
+ * Filters abilities that affect combat stats
  */
 export function isCombatAbility(ability: Ability): boolean {
-  // Vérifier les effects au niveau de l'ability
+  // Check effects at the ability level
   const abilityLevelEffects = ability.effects;
   if (abilityLevelEffects && abilityLevelEffects.length > 0) {
     const hasCombatEffect = abilityLevelEffects.some(effect => {
@@ -81,10 +81,10 @@ export function isCombatAbility(ability: Ability): boolean {
     if (hasCombatEffect) return true;
   }
 
-  // Vérifier les effects au niveau des variations
-  return ability.variations.some(variation => 
+  // Check effects at the variation level
+  return ability.variations.some(variation =>
     variation.effects?.some(effect => {
-      // Si l'ability cible une unité spécifique (select.id), la considérer comme ability de combat
+      // If the ability targets a specific unit (select.id), treat it as a combat ability
       if (effect.select?.id && effect.select.id.length > 0) {
         return true;
       }
@@ -107,7 +107,7 @@ export function isCombatAbility(ability: Ability): boolean {
 export const combatAbilities = allAbilities.filter(isCombatAbility);
 
 /**
- * Vérifie si une ability affecte une unité donnée
+ * Checks whether an ability affects a given unit
  */
 export function abilityAffectsUnit(
   ability: AbilityVariation,
@@ -121,8 +121,8 @@ export function abilityAffectsUnit(
     let matchesByClass = false;
     let matchesByIdAsClass = false;
     
-    // Pour les effets versus debuff, seul select.id compte (l'unité qui possède l'abilité)
-    // La partie select.class définit la cible de l'effet, pas qui possède l'abilité
+    // For versus debuff effects, only select.id matters (the unit that owns the ability)
+    // The select.class part defines the target of the effect, not who owns the ability
     if (effect.property === 'versusOpponentDamageDebuff') {
       if (effect.select?.id && unitId) {
         matchesById = effect.select.id.some(id => 
@@ -132,35 +132,35 @@ export function abilityAffectsUnit(
       return matchesById;
     }
     
-    // Pour les autres effets, logique normale
+    // For other effects, normal logic
     if (effect.select?.id && unitId) {
-      matchesById = effect.select.id.some(id => 
+      matchesById = effect.select.id.some(id =>
         id.toLowerCase() === unitId.toLowerCase()
       );
-      
+
       matchesByIdAsClass = effect.select.id.some(id =>
-        unitClasses.some(unitClass => 
+        unitClasses.some(unitClass =>
           unitClass.toLowerCase() === id.toLowerCase()
         )
       );
     }
-    
+
     if (effect.select?.class) {
       matchesByClass = effect.select.class.some(classGroup =>
-        classGroup.every(className => 
-          unitClasses.some(unitClass => 
+        classGroup.every(className =>
+          unitClasses.some(unitClass =>
             unitClass.toLowerCase() === className.toLowerCase()
           )
         )
       );
     }
-    
+
     return matchesById || matchesByClass || matchesByIdAsClass;
   });
 }
 
 /**
- * Obtient les abilities disponibles pour une unité
+ * Gets the available abilities for a unit
  */
 export function getAbilitiesForUnit(
   unitClasses: string[],
@@ -169,21 +169,21 @@ export function getAbilitiesForUnit(
   unitId?: string
 ): Ability[] {
   const abilities = combatAbilities.filter(ability => {
-    // Filtrer les abilities marquées comme hidden
+    // Filter abilities marked as hidden
     if ((ability as any).hidden) return false; // eslint-disable-line @typescript-eslint/no-explicit-any
     
     if (ability.civs.length > 0 && !ability.civs.includes(civAbbr) && civAbbr !== 'all') {
       return false;
     }
     
-    // Vérifier les effects au niveau de l'ability
+    // Check effects at the ability level
     if (ability.effects && ability.effects.length > 0) {
       const affectsUnit = ability.effects.some(effect => {
         let matchesById = false;
         let matchesByClass = false;
         let matchesByIdAsClass = false;
         
-        // Pour les effets versus debuff, seul select.id compte
+        // For versus debuff effects, only select.id matters
         if (effect.property === 'versusOpponentDamageDebuff') {
           if (effect.select?.id && unitId) {
             matchesById = effect.select.id.some(id => id.toLowerCase() === unitId.toLowerCase());
@@ -191,7 +191,7 @@ export function getAbilitiesForUnit(
           return matchesById;
         }
         
-        // Pour les autres effets, logique normale
+        // For other effects, normal logic
         if (effect.select?.id && unitId) {
           matchesById = effect.select.id.some(id => id.toLowerCase() === unitId.toLowerCase());
           matchesByIdAsClass = effect.select.id.some(id =>
@@ -213,12 +213,12 @@ export function getAbilitiesForUnit(
       if (affectsUnit) return true;
     }
     
-    // Vérifier au niveau des variations
+    // Check at the variation level
     return ability.variations.some(variation => {
       if (variation.civs.length > 0 && civAbbr !== 'all' && !variation.civs.includes(civAbbr)) return false;
 
-      // Si cette ability est déverrouillée par une technologie (ex: "technologies/camel-support")
-      // et que la technologie du même nom/ID s'applique déjà à l'unité, ignorer l'ability
+      // If this ability is unlocked by a technology (e.g. "technologies/camel-support")
+      // and the technology with the same name/ID already applies to the unit, ignore the ability
       if (variation.unlockedBy && Array.isArray(variation.unlockedBy)) {
         const techRefs = variation.unlockedBy
           .map(u => typeof u === 'string' ? u : '')
@@ -241,7 +241,7 @@ export function getAbilitiesForUnit(
 }
 
 /**
- * Obtient la variation correcte d'une ability
+ * Gets the correct variation of an ability
  */
 export function getAbilityVariation(
   abilityId: string,
@@ -265,10 +265,10 @@ export function getAbilityVariation(
 
   if (!finalVariation) return null;
 
-  // Fusionner avec les effects au niveau de l'ability si présents
+  // Merge with ability-level effects if present
   if (ability.effects && ability.effects.length > 0) {
-    // Conserver les effets de la variation ET ceux de l'ability (concaténation),
-    // afin de ne pas écraser des patchs appliqués aux variations.
+    // Keep both the variation's effects AND the ability's effects (concatenation),
+    // so that patches applied to variations are not overwritten.
     const variationEffects = finalVariation.effects || [];
     const mergedEffects = [...variationEffects, ...ability.effects];
     return {
@@ -281,7 +281,7 @@ export function getAbilityVariation(
 }
 
 /**
- * Obtient toutes les variations actives d'abilities (similaire aux technologies)
+ * Gets all active ability variations (similar to technologies)
  */
 export function getActiveAbilityVariations(
   activeAbilities: Set<string>,

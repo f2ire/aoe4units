@@ -114,7 +114,7 @@ function createChargeAttackAbility(): Ability {
 }
 
 export function applyAbilityPatches(abilities: Ability[]): Ability[] {
-  // Ajouter l'ability de charge créée
+  // Add the created charge ability
   const chargeAttackAbility = createChargeAttackAbility();
   const abilitiesWithCharge = [...abilities, chargeAttackAbility];
 

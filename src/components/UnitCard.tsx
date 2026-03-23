@@ -40,7 +40,7 @@ interface UnitCardProps {
   isSelected?: boolean;
   mode?: "comparative" | "versus";
   versusMetrics?: VersusMetricsProps;
-  // Stats de comparaison (unité adverse)
+  // Comparison stats (opponent unit)
   compareHp?: number;
   compareAttack?: number;
   compareMeleeArmor?: number;
@@ -50,7 +50,7 @@ interface UnitCardProps {
   compareMaxRange?: number;
   bonusDamage?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   compareBonusDamage?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
-  maxBonusDamageLines?: number; // Nombre maximum de lignes de bonus pour l'alignement
+  maxBonusDamageLines?: number; // Maximum number of bonus lines for alignment
   chargeBonus?: number;
   compareChargeBonus?: number;
   compareCost?: number;
@@ -109,7 +109,7 @@ export const UnitCard = ({
     <span className="ml-2 inline-flex items-center text-xs font-semibold text-yellow-500" title="Winner" aria-label="Winner">👑</span>
   ) : null;
 
-  // Calculer bonus applicable contre l'adversaire (versus mode seulement)
+  // Calculate applicable bonus against the opponent (versus mode only)
   let applicableBonus = 0;
   if (mode === 'versus' && versusMetrics?.opponentClasses && primaryWeapon?.modifiers?.length) {
     const opp = versusMetrics.opponentClasses.map(c => c.toLowerCase());
@@ -208,7 +208,7 @@ export const UnitCard = ({
                     {bonusDamage?.map((modifier: any, idx: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
                       if (modifier.hidden) return <div key={idx} className="h-4" />;
                       
-                      // Affichage spécial pour le bonus de charge
+                      // Special display for charge bonus
                       if (modifier.isChargeBonus) {
                         const compareModifier = compareBonusDamage?.[idx];
                         const comparison = compareModifier && !compareModifier.hidden && compareModifier.isChargeBonus
@@ -333,7 +333,7 @@ export const UnitCard = ({
 
         {mode === 'versus' && versusMetrics && (
           <div className="space-y-3">
-            {/* Bouton pour afficher/masquer la formule */}
+            {/* Button to show/hide the formula */}
             {versusMetrics.multiplier && versusMetrics.multiplier > 1 && (
               <button
                 onClick={() => setShowFormula(!showFormula)}
@@ -343,7 +343,7 @@ export const UnitCard = ({
               </button>
             )}
             
-            {/* Affichage de la formule détaillée */}
+            {/* Detailed formula display */}
             {showFormula && versusMetrics.multiplier && (
               <div className="text-[10px] leading-relaxed bg-muted/60 p-2 rounded space-y-1 border border-border">
                 <div className="font-semibold text-primary mb-1">📐 Math Breakdown:</div>
@@ -418,10 +418,10 @@ export const UnitCard = ({
                   </span>
                 </div>
               </div>
-              {/* Message d'erreur supprimé - les stats de base s'affichent toujours */}
+              {/* Error message removed - base stats always display */}
             </div>
             
-            {/* Informations supplémentaires pour le gagnant en mode At Equal Cost */}
+            {/* Additional information for the winner in At Equal Cost mode */}
             {versusMetrics.isWinner && versusMetrics.multiplier && versusMetrics.multiplier > 1 && versusMetrics.winnerHpRemaining !== undefined && (
               <div className="mt-3 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded text-xs space-y-1">
                 <div className="font-semibold text-yellow-700 dark:text-yellow-300">🏆 Winner Stats:</div>
@@ -501,7 +501,7 @@ export const UnitCard = ({
               <span>{productionTime ? `${productionTime}s` : '—'}</span>
             </div>
 
-            {/* Bonus intégré dans la ligne Atk, section supprimée */}
+            {/* Bonus integrated into the Atk line, section removed */}
           </div>
         </CardFooter>
       )}

@@ -33,7 +33,7 @@ const Quiz = () => {
     }
   }, []);
 
-  // Protection contre les données non chargées
+  // Guard against unloaded data
   if (!aoe4Units || aoe4Units.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center">

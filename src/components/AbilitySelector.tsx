@@ -26,7 +26,7 @@ export const AbilitySelector = ({
 }: AbilitySelectorProps) => {
   if (abilities.length === 0) return null;
 
-  // Grouper les abilities par âge seulement (pas de catégories complexes)
+  // Group abilities by age only (no complex categories)
   const grouped: Record<number, Ability[]> = { 1: [], 2: [], 3: [], 4: [] };
   
   abilities.forEach(ability => {
@@ -47,10 +47,10 @@ export const AbilitySelector = ({
           <div key={age} className="w-12 flex flex-col gap-2">
             {ageAbilities.map(ability => {
               const isActive = activeAbilities.has(ability.id);
-              // Détecter si cette ability est "active" par défaut (ex: aura)
-              // Vérifier à la fois au niveau de l'ability et des variations
+              // Detect if this ability is "active" by default (e.g. aura)
+              // Check both at the ability level and in variations
               const isDefaultAlways = (hasActiveProperty(ability) && ability.active === 'always') || ability.variations?.some((v: AbilityVariation) => v.active === 'always');
-              // Utiliser l'icône depuis l'URL aoe4world.com
+              // Use the icon from the aoe4world.com URL
               const iconPath = ability.icon;
 
               return (

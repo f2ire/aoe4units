@@ -131,12 +131,12 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
   {
     id: 'chemistry',
-    reason: 'aoe4world does not list the bonus damage targets for Chemistry on gunpowder units. In-game, Chemistry grants +25% bonus damage vs war elephants, buildings, naval units and infantry to gunpowder siege and warships.',
+    reason: 'aoe4world does not list the bonus damage targets for Chemistry on gunpowder units. In-game, Chemistry grants +25% bonus damage vs war elephants, buildings, naval units and infantry to gunpowder siege and warships. Warships use class "naval_warship" (not "warship") in aoe4world data.',
     update: {
       effects: [
         {
           property: 'siegeAttack',
-          select: { class: [['gunpowder', 'siege'], ['gunpowder', 'warship']] },
+          select: { class: [['gunpowder', 'siege'], ['gunpowder', 'naval_warship']] },
           effect: 'multiply',
           value: 1.25,
           type: 'bonus',
@@ -144,7 +144,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         },
         {
           property: 'siegeAttack',
-          select: { class: [['gunpowder', 'siege'], ['gunpowder', 'warship']] },
+          select: { class: [['gunpowder', 'siege'], ['gunpowder', 'naval_warship']] },
           effect: 'multiply',
           value: 1.25,
           type: 'bonus',
@@ -152,7 +152,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         },
         {
           property: 'siegeAttack',
-          select: { class: [['gunpowder', 'siege'], ['gunpowder', 'warship']] },
+          select: { class: [['gunpowder', 'siege'], ['gunpowder', 'naval_warship']] },
           effect: 'multiply',
           value: 1.25,
           type: 'bonus',
@@ -160,7 +160,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         },
         {
           property: 'siegeAttack',
-          select: { class: [['gunpowder', 'siege'], ['gunpowder', 'warship']] },
+          select: { class: [['gunpowder', 'siege'], ['gunpowder', 'naval_warship']] },
           effect: 'multiply',
           value: 1.25,
           type: 'bonus',
@@ -168,7 +168,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         },
         {
           property: 'siegeAttack',
-          select: { class: [['gunpowder', 'siege'], ['gunpowder', 'warship']] },
+          select: { class: [['gunpowder', 'siege'], ['gunpowder', 'naval_warship']] },
           effect: 'multiply',
           value: 1.25,
           type: 'bonus',

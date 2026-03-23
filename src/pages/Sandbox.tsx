@@ -36,11 +36,11 @@ const categoryIcons: Record<string, string> = {
 
 const categoryOrder = ['melee_infantry', 'ranged', 'cavalry', 'siege', 'monk', 'ship', 'other'];
 
-// Fonction pour calculer le bonus de charge pour une unité
+// Function to calculate the charge bonus for a unit
 const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activeAbilities: Set<string>, age: number): number => {
   if (!activeAbilities.has('charge-attack') || !unitData) return 0;
   
-  // Obtenir l'ID de base pour les variations
+  // Get the base ID for variations
   const baseId = ('baseId' in unitData) ? unitData.baseId : unitData.id;
   const unitClasses = unitData.classes || [];
   
@@ -49,7 +49,7 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
   
   if (!isKnight && !isGhulam) return 0;
   
-  // Bonus de charge selon l'âge
+  // Charge bonus based on age
   if (isKnight) {
     switch (age) {
       case 2: return 10; // Early
@@ -59,7 +59,7 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
     }
   }
   
-  // Bonus pour Ghulam (pas de variant Early)
+  // Bonus for Ghulam (no Early variant)
   if (isGhulam) {
     switch (age) {
       case 3: return 5;  // Regular
@@ -113,7 +113,7 @@ const Sandbox = () => {
     toggleAbility: toggleAbilityEnemy,
   } = enemy;
 
-  // Créer les variations avec les technologies appliquées
+  // Build variations with applied technologies
   const modifiedVariationAlly = variationAlly ? (() => {
     const debuffMultiplier = unit2 && activeAbilitiesEnemy.size > 0 
       ? getVersusDebuffMultiplier(variationAlly.classes || [], Array.from(activeAbilitiesEnemy))
@@ -174,12 +174,12 @@ const Sandbox = () => {
     };
   })() : undefined;
   
-  // Calculer les stats pour la comparaison
+  // Compute stats for comparison
   const allyData = modifiedVariationAlly || unit1;
   const enemyData = modifiedVariationEnemy || unit2;
   
   const modifiedUnit1 = unit1 && !variationAlly ? (() => {
-    // Calculer le debuff versus des abilités ennemies
+    // Compute the versus debuff from enemy abilities
     const debuffMultiplier = unit2 && activeAbilitiesEnemy.size > 0 
       ? getVersusDebuffMultiplier(unit1.classes || [], Array.from(activeAbilitiesEnemy))
       : 1.0;
@@ -210,7 +210,7 @@ const Sandbox = () => {
   })() : undefined;
   
   const modifiedUnit2 = unit2 && !variationEnemy ? (() => {
-    // Calculer le debuff versus des abilités ally
+    // Compute the versus debuff from ally abilities
     const debuffMultiplier = unit1 && activeAbilitiesAlly.size > 0 
       ? getVersusDebuffMultiplier(unit2.classes || [], Array.from(activeAbilitiesAlly))
       : 1.0;
@@ -240,12 +240,12 @@ const Sandbox = () => {
     };
   })() : undefined;
   
-  // Stats finales avec coûts
+  // Final stats with costs
   const allyStats = allyData ? {
     hp: modifiedAllyStats.hitpoints,
     attack: (() => {
       const baseAttack = Math.max(modifiedAllyStats.meleeAttack, modifiedAllyStats.rangedAttack);
-      // En mode versus, appliquer le debuff des abilités ennemies sur les dégâts de l'ally
+      // In versus mode, apply the enemy abilities debuff to the ally's damage
       if (unit1 && unit2 && activeAbilitiesEnemy.size > 0) {
         const debuffMultiplier = getVersusDebuffMultiplier(
           unit1.classes || [],
@@ -272,7 +272,7 @@ const Sandbox = () => {
     hp: modifiedEnemyStats.hitpoints,
     attack: (() => {
       const baseAttack = Math.max(modifiedEnemyStats.meleeAttack, modifiedEnemyStats.rangedAttack);
-      // En mode versus, appliquer le debuff des abilités ally sur les dégâts de l'enemy
+      // In versus mode, apply the ally abilities debuff to the enemy's damage
       if (unit1 && unit2 && activeAbilitiesAlly.size > 0) {
         const debuffMultiplier = getVersusDebuffMultiplier(
           unit2.classes || [],
@@ -295,9 +295,9 @@ const Sandbox = () => {
     productionTime: 'costs' in (variationEnemy || unit2 || {}) ? (variationEnemy || unit2 as any)?.costs?.time : undefined // eslint-disable-line @typescript-eslint/no-explicit-any
   } : null;
 
-  // Créer des listes de bonus alignées pour chaque unité
-  // 1. D'abord les bonus communs (même cible)
-  // 2. Ensuite les bonus uniques de chaque côté
+  // Build aligned bonus lists for each unit
+  // 1. First the shared bonuses (same target)
+  // 2. Then the unique bonuses for each side
   const allyBonuses = allyStats?.bonusDamage || [];
   const enemyBonuses = enemyStats?.bonusDamage || [];
   
@@ -305,7 +305,7 @@ const Sandbox = () => {
   const alignedAllyBonuses: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
   const alignedEnemyBonuses: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
   
-  // Phase 0: Ajouter le bonus de charge en première ligne SEULEMENT si au moins une unité l'a
+  // Phase 0: Add the charge bonus on the first line ONLY if at least one unit has it
   const allyHasChargeBonus = allyStats?.chargeBonus && allyStats.chargeBonus > 0;
   const enemyHasChargeBonus = enemyStats?.chargeBonus && enemyStats.chargeBonus > 0;
   
@@ -334,7 +334,7 @@ const Sandbox = () => {
     }
   }
   
-  // Phase 1: Ajouter les bonus communs (alignés)
+  // Phase 1: Add the shared bonuses (aligned)
   allyBonuses.forEach((allyBonus: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     const allyTarget = allyBonus.target?.class?.flat().join(' ') || '';
     const enemyBonus = enemyBonuses.find((b: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -349,7 +349,7 @@ const Sandbox = () => {
     }
   });
   
-  // Phase 2: Ajouter les bonus non-matchés
+  // Phase 2: Add the unmatched bonuses
   const unmatchedAlly = allyBonuses.filter((b: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     const target = b.target?.class?.flat().join(' ') || '';
     return !matchedTargets.has(target);
@@ -360,7 +360,7 @@ const Sandbox = () => {
     return !matchedTargets.has(target);
   });
   
-  // Phase 3: Combler les lignes vides créées par le charge bonus avec les premiers bonus non-matchés
+  // Phase 3: Fill the empty rows created by the charge bonus with the first unmatched bonuses
   let allyUnmatchedIndex = 0;
   let enemyUnmatchedIndex = 0;
   
@@ -374,7 +374,7 @@ const Sandbox = () => {
     enemyUnmatchedIndex = 1;
   }
   
-  // Phase 4: Ajouter les bonus non-matchés restants avec des lignes vides pour maintenir l'alignement
+  // Phase 4: Add the remaining unmatched bonuses with empty rows to preserve alignment
   const remainingUnmatchedAlly = unmatchedAlly.slice(allyUnmatchedIndex);
   const remainingUnmatchedEnemy = unmatchedEnemy.slice(enemyUnmatchedIndex);
   const maxUnmatched = Math.max(remainingUnmatchedAlly.length, remainingUnmatchedEnemy.length);
@@ -395,7 +395,7 @@ const Sandbox = () => {
   
   const maxBonusDamageLines = alignedAllyBonuses.length;
 
-  // Si pas d'unités chargées, afficher un message
+  // If no units are loaded, display a message
   if (!aoe4Units || aoe4Units.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -462,7 +462,7 @@ const Sandbox = () => {
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 mb-8">
-          {/* Colonne Alliée */}
+          {/* Ally Column */}
           <div className="space-y-4 flex flex-col items-center md:items-end">
             <label className="text-sm font-medium text-foreground">Civilization (Ally):</label>
             <Select value={selectedCivAlly} onValueChange={setSelectedCivAlly}>
@@ -558,7 +558,7 @@ const Sandbox = () => {
             <p className="text-xs text-muted-foreground">{filteredUnitsAlly.length} units available</p>
           </div>
 
-          {/* Colonne Ennemie */}
+          {/* Enemy Column */}
           <div className="space-y-4 flex flex-col items-center md:items-start">
             <label className="text-sm font-medium text-foreground">Civilization (Enemy):</label>
             <Select value={selectedCivEnemy} onValueChange={setSelectedCivEnemy}>
@@ -655,7 +655,7 @@ const Sandbox = () => {
           </div>
         </div>
 
-        {/* Zone de comparaison / versus */}
+        {/* Comparison / versus area */}
         {!isVersus && (
           <div className="grid md:grid-cols-2 gap-8 mt-12">
             {/* Ally Unit */}
@@ -780,11 +780,11 @@ const Sandbox = () => {
               let versusData;
               let multipliers = undefined;
               
-              // Convertir les Sets en tableaux pour passer aux fonctions de combat
+              // Convert Sets to arrays to pass to combat functions
               const abilitiesArrayAlly = Array.from(activeAbilitiesAlly);
               const abilitiesArrayEnemy = Array.from(activeAbilitiesEnemy);
               
-              // Calculer les bonus de charge
+              // Compute charge bonuses
               const chargeAlly = getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly);
               const chargeEnemy = getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy);
               
@@ -808,9 +808,9 @@ const Sandbox = () => {
                     chargeAlly,
                     chargeEnemy
                   );
-                }              // Logique de victoire/défaite basée sur la possession d'arme
-              // Une unité sans arme perd toujours contre une unité avec arme
-              // Un draw n'existe que si les deux unités n'ont pas d'armes
+                }              // Win/loss logic based on weapon ownership
+              // A unit without a weapon always loses against a unit with a weapon
+              // A draw only occurs when neither unit has a weapon
               const allyHasWeapon = !!getPrimaryWeapon(modifiedVariationAlly || modifiedUnit1);
               const enemyHasWeapon = !!getPrimaryWeapon(modifiedVariationEnemy || modifiedUnit2);
               
@@ -819,20 +819,20 @@ const Sandbox = () => {
               let rightIsWinner = false;
               
               if (allyHasWeapon && !enemyHasWeapon) {
-                // Ally a une arme, Enemy n'en a pas -> Ally gagne
+                // Ally has a weapon, Enemy does not -> Ally wins
                 leftIsWinner = true;
                 isDraw = false;
               } else if (!allyHasWeapon && enemyHasWeapon) {
-                // Ally n'a pas d'arme, Enemy en a une -> Enemy gagne
+                // Ally has no weapon, Enemy does -> Enemy wins
                 rightIsWinner = true;
                 isDraw = false;
               } else if (allyHasWeapon && enemyHasWeapon) {
-                // Les deux ont une arme -> utiliser la logique normale de versus
+                // Both have a weapon -> use normal versus logic
                 isDraw = versusData.winner === 'draw';
                 leftIsWinner = !isDraw && versusData.winner === versusData.attacker.id;
                 rightIsWinner = !isDraw && versusData.winner === versusData.defender.id;
               } else {
-                // Les deux n'ont pas d'arme -> Draw
+                // Neither has a weapon -> Draw
                 isDraw = true;
                 leftIsWinner = false;
                 rightIsWinner = false;

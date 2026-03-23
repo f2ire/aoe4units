@@ -1,10 +1,10 @@
 import type { UnitUnifiedPatch } from './types';
 import { deepMerge } from './types';
 
-// IMPORTANT: on ne dépend ici d'aucune valeur runtime de unified-units.ts pour éviter les cycles.
-// Les structures sont manipulées par forme (shape) avec deepMerge.
+// IMPORTANT: this file does not depend on any runtime values from unified-units.ts to avoid circular imports.
+// Structures are manipulated by shape with deepMerge.
 
-// Fonction helper pour transformer les arrays de classes multi-valeurs en identifiants combinés
+// Helper function to transform multi-value class arrays into combined identifiers
 function transformMultiClassTargets(value: unknown): unknown {
   if (typeof value === 'string') return value;
   if (typeof value === 'number') return value;
@@ -12,18 +12,18 @@ function transformMultiClassTargets(value: unknown): unknown {
   if (value === null) return value;
   
   if (Array.isArray(value)) {
-    // Vérifier si c'est un array de 2 strings (["archer", "ship"] -> "archer_ship")
+    // Check if it is an array of 2 strings (["archer", "ship"] -> "archer_ship")
     if (
       value.length === 2 &&
       typeof value[0] === 'string' &&
       typeof value[1] === 'string' &&
       !value.some(v => typeof v === 'object')
     ) {
-      // C'est potentiellement un multi-class target
-      // On le transforme en identifiant combiné
+      // This is potentially a multi-class target
+      // Transform it into a combined identifier
       return value.join('_');
     }
-    // Sinon, appliquer la transformation récursivement
+    // Otherwise, apply the transformation recursively
     return value.map(v => transformMultiClassTargets(v));
   }
   

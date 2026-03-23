@@ -22,7 +22,7 @@ export const TechnologySelector = ({
 }: TechnologySelectorProps) => {
   if (technologies.length === 0) return null;
 
-  // Grouper les technologies par catégorie ET par âge
+  // Group technologies by category AND by age
   const categories = [
     'HP', 
     'HP-Unique',
@@ -89,10 +89,10 @@ export const TechnologySelector = ({
 
   const ages = [1, 2, 3, 4];
   
-  // Tracker pour savoir quelle est la première ligne de chaque groupe (HP, ATK, ARM, SPD)
+  // Tracker to know which is the first line of each group (HP, ATK, ARM, SPD)
   const firstLineOfGroup = new Map<string, { category: string; lineKey: string }>();
-  
-  // Pré-calculer quelle est la première ligne visible de chaque groupe
+
+  // Pre-calculate which is the first visible line of each group
   categories.forEach(category => {
     const categoryLines = grouped[category];
     const lineKeys = Object.keys(categoryLines);
@@ -199,7 +199,7 @@ export const TechnologySelector = ({
           </div>
         );
 
-          // Afficher le label seulement sur la première ligne de chaque groupe
+          // Show the label only on the first line of each group
           const baseLabel = categoryLabels[category];
           const firstLine = firstLineOfGroup.get(baseLabel);
           const isFirstLineOfGroup = firstLine?.category === category && firstLine?.lineKey === lineKey;

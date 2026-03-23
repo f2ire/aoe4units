@@ -1,12 +1,12 @@
 /**
- * Chargement et parsing des données unifiées d'AoE4
- * Source: all-unified.json (données officielles aoe4world)
+ * Loading and parsing of unified AoE4 data
+ * Source: all-unified.json (official aoe4world data)
  */
 
 import allUnifiedData from './all-unified.json';
 import { applyUnitPatches } from './patches/units';
 
-// Interfaces pour la structure all-unified.json
+// Interfaces for the all-unified.json structure
 interface UnifiedWeaponRange {
   min: number;
   max: number;
@@ -113,21 +113,21 @@ interface UnifiedUnit {
 interface AllUnifiedData {
   __note__: string;
   __version__: string;
-  data: Array<UnifiedUnit | Record<string, unknown>>; // Unités ou autres types (buildings, techs)
+  data: Array<UnifiedUnit | Record<string, unknown>>; // Units or other types (buildings, techs)
 }
 
-// Cast des données importées
+// Cast imported data
 const typedData = allUnifiedData as AllUnifiedData;
 
-// Filtrer uniquement les unités (type === "unit")
+// Filter only units (type === "unit")
 const allUnitsRaw = typedData.data.filter(
   (item): item is UnifiedUnit => item.type === 'unit'
 );
 
-// Appliquer les patchs locaux (non destructif)
+// Apply local patches (non-destructive)
 export const allUnits: UnifiedUnit[] = applyUnitPatches(allUnitsRaw) as UnifiedUnit[];
 
-// Interface simplifiée pour l'utilisation dans l'app (compatible avec AoE4Unit)
+// Simplified interface for use in the app (compatible with AoE4Unit)
 export interface AoE4Unit {
   id: string;
   name: string;
@@ -138,7 +138,7 @@ export interface AoE4Unit {
     wood: number;
     gold: number;
     stone: number;
-    oliveoil?: number;    // Huile d'olive (Byzantins) ou Silver (Macédoniens)
+    oliveoil?: number;    // Olive oil (Byzantines) or Silver (Macedonians)
   };
   armor: UnifiedArmor[];
   resistance?: UnifiedResistance[];
@@ -154,15 +154,15 @@ export interface AoE4Unit {
   };
   description: string;
   producedBy?: string[];
-  variations?: UnifiedVariation[]; // Garder les variations pour accès détaillé
+  variations?: UnifiedVariation[]; // Keep variations for detailed access
 }
 
 /**
- * Convertit les unités unifiées en format simplifié
- * Prend la première variation (âge minimum) comme référence
+ * Converts unified units into the simplified format
+ * Takes the first variation (minimum age) as the reference
  */
 export const aoe4Units: AoE4Unit[] = allUnits.map(unit => {
-  // Prendre la première variation (généralement âge 2 ou minimum)
+  // Take the first variation (usually age 2 or minimum)
   const baseVariation = unit.variations[0];
   
   return {
@@ -189,27 +189,27 @@ export const aoe4Units: AoE4Unit[] = allUnits.map(unit => {
     movement: baseVariation.movement,
     description: unit.description,
     producedBy: baseVariation.producedBy,
-    variations: unit.variations, // Garder toutes les variations
+    variations: unit.variations, // Keep all variations
   };
 });
 
 
 /**
- * Récupère une unité par son ID
+ * Retrieves a unit by its ID
  */
 export function getUnitById(id: string): AoE4Unit | undefined {
   return aoe4Units.find(unit => unit.id === id);
 }
 
 /**
- * Récupère toutes les unités d'une civilisation
+ * Retrieves all units belonging to a civilization
  */
 export function getUnitsByCiv(civAbbr: string): AoE4Unit[] {
   return aoe4Units.filter(unit => unit.civs.includes(civAbbr));
 }
 
 /**
- * Récupère les unités par classe
+ * Retrieves units by class
  */
 export function getUnitsByClass(className: string): AoE4Unit[] {
   return aoe4Units.filter(unit => 
@@ -218,8 +218,8 @@ export function getUnitsByClass(className: string): AoE4Unit[] {
 }
 
 /**
- * Récupère la variation d'une unité pour une civ et un âge spécifiques
- * Si civAbbr est "all", prend la première variation de cet âge
+ * Retrieves the variation of a unit for a specific civ and age
+ * If civAbbr is "all", takes the first variation of that age
  */
 export function getUnitVariation(
   unitId: string,
@@ -229,19 +229,19 @@ export function getUnitVariation(
   const unit = allUnits.find(u => u.id === unitId);
   if (!unit) return undefined;
   
-  // Si "all", prendre la première variation de cet âge
+  // If "all", take the first variation of that age
   if (civAbbr === "all") {
     return unit.variations.find(v => v.age === age);
   }
   
-  // Chercher la variation exacte pour cette civ et cet âge
-  return unit.variations.find(v => 
+  // Look for the exact variation for this civ and age
+  return unit.variations.find(v =>
     v.civs.includes(civAbbr) && v.age === age
-  ) || unit.variations.find(v => v.age === age); // Fallback sur l'âge seul
+  ) || unit.variations.find(v => v.age === age); // Fallback to age only
 }
 
 /**
- * Récupère toutes les variations d'une unité
+ * Retrieves all variations of a unit
  */
 export function getAllVariations(unitId: string): UnifiedVariation[] {
   const unit = allUnits.find(u => u.id === unitId);
@@ -249,13 +249,13 @@ export function getAllVariations(unitId: string): UnifiedVariation[] {
 }
 
 /**
- * Récupère les âges disponibles pour une unité et une civilisation
- * Si civAbbr est "all", retourne tous les âges disponibles pour toutes les civs
+ * Retrieves available ages for a unit and a civilization
+ * If civAbbr is "all", returns all available ages across all civs
  */
 export function getAvailableAges(unitId: string, civAbbr: string): number[] {
   const variations = getAllVariations(unitId);
   
-  // Si "all", retourner tous les âges disponibles
+  // If "all", return all available ages
   if (civAbbr === "all") {
     const allAges = variations
       .map(v => v.age)
@@ -264,14 +264,14 @@ export function getAvailableAges(unitId: string, civAbbr: string): number[] {
     return allAges;
   }
   
-  // Sinon filtrer par civilisation
+  // Otherwise filter by civilization
   const ages = variations
     .filter(v => v.civs.includes(civAbbr))
     .map(v => v.age)
-    .filter((age, index, self) => self.indexOf(age) === index) // Unique
+    .filter((age, index, self) => self.indexOf(age) === index) // Deduplicate
     .sort((a, b) => a - b);
   
-  // Fallback: si aucun âge trouvé pour cette civ, retourner tous les âges disponibles
+  // Fallback: if no age found for this civ, return all available ages
   return ages.length > 0 ? ages : variations
     .map(v => v.age)
     .filter((age, index, self) => self.indexOf(age) === index)
@@ -279,7 +279,7 @@ export function getAvailableAges(unitId: string, civAbbr: string): number[] {
 }
 
 /**
- * Récupère l'âge maximum disponible pour une unité
+ * Retrieves the maximum available age for a unit
  */
 export function getMaxAge(unitId: string, civAbbr: string): number {
   const ages = getAvailableAges(unitId, civAbbr);
@@ -287,7 +287,7 @@ export function getMaxAge(unitId: string, civAbbr: string): number {
 }
 
 /**
- * Calcule le coût total d'une unité ou variation (incluant les ressources secondaires)
+ * Computes the total cost of a unit or variation (including secondary resources)
  */
 export function getTotalCost(unit: AoE4Unit | UnifiedVariation): number {
   return unit.costs.food +
@@ -298,7 +298,7 @@ export function getTotalCost(unit: AoE4Unit | UnifiedVariation): number {
 }
 
 /**
- * Récupère la valeur d'armure pour un type spécifique
+ * Retrieves the armor value for a specific type
  */
 export function getArmorValue(unit: AoE4Unit | UnifiedVariation, armorType: string): number {
   const armor = unit.armor?.find(a => a.type.toLowerCase() === armorType.toLowerCase());
@@ -306,8 +306,8 @@ export function getArmorValue(unit: AoE4Unit | UnifiedVariation, armorType: stri
 }
 
 /**
- * Récupère la résistance (%) pour un type de dégât donné
- * Ex: getResistanceValue(ram, "ranged") → 95
+ * Retrieves the resistance (%) for a given damage type
+ * E.g. getResistanceValue(ram, "ranged") → 95
  */
 export function getResistanceValue(unit: AoE4Unit | UnifiedVariation, damageType: string): number {
   const entry = unit.resistance?.find(r => r.type.toLowerCase() === damageType.toLowerCase());
@@ -315,12 +315,12 @@ export function getResistanceValue(unit: AoE4Unit | UnifiedVariation, damageType
 }
 
 /**
- * Récupère l'arme principale de l'unité ou variation
+ * Retrieves the primary weapon of the unit or variation
  */
 export function getPrimaryWeapon(unit: AoE4Unit | UnifiedVariation): UnifiedWeapon | undefined {
   return unit.weapons[0];
 }
 
-// Exporter aussi les données brutes pour accès avancé
+// Also export raw data for advanced access
 export { allUnits as unifiedUnits };
 export type { UnifiedUnit, UnifiedVariation, UnifiedWeapon, UnifiedArmor, UnifiedResistance, UnifiedCosts };

@@ -1,14 +1,14 @@
-// Types utilitaires et schémas de patchs (uniquement types)
+// Utility types and patch schemas (types only)
 
 export type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K];
 };
 
-// Patches pour les Unités (structure UnifiedUnit/UnifiedVariation)
+// Patches for Units (UnifiedUnit/UnifiedVariation structure)
 export interface UnitVariationMatch {
   id?: string;
   age?: number;
-  civsIncludes?: string; // ex: 'de'
+  civsIncludes?: string; // e.g. 'de'
 }
 
 export interface UnitVariationPatch<UnifiedVariation> {
@@ -18,14 +18,14 @@ export interface UnitVariationPatch<UnifiedVariation> {
 }
 
 export interface UnitUnifiedPatch<UnifiedUnit, UnifiedVariation> {
-  id: string; // id de l'unité (ex: 'spearman')
-  reason: string; // pourquoi ce patch existe (bug source, version concernée, comportement modélisé)
+  id: string; // unit id (e.g. 'spearman')
+  reason: string; // why this patch exists (bug source, affected version, modelled behaviour)
   update?: DeepPartial<UnifiedUnit>;
   variations?: UnitVariationPatch<UnifiedVariation>[];
-  after?: (unit: UnifiedUnit) => UnifiedUnit; // échappatoire custom au besoin
+  after?: (unit: UnifiedUnit) => UnifiedUnit; // custom escape hatch if needed
 }
 
-// Patches pour les Technologies
+// Patches for Technologies
 export interface TechVariationMatch {
   id?: string;
   civsIncludes?: string;
@@ -39,8 +39,8 @@ export interface TechVariationPatch<TechnologyVariation> {
 }
 
 export interface TechnologyPatch<Technology, TechnologyVariation> {
-  id: string; // id de la technologie
-  reason: string; // pourquoi ce patch existe (bug source, version concernée, comportement modélisé)
+  id: string; // technology id
+  reason: string; // why this patch exists (bug source, affected version, modelled behaviour)
   update?: DeepPartial<Technology>;
   variations?: TechVariationPatch<TechnologyVariation>[];
   after?: (tech: Technology) => Technology;
@@ -48,7 +48,7 @@ export interface TechnologyPatch<Technology, TechnologyVariation> {
   uiTooltip?: string;
 }
 
-// Petit utilitaire deep-merge (non mutatif)
+// Small deep-merge utility (non-mutating)
 export function deepMerge<T>(base: T, patch: DeepPartial<T>): T {
   if (patch === undefined || patch === null) return base;
   if (typeof base !== 'object' || base === null) return (patch as T) ?? base;

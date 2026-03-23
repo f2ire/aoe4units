@@ -16,7 +16,7 @@ export const AgeSelector = ({
   const ages = [1, 2, 3, 4];
   const ageLabels = ["I", "II", "III", "IV"];
   
-  // Si orientation est "left", on inverse l'ordre pour afficher 1,2,3,4 de gauche à droite
+  // If orientation is "left", reverse the order to display 1,2,3,4 from left to right
   const displayAges = orientation === "left" ? [...ages].reverse() : ages;
   const displayLabels = orientation === "left" ? [...ageLabels].reverse() : ageLabels;
   

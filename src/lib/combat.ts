@@ -1,7 +1,7 @@
 import { AoE4Unit, UnifiedVariation, UnifiedWeapon, UnifiedArmor, UnifiedResistance, getArmorValue, getResistanceValue } from "@/data/unified-units";
 import { allAbilities } from "@/data/unified-abilities";
 
-// Type regroupé pour accepter unit ou variation modifiée
+// Unified type to accept unit or modified variation
 export interface CombatEntity {
   id: string;
   name: string;
@@ -17,7 +17,7 @@ export interface CombatEntity {
     oliveoil?: number;
   };
   classes: string[];
-  activeAbilities?: string[]; // IDs des abilités actives
+  activeAbilities?: string[]; // IDs of active abilities
 }
 
 export interface VersusMetrics {
@@ -26,17 +26,17 @@ export interface VersusMetrics {
   dps: number | null;
   dpsPerCost: number | null;
   hitsToKill: number | null;
-  timeToKill: number | null; // secondes
+  timeToKill: number | null; // seconds
   effectiveDamagePerHit: number | null;
   bugAttackSpeed: boolean;
-  cannotAttackUnits: boolean; // ex: ram — attaque uniquement les bâtiments
-  formula: string; // description détaillée pour tooltip
+  cannotAttackUnits: boolean; // e.g. ram — attacks buildings only
+  formula: string; // detailed description for tooltip
 }
 
 export interface VersusResult {
   attacker: VersusMetrics;
-  defender: VersusMetrics; // metrics de B vs A
-  winner: "draw" | string; // id du gagnant ou draw
+  defender: VersusMetrics; // metrics of B vs A
+  winner: "draw" | string; // id of the winner or draw
   winnerHpRemaining?: number;
   winnerUnitsRemaining?: number;
   resourceDifference?: number;
@@ -61,41 +61,41 @@ function totalCost(entity: CombatEntity): number {
   return c.food + c.wood + c.gold + c.stone + (c.oliveoil || 0);
 }
 
-// Détermine si l'entité est gunpowder (ignore ranged armor sur tir)
+// Determines whether the entity is gunpowder (ignores ranged armor when firing)
 function isGunpowder(entity: CombatEntity, weapon?: UnifiedWeapon): boolean {
   if (!weapon) return false;
-  // Basé sur classes contenant "gunpowder"
+  // Based on classes containing "gunpowder"
   return entity.classes.some(c => c.toLowerCase().includes("gunpowder"));
 }
 
-// Détermine si on ignore l'armure (siege ou gunpowder ou weapon.type === 'siege')
+// Determines whether armor should be ignored (siege, gunpowder, or weapon.type === 'siege')
 function shouldIgnoreArmor(attacker: CombatEntity, weapon?: UnifiedWeapon): boolean {
   if (!weapon) return false;
   if (weapon.type === "siege") return true;
-  // Siege classes communes
+  // Common siege classes
   const siegeClasses = ["siege", "siege_range", "siege_tower", "ram", "catapult", "trebuchet_counterweight"]; 
   if (attacker.classes.some(c => siegeClasses.includes(c.toLowerCase()))) return true;
   return false;
 }
 
-// Calcule le multiplicateur de debuff versus appliqué par les abilités du défenseur sur l'attaquant
+// Computes the versus debuff multiplier applied by the defender's abilities on the attacker
 export function getVersusDebuffMultiplier(attackerClasses: string[], defenderAbilities: string[]): number {
   if (!defenderAbilities || defenderAbilities.length === 0) return 1.0;
   
   let multiplier = 1.0;
   const attackerClassesLower = attackerClasses.map(c => c.toLowerCase());
   
-  // Pour chaque abilité active du défenseur
+  // For each active ability of the defender
   for (const abilityId of defenderAbilities) {
     const ability = allAbilities.find(a => a.id === abilityId);
     if (!ability || !ability.effects) continue;
     
-    // Chercher les effets de type versusOpponentDamageDebuff
+    // Look for effects of type versusOpponentDamageDebuff
     for (const effect of ability.effects) {
       if (effect.property !== 'versusOpponentDamageDebuff') continue;
       if (effect.effect !== 'multiply') continue;
       
-      // Vérifier si l'attaquant correspond aux classes ciblées
+      // Check whether the attacker matches the targeted classes
       if (effect.select?.class) {
         const groups: string[][] = Array.isArray(effect.select.class) && effect.select.class.some(v => Array.isArray(v))
           ? (effect.select.class as unknown as string[][])
@@ -119,45 +119,45 @@ export function getVersusDebuffMultiplier(attackerClasses: string[], defenderAbi
   return multiplier;
 }
 
-// Calcule les dégâts effectifs par coup d'attaquant vers défenseur
+// Computes the effective damage per hit from attacker to defender
 function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, chargeBonus: number = 0, isFirstAttack: boolean = false): { value: number; base: number; bonus: number; armorApplied: number; weapon?: UnifiedWeapon; debuffMultiplier?: number; cannotAttack?: boolean; resistanceApplied?: number } {
-  // Ram (et assimilés) : peut uniquement attaquer les bâtiments
+  // Ram (and similar units): can only attack buildings
   const RAM_CLASSES = ["ram", "workshop_ram"];
   if (attacker.classes.some(c => RAM_CLASSES.includes(c.toLowerCase()))) {
     return { value: 0, base: 0, bonus: 0, armorApplied: 0, cannotAttack: true };
   }
 
   const weapon = attacker.weapons[0];
-  if (!weapon) return { value: 1, base: 0, bonus: 0, armorApplied: 0, weapon }; // Pas d'arme -> minimal
+  if (!weapon) return { value: 1, base: 0, bonus: 0, armorApplied: 0, weapon }; // No weapon -> minimal
 
   const baseDamage = weapon.damage || 0;
   
-  // Nombre de projectiles (burst)
+  // Number of projectiles (burst)
   const burstCount = weapon.burst?.count || 1;
   
-  // Ajouter le bonus de charge SEULEMENT au premier attaque
+  // Add charge bonus ONLY on the first attack
   const chargeBonus_applied = isFirstAttack ? chargeBonus : 0;
 
-  // Bonus applicables : logique AND par groupe. Chaque entrée de mod.target.class:
-  // - Si c'est un tableau simple ["infantry","light"] => nécessite toutes ces classes (AND)
-  // - Si c'est un tableau de tableaux [["light","gunpowder","infantry"],["cavalry","melee"]] => OR entre groupes, AND à l'intérieur.
-  // NOTE: Les bonus "siegeAttack" s'appliquent comme les autres bonus normaux (depuis l'unification des données)
+  // Applicable bonuses: AND logic per group. Each entry of mod.target.class:
+  // - If it is a simple array ["infantry","light"] => requires all these classes (AND)
+  // - If it is an array of arrays [["light","gunpowder","infantry"],["cavalry","melee"]] => OR between groups, AND within each group.
+  // NOTE: "siegeAttack" bonuses apply like all other normal bonuses (since data unification)
   let bonusDamage = 0;
   if (weapon.modifiers && defender.classes && defender.classes.length > 0) {
     const defenderClassesLower = defender.classes.map(c => c.toLowerCase());
-    // Créer un set contenant toutes les classes du défenseur
+    // Build a set containing all defender classes
     const expandedTokens = new Set<string>();
     for (const cls of defenderClassesLower) {
       expandedTokens.add(cls);
     }
     for (const mod of weapon.modifiers) {
-      // Appliquer les modifiers normaux et siegeAttack (property est juste un label, pas une raison d'ignorer)
-      // if (mod.property === "siegeAttack") continue; // SUPPRIMÉ: siegeAttack doit être appliqué comme les autres
+      // Apply normal modifiers and siegeAttack (property is just a label, not a reason to ignore)
+      // if (mod.property === "siegeAttack") continue; // REMOVED: siegeAttack must be applied like the others
       
       const spec = mod.target?.class;
       if (!spec) continue;
 
-      // Normaliser en tableau de groupes
+      // Normalize into an array of groups
       const groups: string[][] = Array.isArray(spec) && spec.some(v => Array.isArray(v))
         ? (spec as unknown as string[][])
         : [spec as unknown as string[]];
@@ -166,8 +166,8 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
         if (!Array.isArray(group)) return false;
         return group.every(req => {
           const r = req.toLowerCase();
-          // La condition est satisfaite si: toutes les classes requises sont présentes individuellement
-          // OU si elles apparaissent comme morceaux d'une classe composite
+          // The condition is satisfied if: all required classes are present individually
+          // OR if they appear as parts of a composite class
           return expandedTokens.has(r);
         });
       });
@@ -177,37 +177,37 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
     }
   }
 
-  // Détermination de l'armure à appliquer
+  // Determine which armor to apply
   let armorValue = 0;
-  // Les armes siege ignorent l'armure (elles ne sont pas affectées par melee ou ranged armor)
+  // Siege weapons ignore armor (they are not affected by melee or ranged armor)
   if (weapon.type !== "siege" && !shouldIgnoreArmor(attacker, weapon)) {
     if (weapon.type === "melee") {
       armorValue = getArmorValue(defender as unknown as AoE4Unit, "melee");
     } else if (weapon.type === "ranged") {
-      // Gunpowder ignore ranged armor
+      // Gunpowder ignores ranged armor
       if (!isGunpowder(attacker, weapon)) {
         armorValue = getArmorValue(defender as unknown as AoE4Unit, "ranged");
       }
     } else {
-      // Autres types : appliquer ranged armor sauf si ignoré ci-dessus
+      // Other types: apply ranged armor unless ignored above
       if (!isGunpowder(attacker, weapon)) {
         armorValue = getArmorValue(defender as unknown as AoE4Unit, "ranged");
       }
     }
   }
 
-  // Calcul des dégâts par projectile: (baseDamage + bonus + chargeBonus - armor) * burst
-  // L'armure est appliquée à chaque projectile individuellement
+  // Damage per projectile: (baseDamage + bonus + chargeBonus - armor) * burst
+  // Armor is applied to each projectile individually
   let damagePerProjectile = baseDamage + bonusDamage + chargeBonus_applied - armorValue;
 
-  // Appliquer les debuffs versus (ex: Camel Unease)
+  // Apply versus debuffs (e.g. Camel Unease)
   const debuffMultiplier = getVersusDebuffMultiplier(attacker.classes, defender.activeAbilities || []);
   if (debuffMultiplier !== 1.0) {
     damagePerProjectile = damagePerProjectile * debuffMultiplier;
   }
 
-  // Appliquer la résistance du défenseur (ex: Ram résiste à 95% des dégâts ranged)
-  // La résistance s'applique après l'armure, avant le clamp à 1
+  // Apply the defender's resistance (e.g. Ram resists 95% of ranged damage)
+  // Resistance is applied after armor, before clamping to 1
   const resistancePct = getResistanceValue(defender as unknown as AoE4Unit, weapon.type);
   let resistanceApplied: number | undefined;
   if (resistancePct > 0) {
@@ -272,7 +272,7 @@ function computeMetrics(
     dpsPerCost = cost > 0 ? round(unitDPS / cost, 2) : null;
   }
 
-  // Cas spécial : l'attaquant ne peut pas attaquer les unités (ex: ram)
+  // Special case: attacker cannot attack units (e.g. ram)
   if (normalAttackData.cannotAttack) {
     return {
       id: attacker.id,
@@ -309,25 +309,25 @@ function computeMetrics(
   };
 }
 
-// Calcule le multiplicateur pour égaliser les coûts (± 10%)
+// Computes the multiplier to equalize costs (± 10%)
 export function calculateEqualCostMultipliers(costA: number, costB: number): { multA: number; multB: number; totalCostA: number; totalCostB: number } {
   if (costA <= 0 || costB <= 0) {
     return { multA: 1, multB: 1, totalCostA: costA, totalCostB: costB };
   }
   
-  // Trouver le multiplicateur qui égalise les coûts (avec tolérance 10%)
-  // On cherche des entiers multA et multB tels que: |multA * costA - multB * costB| <= 0.10 * max(multA * costA, multB * costB)
-  // Stratégie: on cherche la meilleure paire (multA, multB) dans une plage raisonnable
+  // Find the multiplier that equalizes costs (with 10% tolerance)
+  // We look for integers multA and multB such that: |multA * costA - multB * costB| <= 0.10 * max(multA * costA, multB * costB)
+  // Strategy: search for the best pair (multA, multB) within a reasonable range
   let bestMultA = 1;
   let bestMultB = 1;
   let bestDiff = Infinity;
   
-  // Limiter la recherche à des multiplicateurs raisonnables (1 à 50 par exemple)
+  // Limit the search to reasonable multipliers (1 to 50 for instance)
   const maxMult = 50;
   
   for (let mA = 1; mA <= maxMult; mA++) {
     const targetCost = mA * costA;
-    // Trouver le meilleur mB
+    // Find the best mB
     const idealMB = targetCost / costB;
     const mB1 = Math.floor(idealMB);
     const mB2 = Math.ceil(idealMB);
@@ -340,7 +340,7 @@ export function calculateEqualCostMultipliers(costA: number, costB: number): { m
       const diff = Math.abs(totalA - totalB);
       const tolerance = maxTotal * 0.10;
       
-      // Vérifier si c'est dans la tolérance et meilleur que le précédent
+      // Check whether it is within tolerance and better than the previous best
       if (diff <= tolerance && diff < bestDiff) {
         bestDiff = diff;
         bestMultA = mA;
@@ -370,7 +370,7 @@ export function computeVersus(
   const metricsA = computeMetrics(A, B, chargeBonusA);
   const metricsB = computeMetrics(B, A, chargeBonusB);
 
-  // Détermination du gagnant via TTK (plus bas gagne), draw si proche <=5%
+  // Determine winner via TTK (lower wins), draw if within <=5%
   let winner: "draw" | string = "draw";
   if (metricsA.cannotAttackUnits && metricsB.cannotAttackUnits) {
     winner = "draw";
@@ -409,24 +409,24 @@ export function computeVersusAtEqualCost(
   const A = toCombatEntity(a, activeAbilitiesA);
   const B = toCombatEntity(b, activeAbilitiesB);
   
-  // Calculer les multiplicateurs
+  // Compute the multipliers
   const costA = totalCost(A);
   const costB = totalCost(B);
   const multipliers = calculateEqualCostMultipliers(costA, costB);
   
-  // Calculer les métriques avec multiplicateurs
-  // A attaque B: multA attaquants vs multB défenseurs
+  // Compute metrics with multipliers
+  // A attacks B: multA attackers vs multB defenders
   const metricsA = computeMetrics(A, B, chargeBonusA, multipliers.multA, multipliers.multB);
-  // B attaque A: multB attaquants vs multA défenseurs
+  // B attacks A: multB attackers vs multA defenders
   const metricsB = computeMetrics(B, A, chargeBonusB, multipliers.multB, multipliers.multA);
 
-  // Calculer les unités restantes pour les deux camps
+  // Compute remaining units for both sides
   let unitsRemainingA: number = 0;
   let unitsRemainingB: number = 0;
   let hpRemainingA: number = 0;
   let hpRemainingB: number = 0;
   
-  // Cas spécial : un camp ne peut pas attaquer les unités (ex: ram)
+  // Special case: one side cannot attack units (e.g. ram)
   if (metricsA.cannotAttackUnits || metricsB.cannotAttackUnits) {
     let winner: "draw" | string = "draw";
     if (metricsA.cannotAttackUnits && metricsB.cannotAttackUnits) {
@@ -440,16 +440,16 @@ export function computeVersusAtEqualCost(
   }
 
   if (!metricsA.bugAttackSpeed && !metricsB.bugAttackSpeed && metricsA.timeToKill !== null && metricsB.timeToKill !== null) {
-    // Calculer dégâts subis par A pendant son TTK contre B
-    const attackDataBA = computeEffectiveDamage(B, A); // B attaque A
+    // Compute damage taken by A during its TTK against B
+    const attackDataBA = computeEffectiveDamage(B, A); // B attacks A
     const effectiveDamagePerCycleBA = attackDataBA.value * multipliers.multB;
     const totalAttackerHP_A = A.hitpoints * multipliers.multA;
     const damageTakenByA = effectiveDamagePerCycleBA * metricsA.hitsToKill!;
     hpRemainingA = Math.max(0, totalAttackerHP_A - damageTakenByA);
     unitsRemainingA = Math.floor(hpRemainingA / A.hitpoints);
     
-    // Calculer dégâts subis par B pendant son TTK contre A
-    const attackDataAB = computeEffectiveDamage(A, B); // A attaque B
+    // Compute damage taken by B during its TTK against A
+    const attackDataAB = computeEffectiveDamage(A, B); // A attacks B
     const effectiveDamagePerCycleAB = attackDataAB.value * multipliers.multA;
     const totalAttackerHP_B = B.hitpoints * multipliers.multB;
     const damageTakenByB = effectiveDamagePerCycleAB * metricsB.hitsToKill!;
@@ -457,7 +457,7 @@ export function computeVersusAtEqualCost(
     unitsRemainingB = Math.floor(hpRemainingB / B.hitpoints);
   }
 
-  // Détermination du gagnant via unités restantes
+  // Determine winner via remaining units
   let winner: "draw" | string = "draw";
   let winnerHpRemaining: number | undefined;
   let winnerUnitsRemaining: number | undefined;
@@ -476,7 +476,7 @@ export function computeVersusAtEqualCost(
     const costPerUnit = multipliers.totalCostB / multipliers.multB;
     resourceDifference = winnerUnitsRemaining * costPerUnit;
   } else {
-    // Draw si unités restantes égales (incluant 0-0)
+    // Draw if remaining units are equal (including 0-0)
     winner = "draw";
   }
 
