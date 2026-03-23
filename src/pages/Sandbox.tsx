@@ -410,11 +410,11 @@ const Sandbox = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8">
+    <div className="h-screen overflow-auto p-6">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-6xl"
+        className="min-w-[1080px] max-w-6xl mx-auto"
       >
         <div className="text-center mb-8 space-y-4">
           <div>
@@ -461,9 +461,9 @@ const Sandbox = () => {
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 mb-8">
+        <div className="grid grid-cols-2 gap-6 mb-8">
           {/* Ally Column */}
-          <div className="space-y-4 flex flex-col items-center md:items-end">
+          <div className="space-y-4 flex flex-col items-end">
             <label className="text-sm font-medium text-foreground">Civilization (Ally):</label>
             <Select value={selectedCivAlly} onValueChange={setSelectedCivAlly}>
               <SelectTrigger className="bg-secondary border-border h-14">
@@ -559,7 +559,7 @@ const Sandbox = () => {
           </div>
 
           {/* Enemy Column */}
-          <div className="space-y-4 flex flex-col items-center md:items-start">
+          <div className="space-y-4 flex flex-col items-start">
             <label className="text-sm font-medium text-foreground">Civilization (Enemy):</label>
             <Select value={selectedCivEnemy} onValueChange={setSelectedCivEnemy}>
               <SelectTrigger className="bg-secondary border-border h-14">
@@ -657,17 +657,17 @@ const Sandbox = () => {
 
         {/* Comparison / versus area */}
         {!isVersus && (
-          <div className="grid md:grid-cols-2 gap-8 mt-12">
+          <div className="grid grid-cols-2 gap-6 mt-8">
             {/* Ally Unit */}
               <motion.div
                 initial={{ opacity: 0, x: -50 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.3 }}
-                className="flex items-start gap-4 justify-center"
+                className="flex justify-center w-full"
               >
               {unit1 && (
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0 space-y-3">
+                <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 w-full">
+                  <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0">
                     <AgeSelector
                       availableAges={getAvailableAges(unit1.id, selectedCivAlly)}
                       selectedAge={selectedAgeAlly}
@@ -687,9 +687,9 @@ const Sandbox = () => {
                       orientation="left"
                     />
                   </div>
-                  <div className="flex-1 min-w-0 flex justify-end">
+                  <div className="flex-1 min-w-0">
                     <UnitCard
-                      className="w-[280px]"
+                      className="w-full"
                       variation={modifiedVariationAlly!}
                       unit={modifiedUnit1 || unit1}
                       side="left"
@@ -719,13 +719,13 @@ const Sandbox = () => {
               initial={{ opacity: 0, x: 50 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.3 }}
-              className="flex items-start gap-4 justify-center"
+              className="flex justify-center w-full"
             >
               {unit2 && (
-                <div className="flex items-start gap-4">
-                  <div className="flex-1 min-w-0 flex justify-start">
+                <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 w-full">
+                  <div className="flex-1 min-w-0 order-2 sm:order-1">
                     <UnitCard
-                      className="w-[280px]"
+                      className="w-full"
                       variation={modifiedVariationEnemy!}
                       unit={modifiedUnit2 || unit2}
                       side="right"
@@ -747,7 +747,7 @@ const Sandbox = () => {
                       compareProductionTime={allyStats?.productionTime}
                     />
                   </div>
-                  <div className="flex-shrink-0 space-y-3">
+                  <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
                     <AgeSelector
                       availableAges={getAvailableAges(unit2.id, selectedCivEnemy)}
                       selectedAge={selectedAgeEnemy}
@@ -773,7 +773,7 @@ const Sandbox = () => {
           </div>
         )}
         {isVersus && (
-          <div className="grid md:grid-cols-2 gap-8 mt-12">
+          <div className="grid grid-cols-2 gap-6 mt-8">
             {(() => {
               if (!unit1 || !unit2) return null;
               
@@ -891,10 +891,10 @@ const Sandbox = () => {
                     initial={{ opacity: 0, x: -50 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3 }}
-                    className="flex items-start gap-4 justify-center"
+                    className="flex justify-center w-full"
                   >
-                    <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0 space-y-3">
+                    <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 w-full">
+                      <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0">
                         <AgeSelector
                           availableAges={getAvailableAges(unit1.id, selectedCivAlly)}
                           selectedAge={selectedAgeAlly}
@@ -916,7 +916,7 @@ const Sandbox = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <UnitCard
-                          className="w-[280px]"
+                          className="w-full"
                           variation={modifiedVariationAlly!}
                           unit={modifiedUnit1 || unit1}
                           side="left"
@@ -930,12 +930,12 @@ const Sandbox = () => {
                     initial={{ opacity: 0, x: 50 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3 }}
-                    className="flex items-start gap-4 justify-center"
+                    className="flex justify-center w-full"
                   >
-                    <div className="flex items-start gap-4">
-                      <div className="flex-1 min-w-0">
+                    <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 w-full">
+                      <div className="flex-1 min-w-0 order-2 sm:order-1">
                         <UnitCard
-                          className="w-[280px]"
+                          className="w-full"
                           variation={modifiedVariationEnemy!}
                           unit={modifiedUnit2 || unit2}
                           side="right"
@@ -943,7 +943,7 @@ const Sandbox = () => {
                           versusMetrics={rightMetrics}
                         />
                       </div>
-                      <div className="flex-shrink-0 space-y-3">
+                      <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
                         <AgeSelector
                           availableAges={getAvailableAges(unit2.id, selectedCivEnemy)}
                           selectedAge={selectedAgeEnemy}
