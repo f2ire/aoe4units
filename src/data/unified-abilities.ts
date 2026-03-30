@@ -41,7 +41,8 @@ const combatProperties = [
   'maxRange',
   'attackSpeed',
   'bonusDamage',
-  'versusOpponentDamageDebuff'
+  'versusOpponentDamageDebuff',
+  'costReduction'
 ];
 
 const nonCombatTargets = [

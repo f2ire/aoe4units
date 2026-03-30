@@ -53,6 +53,42 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     }
   },
   {
+    id: 'ability-golden-age-tier-4',
+    reason: 'Ayyubid Golden Age Tier 4: siege units cost 20% less. Property "unknown" mapped to "costReduction". minAge fixed from 5 to 4 (no Age V exists).',
+    uiTooltip: 'Siege units cost 20% less to produce',
+    after: (ability: Ability) => ({
+      ...ability,
+      minAge: 4,
+      effects: [
+        {
+          property: 'costReduction',
+          select: { class: [['siege']] },
+          effect: 'multiply',
+          value: 0.8,
+          type: 'ability'
+        }
+      ]
+    })
+  },
+  {
+    id: 'ability-golden-age-tier-5',
+    reason: 'Ayyubid Golden Age Tier 5: camel units attack 20% faster. Property "unknown" mapped to "attackSpeed". minAge fixed from 5 to 4 (no Age V exists).',
+    uiTooltip: 'Camel units attack 20% faster',
+    after: (ability: Ability) => ({
+      ...ability,
+      minAge: 4,
+      effects: [
+        {
+          property: 'attackSpeed',
+          select: { id: ['camel-lancer', 'desert-raider'] },
+          effect: 'multiply',
+          value: 1 / 1.2,
+          type: 'ability'
+        }
+      ]
+    })
+  },
+  {
     id: 'ability-conversion',
     reason: 'UI-only: Conversion is a monk ability that has no direct impact on unit combat stats. Hidden to avoid confusion in the ability selector.',
     after: (ability: Ability) => ({ ...ability, hidden: true })

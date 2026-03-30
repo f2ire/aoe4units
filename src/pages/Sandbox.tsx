@@ -144,6 +144,14 @@ const Sandbox = () => {
         { type: 'melee', value: modifiedAllyStats.meleeArmor },
         { type: 'ranged', value: modifiedAllyStats.rangedArmor }
       ],
+      costs: modifiedAllyStats.costMultiplier != null && modifiedAllyStats.costMultiplier !== 1.0 ? {
+        ...variationAlly.costs,
+        food: Math.round((variationAlly.costs.food || 0) * modifiedAllyStats.costMultiplier),
+        wood: Math.round((variationAlly.costs.wood || 0) * modifiedAllyStats.costMultiplier),
+        gold: Math.round((variationAlly.costs.gold || 0) * modifiedAllyStats.costMultiplier),
+        stone: Math.round((variationAlly.costs.stone || 0) * modifiedAllyStats.costMultiplier),
+        oliveoil: Math.round((variationAlly.costs.oliveoil || 0) * modifiedAllyStats.costMultiplier),
+      } : variationAlly.costs,
       movement: variationAlly.movement ? {
         ...variationAlly.movement,
         speed: modifiedAllyStats.moveSpeed
@@ -174,6 +182,14 @@ const Sandbox = () => {
         { type: 'melee', value: modifiedEnemyStats.meleeArmor },
         { type: 'ranged', value: modifiedEnemyStats.rangedArmor }
       ],
+      costs: modifiedEnemyStats.costMultiplier != null && modifiedEnemyStats.costMultiplier !== 1.0 ? {
+        ...variationEnemy.costs,
+        food: Math.round((variationEnemy.costs.food || 0) * modifiedEnemyStats.costMultiplier),
+        wood: Math.round((variationEnemy.costs.wood || 0) * modifiedEnemyStats.costMultiplier),
+        gold: Math.round((variationEnemy.costs.gold || 0) * modifiedEnemyStats.costMultiplier),
+        stone: Math.round((variationEnemy.costs.stone || 0) * modifiedEnemyStats.costMultiplier),
+        oliveoil: Math.round((variationEnemy.costs.oliveoil || 0) * modifiedEnemyStats.costMultiplier),
+      } : variationEnemy.costs,
       movement: variationEnemy.movement ? {
         ...variationEnemy.movement,
         speed: modifiedEnemyStats.moveSpeed

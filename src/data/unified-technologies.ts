@@ -77,7 +77,8 @@ const combatProperties = [
   'bonusDamage',      // Bonus damage
   'siegeAttack',      // Siege damage (special property for siege weapons)
   'gunpowderAttack',  // Gunpowder damage (special property for gunpowder weapons)
-  'burst'             // Number of projectiles
+  'burst',            // Number of projectiles
+  'costReduction'     // Unit production cost multiplier
 ];
 
 // Non-combatant target classes to exclude
@@ -287,6 +288,7 @@ export interface UnitStats {
   maxRange?: number;
   burst?: number;
   bonusDamage?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
+  costMultiplier?: number; // Production cost multiplier (e.g. 0.8 = -20%)
 }
 
 export function applyTechnologyEffects(
@@ -373,7 +375,7 @@ export function applyTechnologyEffects(
       if (!combatProperties.includes(property)) continue;
 
       // Handle special properties
-      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst') {
+      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'costReduction') {
         specialEffects.push({
           property,
           effectType: effect.effect as 'change' | 'multiply',
@@ -488,6 +490,18 @@ export function applyTechnologyEffects(
         modifiedStats.burst += effect.value;
       } else if (effect.effectType === 'multiply') {
         modifiedStats.burst *= effect.value;
+      }
+    }
+  }
+
+  // Apply costReduction
+  for (const effect of specialEffects) {
+    if (effect.property === 'costReduction') {
+      if (modifiedStats.costMultiplier == null) modifiedStats.costMultiplier = 1.0;
+      if (effect.effectType === 'multiply') {
+        modifiedStats.costMultiplier *= effect.value;
+      } else if (effect.effectType === 'change') {
+        modifiedStats.costMultiplier += effect.value;
       }
     }
   }
