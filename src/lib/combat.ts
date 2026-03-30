@@ -18,6 +18,7 @@ export interface CombatEntity {
   };
   classes: string[];
   activeAbilities?: string[]; // IDs of active abilities
+  moveSpeed: number; // tiles/s (movement.speed from unit data)
 }
 
 export interface VersusMetrics {
@@ -53,6 +54,7 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     costs: source.costs,
     classes: source.classes || [],
     activeAbilities: activeAbilities || [],
+    moveSpeed: source.movement?.speed ?? 0,
   };
 }
 
@@ -127,7 +129,10 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
     return { value: 0, base: 0, bonus: 0, armorApplied: 0, cannotAttack: true };
   }
 
-  const weapon = attacker.weapons[0];
+  // On the first attack, use the charge weapon if the unit has one AND charge ability is active
+  const hasChargeAbility = attacker.activeAbilities?.includes('charge-attack') ?? false;
+  const chargeWeapon = (isFirstAttack && hasChargeAbility) ? getChargeWeapon(attacker) : undefined;
+  const weapon = chargeWeapon ?? attacker.weapons[0];
   if (!weapon) return { value: 1, base: 0, bonus: 0, armorApplied: 0, weapon }; // No weapon -> minimal
 
   const baseDamage = weapon.damage || 0;
@@ -135,8 +140,9 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
   // Number of projectiles (burst)
   const burstCount = weapon.burst?.count || 1;
   
-  // Add charge bonus ONLY on the first attack
-  const chargeBonus_applied = isFirstAttack ? chargeBonus : 0;
+  // Add charge bonus ONLY on the first attack, and only when NOT using the charge weapon directly
+  // (when chargeWeapon is used, its damage already IS the charge — no bonus on top)
+  const chargeBonus_applied = (isFirstAttack && !chargeWeapon) ? chargeBonus : 0;
 
   // Applicable bonuses: AND logic per group. Each entry of mod.target.class:
   // - If it is a simple array ["infantry","light"] => requires all these classes (AND)
@@ -226,6 +232,198 @@ function round(value: number, decimals: number): number {
   return Math.round(value * f) / f;
 }
 
+// ─── Movement & Kiting ───────────────────────────────────────────────────────
+
+export const START_DISTANCE = 5; // default starting distance in tiles (configurable later)
+
+function isRangedUnit(entity: CombatEntity): boolean {
+  return entity.weapons[0]?.type === 'ranged';
+}
+
+function getMaxRange(entity: CombatEntity): number {
+  return entity.weapons[0]?.range?.max ?? 0;
+}
+
+function getRetreatTime(entity: CombatEntity): number {
+  // The unit can move during winddown (end of attack animation) AND reload.
+  const d = entity.weapons[0]?.durations;
+  return (d?.winddown ?? 0) + (d?.reload ?? 0);
+}
+
+/**
+ * Returns the charge weapon for units that have one (knight, merc_ghulam).
+ * Detection: class-based (knight / merc_ghulam) + heuristic — secondary melee weapon
+ * with higher damage than the primary (the charge weapon hits harder than normal).
+ * Falls back to undefined if no such weapon is found (e.g. ghulam uses chargeBonus instead).
+ */
+function getChargeWeapon(entity: CombatEntity): UnifiedWeapon | undefined {
+  const isChargeClass = entity.classes.some(c => {
+    const lc = c.toLowerCase();
+    return lc === 'knight' || lc === 'merc_ghulam';
+  });
+  if (!isChargeClass) return undefined;
+  const primary = entity.weapons[0];
+  if (!primary) return undefined;
+  // Secondary melee weapon with strictly higher damage = charge weapon
+  return entity.weapons.slice(1).find(w => w.type === 'melee' && w.damage > primary.damage);
+}
+
+/**
+ * Adjusts both metrics for movement / kiting based on starting distance d0.
+ *
+ * Scenarios:
+ *   Ranged vs Ranged  → add shared approach time to both TTKs (no kiting).
+ *   Melee  vs Melee   → unchanged (existing model kept).
+ *   Ranged vs Melee   → kiting: ranged fires then retreats during reload.
+ *     - if ranged can permanently out-run melee → melee TTK = null (never reaches).
+ *     - otherwise → compute approach + kiting phases, pre-contact hits, contact time.
+ */
+function applyKitingToMetrics(
+  metricsA: VersusMetrics,
+  metricsB: VersusMetrics,
+  A: CombatEntity,
+  B: CombatEntity,
+  d0: number = START_DISTANCE,
+): { adjustedA: VersusMetrics; adjustedB: VersusMetrics } {
+  const A_isRanged = isRangedUnit(A);
+  const B_isRanged = isRangedUnit(B);
+
+  // ── Ranged vs Ranged ──────────────────────────────────────────────────────
+  if (A_isRanged && B_isRanged) {
+    const closingSpeed = A.moveSpeed + B.moveSpeed;
+    if (closingSpeed <= 0) return { adjustedA: metricsA, adjustedB: metricsB };
+
+    const t_approach = Math.max(0, d0 - Math.min(getMaxRange(A), getMaxRange(B))) / closingSpeed;
+    if (t_approach <= 0) return { adjustedA: metricsA, adjustedB: metricsB };
+
+    const note = `+${round(t_approach, 1)}s approach`;
+    return {
+      adjustedA: {
+        ...metricsA,
+        timeToKill: metricsA.timeToKill !== null ? round(metricsA.timeToKill + t_approach, 1) : null,
+        formula: metricsA.formula + ` [Movement: ${note}]`,
+      },
+      adjustedB: {
+        ...metricsB,
+        timeToKill: metricsB.timeToKill !== null ? round(metricsB.timeToKill + t_approach, 1) : null,
+        formula: metricsB.formula + ` [Movement: ${note}]`,
+      },
+    };
+  }
+
+  // ── Melee vs Melee ────────────────────────────────────────────────────────
+  if (!A_isRanged && !B_isRanged) {
+    return { adjustedA: metricsA, adjustedB: metricsB };
+  }
+
+  // ── Ranged vs Melee (or Melee vs Ranged) ──────────────────────────────────
+  const isAranged = A_isRanged;
+  const ranged   = isAranged ? A : B;
+  const melee    = isAranged ? B : A;
+  const mRanged  = isAranged ? metricsA : metricsB;
+  const mMelee   = isAranged ? metricsB : metricsA;
+
+  const rangeMax    = getMaxRange(ranged);
+  const retreatTime = getRetreatTime(ranged); // winddown + reload: phases where the unit can move
+  const speedRanged = ranged.moveSpeed;
+  const speedMelee  = melee.moveSpeed;
+  const attackCycle = ranged.weapons[0]?.speed ?? 0;
+
+  // All melee units with charge ability active get a 20% speed boost until their first attack
+  const hasMeleeCharge = melee.activeAbilities?.includes('charge-attack') ?? false;
+  const CHARGE_SPEED_MULTIPLIER = 1.2; // +20% speed boost for all melee units with charge ability
+  const effectiveMeleeSpeed = hasMeleeCharge ? speedMelee * CHARGE_SPEED_MULTIPLIER : speedMelee;
+  // Charge weapon (extra damage on first hit): only for knight / merc_ghulam
+  const meleeChargeWeapon = hasMeleeCharge ? getChargeWeapon(melee) : undefined;
+
+  if (attackCycle <= 0 || effectiveMeleeSpeed <= 0) {
+    return { adjustedA: metricsA, adjustedB: metricsB };
+  }
+
+  // Net gap change per attack cycle (positive = ranged gains distance, negative = melee gains).
+  // During one cycle: ranged retreats for (winddown + reload) → +speedRanged*retreatTime
+  //                   melee advances for attackCycle          → -effectiveMeleeSpeed*attackCycle
+  const delta = speedRanged * retreatTime - effectiveMeleeSpeed * attackCycle;
+
+  // ── Melee can NEVER catch ranged ──────────────────────────────────────────
+  if (delta >= 0) {
+    const note = `melee (${round(speedMelee, 2)} t/s) cannot catch ranged kiting at ${round(speedRanged, 2)} t/s`;
+    const newMRanged: VersusMetrics = {
+      ...mRanged,
+      formula: mRanged.formula + ` [Kiting: ranged permanently out of reach — ${note}]`,
+    };
+    // Melee can never deal damage: null out all combat stats
+    const newMMelee: VersusMetrics = {
+      ...mMelee,
+      dps: null,
+      dpsPerCost: null,
+      hitsToKill: null,
+      timeToKill: null,
+      effectiveDamagePerHit: null,
+      formula: mMelee.formula + ` [Kiting: ${note}]`,
+    };
+    return isAranged
+      ? { adjustedA: newMRanged, adjustedB: newMMelee }
+      : { adjustedA: newMMelee, adjustedB: newMRanged };
+  }
+
+  // ── Melee can catch ranged ────────────────────────────────────────────────
+  const t_approach    = Math.max(0, d0 - rangeMax) / effectiveMeleeSpeed;
+  const freeHits      = Math.floor(t_approach / attackCycle);
+  const d_kite_start  = Math.min(d0, rangeMax); // distance at start of kiting
+  const absDelta      = Math.abs(delta);
+  const n_kite        = absDelta > 0 ? Math.ceil(d_kite_start / absDelta) : 0;
+  const t_kite        = n_kite * attackCycle;
+  const contactTime   = t_approach + t_kite;
+  const preContactHits = freeHits + n_kite;
+
+  // Ranged TTK: determine which phase melee dies in
+  const hitsToKill = mRanged.hitsToKill;
+  let newTTKranged: number | null = mRanged.timeToKill;
+  if (hitsToKill !== null && attackCycle > 0) {
+    if (hitsToKill <= freeHits) {
+      // Dies during approach
+      newTTKranged = round(hitsToKill * attackCycle, 1);
+    } else if (hitsToKill <= preContactHits) {
+      // Dies during kiting
+      newTTKranged = round(t_approach + (hitsToKill - freeHits) * attackCycle, 1);
+    } else {
+      // Dies during close combat
+      newTTKranged = round(contactTime + (hitsToKill - preContactHits) * attackCycle, 1);
+    }
+  }
+
+  const meleeDiesBeforeContact = hitsToKill !== null && hitsToKill <= preContactHits;
+
+  // Melee TTK: can only deal damage after contact
+  // First hit uses charge weapon speed (if any), subsequent hits use primary weapon speed
+  const meleAttackCycle = melee.weapons[0]?.speed ?? 0;
+  const meleeFirstHitSpeed = meleeChargeWeapon ? (meleeChargeWeapon.speed || meleAttackCycle) : meleAttackCycle;
+  const newTTKmelee: number | null = meleeDiesBeforeContact
+    ? null
+    : (mMelee.hitsToKill !== null && meleAttackCycle > 0
+        ? round(contactTime + meleeFirstHitSpeed + (mMelee.hitsToKill - 1) * meleAttackCycle, 1)
+        : null);
+
+  const chargeSpeedNote = hasMeleeCharge ? ` [charge ×${CHARGE_SPEED_MULTIPLIER} speed]` : '';
+  const kitingNote = `approach ${round(t_approach, 1)}s (+${freeHits} free hits)${chargeSpeedNote} · kiting ${round(t_kite, 1)}s (+${n_kite} hits) · contact t=${round(contactTime, 1)}s`;
+
+  const newMRanged: VersusMetrics = {
+    ...mRanged,
+    timeToKill: newTTKranged,
+    formula: mRanged.formula + ` [Kiting: ${kitingNote}]`,
+  };
+  const newMMelee: VersusMetrics = {
+    ...mMelee,
+    timeToKill: newTTKmelee,
+    formula: mMelee.formula + ` [${meleeDiesBeforeContact ? 'Dies before contact' : `contact at t=${round(contactTime, 1)}s`}]`,
+  };
+
+  return isAranged
+    ? { adjustedA: newMRanged, adjustedB: newMMelee }
+    : { adjustedA: newMMelee, adjustedB: newMRanged };
+}
+
 function computeMetrics(
   attacker: CombatEntity,
   defender: CombatEntity,
@@ -233,33 +431,38 @@ function computeMetrics(
   attackerMultiplier: number = 1,
   defenderMultiplier: number = 1
 ): VersusMetrics {
+  const chargeWeapon = getChargeWeapon(attacker);
+  const hasChargeWeapon = !!chargeWeapon && (attacker.activeAbilities?.includes('charge-attack') ?? false);
   const firstAttackData = computeEffectiveDamage(attacker, defender, chargeBonus, true);
   const normalAttackData = computeEffectiveDamage(attacker, defender, 0, false);
   const weapon = normalAttackData.weapon;
   const attackSpeed = weapon?.speed || 0;
+  // First hit uses the charge weapon's own attack cycle (if present)
+  const firstHitSpeed = hasChargeWeapon ? (chargeWeapon!.speed || attackSpeed) : attackSpeed;
   const bugAttackSpeed = attackSpeed <= 0;
   let dps: number | null = null;
   let hitsToKill: number | null = null;
-  let timeToKill: number | null = null;
+  let timeToKill: number | null = null; 
   let dpsPerCost: number | null = null;
 
   if (!bugAttackSpeed) {
     const totalDefenderHP = defender.hitpoints * defenderMultiplier;
 
-    if (chargeBonus > 0) {
+    if (chargeBonus > 0 || hasChargeWeapon) {
       const firstCycleDamage = firstAttackData.value * attackerMultiplier;
       const normalCycleDamage = normalAttackData.value * attackerMultiplier;
 
       if (firstCycleDamage >= totalDefenderHP) {
         hitsToKill = 1;
-        timeToKill = round(attackSpeed, 1);
+        timeToKill = round(firstHitSpeed, 1);
       } else {
         const additionalHits = Math.ceil((totalDefenderHP - firstCycleDamage) / normalCycleDamage);
         hitsToKill = 1 + additionalHits;
-        timeToKill = round(hitsToKill * attackSpeed, 1);
+        timeToKill = round(firstHitSpeed + additionalHits * attackSpeed, 1);
       }
       const totalDamage = firstCycleDamage + (hitsToKill - 1) * normalCycleDamage;
-      dps = round(totalDamage / (hitsToKill * attackSpeed), 2);
+      const totalTime = firstHitSpeed + (hitsToKill - 1) * attackSpeed;
+      dps = round(totalDamage / totalTime, 2);
     } else {
       const unitDPS = round(normalAttackData.value / attackSpeed, 2);
       dps = round(unitDPS * attackerMultiplier, 2);
@@ -290,10 +493,13 @@ function computeMetrics(
 
   const debuffText = normalAttackData.debuffMultiplier ? ` × ${normalAttackData.debuffMultiplier} (debuff)` : '';
   const chargeText = chargeBonus > 0 ? ` + Charge(${chargeBonus})` : '';
+  const chargeWeaponText = hasChargeWeapon
+    ? ` [1st hit: ${chargeWeapon!.name} (${firstAttackData.value} dmg, t=${round(firstHitSpeed, 3)}s)]`
+    : '';
   const resistanceText = normalAttackData.resistanceApplied ? ` × (1 - ${normalAttackData.resistanceApplied}% resistance)` : '';
   const formula = attackerMultiplier > 1
-    ? `${attackerMultiplier} × [Effective = max(1, (Base(${normalAttackData.base}) + Bonus(${normalAttackData.bonus})${chargeText} - Armor(${normalAttackData.armorApplied}))${resistanceText}) = ${normalAttackData.value}] vs ${defenderMultiplier} defenders` + (weapon ? `; Total DPS = ${dps}` : "")
-    : `Effective = max(1, (Base(${normalAttackData.base}) + Bonus(${normalAttackData.bonus})${chargeText} - Armor(${normalAttackData.armorApplied}))${resistanceText}${debuffText}) = ${normalAttackData.value}` + (weapon ? `; DPS = ${dps}` : "");
+    ? `${attackerMultiplier} × [Effective = max(1, (Base(${normalAttackData.base}) + Bonus(${normalAttackData.bonus})${chargeText} - Armor(${normalAttackData.armorApplied}))${resistanceText}) = ${normalAttackData.value}] vs ${defenderMultiplier} defenders` + (weapon ? `; Total DPS = ${dps}` : "") + chargeWeaponText
+    : `Effective = max(1, (Base(${normalAttackData.base}) + Bonus(${normalAttackData.bonus})${chargeText} - Armor(${normalAttackData.armorApplied}))${resistanceText}${debuffText}) = ${normalAttackData.value}` + (weapon ? `; DPS = ${dps}` : "") + chargeWeaponText;
 
   return {
     id: attacker.id,
@@ -358,17 +564,24 @@ export function calculateEqualCostMultipliers(costA: number, costB: number): { m
 }
 
 export function computeVersus(
-  a: AoE4Unit | UnifiedVariation, 
+  a: AoE4Unit | UnifiedVariation,
   b: AoE4Unit | UnifiedVariation,
   activeAbilitiesA?: string[],
   activeAbilitiesB?: string[],
   chargeBonusA: number = 0,
-  chargeBonusB: number = 0
+  chargeBonusB: number = 0,
+  allowKiting: boolean = false,
+  startDistance: number = START_DISTANCE,
 ): VersusResult {
   const A = toCombatEntity(a, activeAbilitiesA);
   const B = toCombatEntity(b, activeAbilitiesB);
-  const metricsA = computeMetrics(A, B, chargeBonusA);
-  const metricsB = computeMetrics(B, A, chargeBonusB);
+  let metricsA = computeMetrics(A, B, chargeBonusA);
+  let metricsB = computeMetrics(B, A, chargeBonusB);
+
+  // Apply movement / kiting adjustments (only when enabled)
+  if (allowKiting) {
+    ({ adjustedA: metricsA, adjustedB: metricsB } = applyKitingToMetrics(metricsA, metricsB, A, B, startDistance));
+  }
 
   // Determine winner via TTK (lower wins), draw if within <=5%
   let winner: "draw" | string = "draw";
@@ -378,15 +591,17 @@ export function computeVersus(
     winner = metricsB.id;
   } else if (metricsB.cannotAttackUnits) {
     winner = metricsA.id;
-  } else if (!metricsA.bugAttackSpeed && !metricsB.bugAttackSpeed && metricsA.timeToKill !== null && metricsB.timeToKill !== null) {
+  } else if (!metricsA.bugAttackSpeed && !metricsB.bugAttackSpeed) {
     const tA = metricsA.timeToKill;
     const tB = metricsB.timeToKill;
-    const diff = Math.abs(tA - tB);
-    const threshold = Math.max(tA, tB) * 0.05; // 5%
-    if (diff <= threshold) {
-      winner = "draw";
-    } else {
-      winner = tA < tB ? metricsA.id : metricsB.id;
+    if (tA !== null && tB === null) {
+      winner = metricsA.id; // B can never kill A (kiting)
+    } else if (tB !== null && tA === null) {
+      winner = metricsB.id; // A can never kill B (kiting)
+    } else if (tA !== null && tB !== null) {
+      const diff = Math.abs(tA - tB);
+      const threshold = Math.max(tA, tB) * 0.05; // 5%
+      winner = diff <= threshold ? "draw" : (tA < tB ? metricsA.id : metricsB.id);
     }
   }
 
@@ -399,26 +614,33 @@ export function computeVersus(
 
 // Compute versus with equal cost multipliers
 export function computeVersusAtEqualCost(
-  a: AoE4Unit | UnifiedVariation, 
+  a: AoE4Unit | UnifiedVariation,
   b: AoE4Unit | UnifiedVariation,
   activeAbilitiesA?: string[],
   activeAbilitiesB?: string[],
   chargeBonusA: number = 0,
-  chargeBonusB: number = 0
+  chargeBonusB: number = 0,
+  allowKiting: boolean = false,
+  startDistance: number = START_DISTANCE,
 ): VersusResult & { multipliers: { multA: number; multB: number; totalCostA: number; totalCostB: number } } {
   const A = toCombatEntity(a, activeAbilitiesA);
   const B = toCombatEntity(b, activeAbilitiesB);
-  
+
   // Compute the multipliers
   const costA = totalCost(A);
   const costB = totalCost(B);
   const multipliers = calculateEqualCostMultipliers(costA, costB);
-  
+
   // Compute metrics with multipliers
   // A attacks B: multA attackers vs multB defenders
-  const metricsA = computeMetrics(A, B, chargeBonusA, multipliers.multA, multipliers.multB);
+  let metricsA = computeMetrics(A, B, chargeBonusA, multipliers.multA, multipliers.multB);
   // B attacks A: multB attackers vs multA defenders
-  const metricsB = computeMetrics(B, A, chargeBonusB, multipliers.multB, multipliers.multA);
+  let metricsB = computeMetrics(B, A, chargeBonusB, multipliers.multB, multipliers.multA);
+
+  // Apply movement / kiting adjustments (timing is per-unit, independent of multipliers)
+  if (allowKiting) {
+    ({ adjustedA: metricsA, adjustedB: metricsB } = applyKitingToMetrics(metricsA, metricsB, A, B, startDistance));
+  }
 
   // Compute remaining units for both sides
   let unitsRemainingA: number = 0;
@@ -437,6 +659,15 @@ export function computeVersusAtEqualCost(
       winner = metricsA.id;
     }
     return { attacker: metricsA, defender: metricsB, winner, multipliers };
+  }
+
+  // Kiting: one side can never deal damage → immediate winner
+  if (!metricsA.bugAttackSpeed && !metricsB.bugAttackSpeed) {
+    if (metricsA.timeToKill !== null && metricsB.timeToKill === null) {
+      return { attacker: metricsA, defender: metricsB, winner: metricsA.id, multipliers };
+    } else if (metricsB.timeToKill !== null && metricsA.timeToKill === null) {
+      return { attacker: metricsA, defender: metricsB, winner: metricsB.id, multipliers };
+    }
   }
 
   if (!metricsA.bugAttackSpeed && !metricsB.bugAttackSpeed && metricsA.timeToKill !== null && metricsB.timeToKill !== null) {

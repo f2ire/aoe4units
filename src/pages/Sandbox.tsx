@@ -75,6 +75,13 @@ const Sandbox = () => {
   const navigate = useNavigate();
   const [isVersus, setIsVersus] = useState<boolean>(false);
   const [atEqualCost, setAtEqualCost] = useState<boolean>(false);
+  const [allowKiting, setAllowKiting] = useState<boolean>(false);
+  const [startDistancePreset, setStartDistancePreset] = useState<string>("medium");
+  const [customDistance, setCustomDistance] = useState<number>(5);
+  const startDistance = startDistancePreset === "melee" ? 0
+    : startDistancePreset === "medium" ? 5
+    : startDistancePreset === "long" ? 9
+    : Math.max(0, Math.min(30, customDistance));
 
   const ally = useUnitSlot();
   const enemy = useUnitSlot();
@@ -445,17 +452,56 @@ const Sandbox = () => {
               </button>
             </div>
             {isVersus && (
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card">
-                <input
-                  type="checkbox"
-                  id="atEqualCost"
-                  checked={atEqualCost}
-                  onChange={(e) => setAtEqualCost(e.target.checked)}
-                  className="w-4 h-4 rounded border-border"
-                />
-                <label htmlFor="atEqualCost" className="text-sm font-medium cursor-pointer">
-                  At Equal Cost
-                </label>
+              <div className="inline-flex items-center gap-3">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card">
+                  <input
+                    type="checkbox"
+                    id="atEqualCost"
+                    checked={atEqualCost}
+                    onChange={(e) => setAtEqualCost(e.target.checked)}
+                    className="w-4 h-4 rounded border-border"
+                  />
+                  <label htmlFor="atEqualCost" className="text-sm font-medium cursor-pointer">
+                    At Equal Cost
+                  </label>
+                </div>
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card">
+                  <input
+                    type="checkbox"
+                    id="allowKiting"
+                    checked={allowKiting}
+                    onChange={(e) => setAllowKiting(e.target.checked)}
+                    className="w-4 h-4 rounded border-border"
+                  />
+                  <label htmlFor="allowKiting" className="text-sm font-medium cursor-pointer">
+                    Allow Kiting
+                  </label>
+                </div>
+                {allowKiting && (
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card">
+                    <label className="text-sm font-medium">Start Distance:</label>
+                    <select
+                      value={startDistancePreset}
+                      onChange={(e) => setStartDistancePreset(e.target.value)}
+                      className="text-sm bg-transparent border-none outline-none cursor-pointer"
+                    >
+                      <option value="melee">Melee (0)</option>
+                      <option value="medium">Medium (5)</option>
+                      <option value="long">Long (9)</option>
+                      <option value="custom">Custom</option>
+                    </select>
+                    {startDistancePreset === "custom" && (
+                      <input
+                        type="number"
+                        min={0}
+                        max={30}
+                        value={customDistance}
+                        onChange={(e) => setCustomDistance(Number(e.target.value))}
+                        className="w-16 text-sm bg-transparent border border-border rounded px-1 outline-none"
+                      />
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -795,7 +841,9 @@ const Sandbox = () => {
                     abilitiesArrayAlly,
                     abilitiesArrayEnemy,
                     chargeAlly,
-                    chargeEnemy
+                    chargeEnemy,
+                    allowKiting,
+                    startDistance,
                   );
                   versusData = result;
                   multipliers = result.multipliers;
@@ -806,7 +854,9 @@ const Sandbox = () => {
                     abilitiesArrayAlly,
                     abilitiesArrayEnemy,
                     chargeAlly,
-                    chargeEnemy
+                    chargeEnemy,
+                    allowKiting,
+                    startDistance,
                   );
                 }              // Win/loss logic based on weapon ownership
               // A unit without a weapon always loses against a unit with a weapon
@@ -845,6 +895,7 @@ const Sandbox = () => {
                 effectiveDamagePerHit: versusData.attacker.effectiveDamagePerHit,
                 bugAttackSpeed: versusData.attacker.bugAttackSpeed,
                 formula: versusData.attacker.formula,
+                opponentFormula: versusData.defender.formula,
                 isWinner: leftIsWinner,
                 isLoser: !leftIsWinner && !isDraw,
                 isDraw,
@@ -869,6 +920,7 @@ const Sandbox = () => {
                 effectiveDamagePerHit: versusData.defender.effectiveDamagePerHit,
                 bugAttackSpeed: versusData.defender.bugAttackSpeed,
                 formula: versusData.defender.formula,
+                opponentFormula: versusData.attacker.formula,
                 isWinner: rightIsWinner,
                 isLoser: !rightIsWinner && !isDraw,
                 isDraw,

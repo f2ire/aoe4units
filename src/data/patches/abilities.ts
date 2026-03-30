@@ -3,6 +3,28 @@ import { Ability, AbilityVariation } from "../unified-abilities";
 
 export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   {
+    id: 'ability-quick-strike',
+    reason: 'Quick Strike (Ghulam): deals two attacks in rapid succession. Effective cycle = (base + 0.5) × 0.5. Base speed 1.125s → 1.625s → 0.8125s. Applied as top-level effects so combat.ts can apply them via applyAbilityWeaponEffects.',
+    update: {
+      effects: [
+        {
+          property: 'attackSpeed',
+          select: { id: ['ghulam'] },
+          effect: 'change',
+          value: 0.5,
+          type: 'ability'
+        },
+        {
+          property: 'attackSpeed',
+          select: { id: ['ghulam'] },
+          effect: 'multiply',
+          value: 0.5,
+          type: 'ability'
+        }
+      ]
+    }
+  },
+  {
     id: 'ability-camel-unease',
     reason: 'Synthetic gameplay rule: aoe4world does not model the Camel Unease debuff. In-game, camel units passively reduce the attack of nearby horse cavalry by 20%. Modelled here as a versusOpponentDamageDebuff effect (×0.8).',
     uiTooltip: 'Versus mode: Reduces enemy horse cavalry damage by 20%',
@@ -43,10 +65,37 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
 ];
 
 // Synthetic ability — not a patch on existing data.
-// aoe4world does not model the charge attack mechanic. In-game, knights and ghulams
-// deal bonus damage on their first attack after a charge. The bonus scales with age
-// (knight: +10/+12/+14, ghulam: +5/+6) and is applied separately in combat.ts.
+// ALL melee units can charge: +20% movement speed until the first attack.
+// Additional bonus damage on first hit only for: knight (age 2: +10, age 3: +12, age 4: +14)
+// and merc_ghulam (age 3: +5, age 4: +6). Per-age bonus applied in Sandbox.tsx.
 function createChargeAttackAbility(): Ability {
+  const chargeEffects: Ability['effects'] = [
+    // Speed boost for ALL melee units (displayed as moveSpeed effect)
+    {
+      property: 'moveSpeed',
+      select: { class: [['melee']] },
+      effect: 'change',
+      value: 0.2, // +20% speed until first attack
+      type: 'ability',
+    },
+    // Extra damage on first hit — knight only
+    {
+      property: 'bonusDamage',
+      select: { class: [['knight']] },
+      effect: 'change',
+      value: 10, // representative (age 2); age 3: +12, age 4: +14
+      type: 'ability',
+    },
+    // Extra damage on first hit — ghulam only
+    {
+      property: 'bonusDamage',
+      select: { class: [['merc_ghulam']] },
+      effect: 'change',
+      value: 5, // representative (age 3); age 4: +6
+      type: 'ability',
+    },
+  ];
+
   return {
     id: 'charge-attack',
     name: 'Charge Attack',
@@ -56,20 +105,10 @@ function createChargeAttackAbility(): Ability {
     classes: [],
     minAge: 1,
     icon: 'https://data.aoe4world.com/images/abilities/ability-tactical-charge-1.png',
-    description: 'Charge before attacking when unit is far enough',
+    description: 'All melee: +20% move speed until first attack. Knights & Ghulams also deal bonus damage on first hit.',
     unique: false,
     active: 'always',
-    effects: [
-      {
-        property: 'bonusDamage',
-        select: {
-          class: [['knight'], ['merc_ghulam']]
-        },
-        effect: 'change',
-        value: 10,
-        type: 'ability'
-      }
-    ],
+    effects: chargeEffects,
     variations: [
       {
         id: 'charge-attack-1',
@@ -80,33 +119,13 @@ function createChargeAttackAbility(): Ability {
         attribName: 'charge_attack_1',
         age: 1,
         civs: [],
-        description: 'Charge before attacking when unit is far enough',
+        description: 'All melee: +20% move speed until first attack. Knights & Ghulams also deal bonus damage on first hit.',
         classes: [],
         displayClasses: [],
         unique: false,
-        costs: {
-          food: 0,
-          wood: 0,
-          stone: 0,
-          gold: 0,
-          vizier: 0,
-          oliveoil: 0,
-          total: 0,
-          popcap: 0,
-          time: 0
-        },
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
         producedBy: [],
-        effects: [
-          {
-            property: 'bonusDamage',
-            select: {
-              class: [['knight'], ['merc_ghulam']]
-            },
-            effect: 'change',
-            value: 10,
-            type: 'ability'
-          }
-        ]
+        effects: chargeEffects,
       }
     ],
     shared: {}

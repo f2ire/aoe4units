@@ -31,6 +31,7 @@ interface UnifiedWeapon {
   range: UnifiedWeaponRange;
   modifiers: UnifiedWeaponModifier[];
   attackSpeed?: number;
+  attribName?: string; // Internal attribute name, used to detect special weapons (e.g. _charge_)
   burst?: {
     count: number;
   };
