@@ -176,6 +176,42 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         }
       ]
     }
+  },
+
+  {
+    id: 'sultans-mamluks',
+    reason: 'aoe4world effects use effect:"change" (addition) with value 1.25 instead of multiply, have no select targeting infantry, and omit the moveSpeed bonus entirely. Patched to: multiply meleeAttack/rangedAttack ×1.25 and moveSpeed ×1.2 for infantry only.',
+    uiTooltip: 'Infantry: +25% damage, +20% move speed (30s after a kill)',
+    variations: [
+      {
+        match: { id: 'sultans-mamluks-3' },
+        update: {
+          effects: [
+            {
+              property: 'meleeAttack',
+              select: { class: [['infantry']] },
+              effect: 'multiply',
+              value: 1.25,
+              type: 'passive'
+            },
+            {
+              property: 'rangedAttack',
+              select: { class: [['infantry']] },
+              effect: 'multiply',
+              value: 1.25,
+              type: 'passive'
+            },
+            {
+              property: 'moveSpeed',
+              select: { class: [['infantry']] },
+              effect: 'multiply',
+              value: 1.2,
+              type: 'passive'
+            }
+          ]
+        }
+      }
+    ]
   }
 ];
 
