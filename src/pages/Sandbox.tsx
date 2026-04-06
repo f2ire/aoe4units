@@ -466,18 +466,27 @@ const Sandbox = () => {
             </div>
             {isVersus && (
               <div className="inline-flex items-center gap-3">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card">
-                  <input
-                    type="checkbox"
-                    id="atEqualCost"
-                    checked={atEqualCost}
-                    onChange={(e) => setAtEqualCost(e.target.checked)}
-                    className="w-4 h-4 rounded border-border"
-                  />
-                  <label htmlFor="atEqualCost" className="text-sm font-medium cursor-pointer">
-                    At Equal Cost
-                  </label>
-                </div>
+                {(() => {
+                  const sameCost = unit1 && unit2 && allyStats?.cost != null && enemyStats?.cost != null && allyStats.cost === enemyStats.cost;
+                  return (
+                    <div
+                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card ${sameCost ? 'opacity-50' : ''}`}
+                      title={sameCost ? 'Units have the same cost' : undefined}
+                    >
+                      <input
+                        type="checkbox"
+                        id="atEqualCost"
+                        checked={atEqualCost}
+                        onChange={(e) => !sameCost && setAtEqualCost(e.target.checked)}
+                        disabled={!!sameCost}
+                        className="w-4 h-4 rounded border-border disabled:cursor-not-allowed"
+                      />
+                      <label htmlFor="atEqualCost" className={`text-sm font-medium ${sameCost ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                        At Equal Cost
+                      </label>
+                    </div>
+                  );
+                })()}
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card">
                   <input
                     type="checkbox"
@@ -937,7 +946,7 @@ const Sandbox = () => {
                 isWinner: rightIsWinner,
                 isLoser: !rightIsWinner && !isDraw,
                 isDraw,
-                opponentClasses: (modifiedVariationEnemy || modifiedUnit2)?.classes ?? unit2?.classes ?? [],
+                opponentClasses: (modifiedVariationAlly || modifiedUnit1)?.classes ?? unit1?.classes ?? [],
                 opponentDps: versusData.attacker.dps,
                 opponentDpsPerCost: versusData.attacker.dpsPerCost,
                 opponentHitsToKill: versusData.attacker.hitsToKill,

@@ -10,7 +10,7 @@ function transformMultiClassTargets(value: unknown): unknown {
   if (typeof value === 'number') return value;
   if (typeof value === 'boolean') return value;
   if (value === null) return value;
-  
+
   if (Array.isArray(value)) {
     // Check if it is an array of 2 strings (["archer", "ship"] -> "archer_ship")
     if (
@@ -26,7 +26,7 @@ function transformMultiClassTargets(value: unknown): unknown {
     // Otherwise, apply the transformation recursively
     return value.map(v => transformMultiClassTargets(v));
   }
-  
+
   if (typeof value === 'object' && value !== null) {
     const obj = value as Record<string, unknown>;
     const result: Record<string, unknown> = {};
@@ -35,11 +35,100 @@ function transformMultiClassTargets(value: unknown): unknown {
     }
     return result;
   }
-  
+
   return value;
 }
 
 export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
+  {
+    id: 'bedouin-swordsman',
+    reason: 'aoe4world data only has a single age-1 variation but the unit is feudal-minimum (age 2). Adding age-3 and age-4 variations with correct HP (160/192/230), attack (11/13/16), melee bonus (3/4/5), and gold cost (75/70/53) per in-game stats.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      const variations = u.variations as Record<string, unknown>[];
+      const base = variations[0] as Record<string, unknown>;
+      const baseCosts = base.costs as Record<string, unknown>;
+
+      const makeVariation = (age: number, hp: number, damage: number, meleeBonus: number, gold: number) => {
+        const weapons = (base.weapons as Record<string, unknown>[]).map((w, i) => {
+          if (i === 0) {
+            const modifiers = (w.modifiers as Record<string, unknown>[]).map(mod => {
+              const m = mod as Record<string, unknown>;
+              return m.property === 'meleeAttack' ? { ...m, value: meleeBonus } : m;
+            });
+            return { ...w, damage, modifiers };
+          }
+          return w;
+        });
+        // Raw data has food:60 but unit costs 0 food in-game (pure gold cost)
+        const costs = { ...baseCosts, food: 0, gold, total: gold };
+        return { ...base, age, id: `bedouin-swordsman-${age}`, hitpoints: hp, weapons, costs };
+      };
+
+      return {
+        ...u,
+        minAge: 2,
+        variations: [
+          makeVariation(2, 160, 11, 3, 75),
+          makeVariation(3, 192, 13, 4, 70),
+          makeVariation(4, 230, 16, 5, 53),
+        ],
+      };
+    },
+  },
+  {
+    id: 'bedouin-skirmisher',
+    reason: 'aoe4world data only has the age-2 variation. Adding age-3 and age-4 variations with correct HP (90/108/130), attack (8/10/12), ranged bonus vs light infantry (8/10/12), and gold cost (75/70/53) per in-game stats.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      const variations = u.variations as Record<string, unknown>[];
+      const base = variations[0] as Record<string, unknown>;
+      const baseCosts = base.costs as Record<string, unknown>;
+
+      const makeVariation = (age: number, hp: number, damage: number, rangedBonus: number, gold: number) => {
+        const weapons = (base.weapons as Record<string, unknown>[]).map((w, i) => {
+          if (i === 0) {
+            const modifiers = (w.modifiers as Record<string, unknown>[]).map(mod => {
+              const m = mod as Record<string, unknown>;
+              // Raw data encodes the target as [['infantry','light']] which fails the combat.ts
+              // expandedTokens check — 'light' is not a standalone class. Fix to ['infantry_light'].
+              return m.property === 'rangedAttack'
+                ? { ...m, value: rangedBonus, target: { class: ['infantry_light'] } }
+                : m;
+            });
+            return { ...w, damage, modifiers };
+          }
+          return w;
+        });
+        // Raw data has food:80 but unit costs 0 food in-game (pure gold cost)
+        const costs = { ...baseCosts, food: 0, gold, total: gold };
+        return { ...base, age, id: `bedouin-skirmisher-${age}`, hitpoints: hp, weapons, costs };
+      };
+
+      return {
+        ...u,
+        variations: [
+          makeVariation(2, 90, 8, 8, 75),
+          makeVariation(3, 108, 10, 10, 70),
+          makeVariation(4, 130, 12, 12, 53),
+        ],
+      };
+    },
+  },
+  {
+    id: 'landsknecht',
+    reason: 'aoe4world data is missing infantry_light class on the hr (Holy Roman) variations. Both by and hr display "Light Melee Infantry" and behave identically — the hr omission is a data error.',
+    variations: [
+      {
+        match: { age: 3, civsIncludes: 'hr' },
+        update: { classes: ['annihilation_condition', 'armored', 'formational', 'human', 'included_by_military_hotkeys', 'infantry', 'infantry_light', 'landsknecht', 'light_melee_infantry', 'melee', 'melee_infantry', 'military', 'torch_thrower'] },
+      },
+      {
+        match: { age: 4, civsIncludes: 'hr' },
+        update: { classes: ['annihilation_condition', 'armored', 'formational', 'human', 'included_by_military_hotkeys', 'infantry', 'infantry_light', 'landsknecht', 'light_melee_infantry', 'melee', 'melee_infantry', 'military', 'torch_thrower'] },
+      },
+    ],
+  },
   {
     id: 'culverin',
     reason: 'aoe4world encodes composite class targets as nested string arrays (["naval","unit"]) instead of underscored identifiers ("naval_unit"). Applies transformMultiClassTargets to the whole unit, then fixes the remaining edge cases (naval_unit, war_elephant) on the age-4 variation.',

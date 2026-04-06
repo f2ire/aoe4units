@@ -8,7 +8,10 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "update-data": "node scripts/update-data.mjs",
+    "update-data:force": "node scripts/update-data.mjs --force",
+    "update-data:dry": "node scripts/update-data.mjs --dry-run"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

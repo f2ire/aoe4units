@@ -26,9 +26,15 @@ interface AllAbilitiesData {
 
 const typedData = allAbilitiesData as AllAbilitiesData;
 
+// Abilities irrelevant to combat simulation (heal, utility, etc.)
+const EXCLUDED_ABILITY_IDS = [
+  'ability-mass-heal', // AoE heal with no combat stat effect
+];
+
 // Apply patches specific to abilities
 const allAbilitiesRaw: Ability[] = typedData.data as Ability[];
-export const allAbilities: Ability[] = applyAbilityPatches(allAbilitiesRaw);
+export const allAbilities: Ability[] = applyAbilityPatches(allAbilitiesRaw)
+  .filter(a => !EXCLUDED_ABILITY_IDS.includes(a.id));
 
 // Combat properties (reuses the same list as technologies)
 const combatProperties = [
