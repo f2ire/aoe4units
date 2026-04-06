@@ -37,7 +37,7 @@ export interface VersusMetrics {
 export interface VersusResult {
   attacker: VersusMetrics;
   defender: VersusMetrics; // metrics of B vs A
-  winner: "draw" | string; // id of the winner or draw
+  winner: "draw" | "attacker" | "defender";
   winnerHpRemaining?: number;
   winnerUnitsRemaining?: number;
   resourceDifference?: number;
@@ -584,24 +584,24 @@ export function computeVersus(
   }
 
   // Determine winner via TTK (lower wins), draw if within <=5%
-  let winner: "draw" | string = "draw";
+  let winner: "draw" | "attacker" | "defender" = "draw";
   if (metricsA.cannotAttackUnits && metricsB.cannotAttackUnits) {
     winner = "draw";
   } else if (metricsA.cannotAttackUnits) {
-    winner = metricsB.id;
+    winner = "defender";
   } else if (metricsB.cannotAttackUnits) {
-    winner = metricsA.id;
+    winner = "attacker";
   } else if (!metricsA.bugAttackSpeed && !metricsB.bugAttackSpeed) {
     const tA = metricsA.timeToKill;
     const tB = metricsB.timeToKill;
     if (tA !== null && tB === null) {
-      winner = metricsA.id; // B can never kill A (kiting)
+      winner = "attacker"; // B can never kill A (kiting)
     } else if (tB !== null && tA === null) {
-      winner = metricsB.id; // A can never kill B (kiting)
+      winner = "defender"; // A can never kill B (kiting)
     } else if (tA !== null && tB !== null) {
       const diff = Math.abs(tA - tB);
       const threshold = Math.max(tA, tB) * 0.05; // 5%
-      winner = diff <= threshold ? "draw" : (tA < tB ? metricsA.id : metricsB.id);
+      winner = diff <= threshold ? "draw" : (tA < tB ? "attacker" : "defender");
     }
   }
 
@@ -650,13 +650,13 @@ export function computeVersusAtEqualCost(
   
   // Special case: one side cannot attack units (e.g. ram)
   if (metricsA.cannotAttackUnits || metricsB.cannotAttackUnits) {
-    let winner: "draw" | string = "draw";
+    let winner: "draw" | "attacker" | "defender" = "draw";
     if (metricsA.cannotAttackUnits && metricsB.cannotAttackUnits) {
       winner = "draw";
     } else if (metricsA.cannotAttackUnits) {
-      winner = metricsB.id;
+      winner = "defender";
     } else {
-      winner = metricsA.id;
+      winner = "attacker";
     }
     return { attacker: metricsA, defender: metricsB, winner, multipliers };
   }
@@ -664,9 +664,9 @@ export function computeVersusAtEqualCost(
   // Kiting: one side can never deal damage → immediate winner
   if (!metricsA.bugAttackSpeed && !metricsB.bugAttackSpeed) {
     if (metricsA.timeToKill !== null && metricsB.timeToKill === null) {
-      return { attacker: metricsA, defender: metricsB, winner: metricsA.id, multipliers };
+      return { attacker: metricsA, defender: metricsB, winner: "attacker", multipliers };
     } else if (metricsB.timeToKill !== null && metricsA.timeToKill === null) {
-      return { attacker: metricsA, defender: metricsB, winner: metricsB.id, multipliers };
+      return { attacker: metricsA, defender: metricsB, winner: "defender", multipliers };
     }
   }
 
@@ -689,19 +689,19 @@ export function computeVersusAtEqualCost(
   }
 
   // Determine winner via remaining units
-  let winner: "draw" | string = "draw";
+  let winner: "draw" | "attacker" | "defender" = "draw";
   let winnerHpRemaining: number | undefined;
   let winnerUnitsRemaining: number | undefined;
   let resourceDifference: number | undefined;
-  
+
   if (unitsRemainingA > unitsRemainingB) {
-    winner = metricsA.id;
+    winner = "attacker";
     winnerHpRemaining = hpRemainingA;
     winnerUnitsRemaining = unitsRemainingA;
     const costPerUnit = multipliers.totalCostA / multipliers.multA;
     resourceDifference = winnerUnitsRemaining * costPerUnit;
   } else if (unitsRemainingB > unitsRemainingA) {
-    winner = metricsB.id;
+    winner = "defender";
     winnerHpRemaining = hpRemainingB;
     winnerUnitsRemaining = unitsRemainingB;
     const costPerUnit = multipliers.totalCostB / multipliers.multB;

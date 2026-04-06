@@ -26,9 +26,10 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   },
   {
     id: 'ability-camel-unease',
-    reason: 'Synthetic gameplay rule: aoe4world does not model the Camel Unease debuff. In-game, camel units passively reduce the attack of nearby horse cavalry by 20%. Modelled here as a versusOpponentDamageDebuff effect (×0.8).',
+    reason: 'Synthetic gameplay rule: aoe4world does not model the Camel Unease debuff. In-game, camel units passively reduce the attack of nearby horse cavalry by 20%. Modelled here as a versusOpponentDamageDebuff effect (×0.8). Marked active:always so it auto-activates on unit select.',
     uiTooltip: 'Versus mode: Reduces enemy horse cavalry damage by 20%',
     update: {
+      active: 'always',
       effects: [
         {
           property: 'versusOpponentDamageDebuff',
@@ -87,6 +88,29 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         }
       ]
     })
+  },
+  {
+    id: 'ability-atabeg-supervision',
+    reason: 'Atabeg Supervision: an Atabeg gives +20% HP to nearby land military units it supervises. Raw data has property:unknown targeting only atabeg itself (aoe4world does not model this buff). Patched to property:hitpoints ×1.2 targeting land_military class. Available for Ayyubid (civs:[ay]) only.',
+    after: (ability: Ability) => ({
+      ...ability,
+      effects: [
+        {
+          property: 'hitpoints',
+          select: { class: [['land_military']] },
+          effect: 'multiply',
+          value: 1.2,
+          type: 'ability'
+        }
+      ]
+    })
+  },
+  {
+    id: 'ability-tactical-charge',
+    reason: 'Tactical Charge is always active for Camel Lancer — it is a passive characteristic, not a togglable ability. Marking active:always at the top level so it auto-activates on unit select (variation already had active:always but the top-level ability did not).',
+    update: {
+      active: 'always',
+    }
   },
   {
     id: 'ability-conversion',

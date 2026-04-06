@@ -130,6 +130,11 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
     ],
   },
   {
+    id: 'manjaniq',
+    reason: 'Same as culverin: composite class targets encoded as nested arrays ([["naval","unit"]]) need to be transformed to underscored identifiers ("naval_unit") for combat.ts. Applies to both kinetic and incendiary weapon modifiers.',
+    after: (unit: unknown) => transformMultiClassTargets(unit),
+  },
+  {
     id: 'culverin',
     reason: 'aoe4world encodes composite class targets as nested string arrays (["naval","unit"]) instead of underscored identifiers ("naval_unit"). Applies transformMultiClassTargets to the whole unit, then fixes the remaining edge cases (naval_unit, war_elephant) on the age-4 variation.',
     after: (unit: unknown) => transformMultiClassTargets(unit),

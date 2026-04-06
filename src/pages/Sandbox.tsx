@@ -50,6 +50,7 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
   
   // Charge bonus based on age
   if (isKnight) {
+    // TODO: To change more precisely — camel-lancer charge damage may differ from standard knight
     switch (age) {
       case 2: return 10; // Early
       case 3: return 12; // Regular
@@ -578,7 +579,16 @@ const Sandbox = () => {
             </Select>
 
             <label className="text-sm font-medium text-foreground mt-6 block">Friendly Unit:</label>
-            <Select value={unit1?.id || ""} onValueChange={(id) => setUnit1(filteredUnitsAlly.find(u => u.id === id) || null)}>
+            <Select
+              value={unit1?.id === 'desert-raider' && activeAbilitiesAlly.has('ability-desert-raider-blade') ? 'desert-raider_cavalry' : (unit1?.id || "")}
+              onValueChange={(value) => {
+                if (value === 'desert-raider_cavalry') {
+                  setUnit1(filteredUnitsAlly.find(u => u.id === 'desert-raider') || null, 'ability-desert-raider-blade');
+                } else {
+                  setUnit1(filteredUnitsAlly.find(u => u.id === value) || null);
+                }
+              }}
+            >
               <SelectTrigger className="bg-secondary border-border">
                 <SelectValue placeholder="Select a unit..." />
               </SelectTrigger>
@@ -674,7 +684,16 @@ const Sandbox = () => {
             </Select>
 
             <label className="text-sm font-medium text-foreground mt-6 block">Enemy Unit:</label>
-            <Select value={unit2?.id || ""} onValueChange={(id) => setUnit2(filteredUnitsEnemy.find(u => u.id === id) || null)}>
+            <Select
+              value={unit2?.id === 'desert-raider' && activeAbilitiesEnemy.has('ability-desert-raider-blade') ? 'desert-raider_cavalry' : (unit2?.id || "")}
+              onValueChange={(value) => {
+                if (value === 'desert-raider_cavalry') {
+                  setUnit2(filteredUnitsEnemy.find(u => u.id === 'desert-raider') || null, 'ability-desert-raider-blade');
+                } else {
+                  setUnit2(filteredUnitsEnemy.find(u => u.id === value) || null);
+                }
+              }}
+            >
               <SelectTrigger className="bg-secondary border-border">
                 <SelectValue placeholder="Select a unit..." />
               </SelectTrigger>
@@ -901,8 +920,8 @@ const Sandbox = () => {
               } else if (allyHasWeapon && enemyHasWeapon) {
                 // Both have a weapon -> use normal versus logic
                 isDraw = versusData.winner === 'draw';
-                leftIsWinner = !isDraw && versusData.winner === versusData.attacker.id;
-                rightIsWinner = !isDraw && versusData.winner === versusData.defender.id;
+                leftIsWinner = !isDraw && versusData.winner === 'attacker';
+                rightIsWinner = !isDraw && versusData.winner === 'defender';
               } else {
                 // Neither has a weapon -> Draw
                 isDraw = true;

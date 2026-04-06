@@ -46,7 +46,7 @@ const SOURCES = [
 // IDs référencés dans les patches — à vérifier après mise à jour
 // (liste extraite de src/data/patches/)
 const PATCH_UNIT_IDS = [
-  'culverin',
+  'culverin', 'manjaniq',
   'ghulam', 'camel-lancer', 'desert-raider', 'mangonel',
   'bedouin-swordsman', 'bedouin-skirmisher',
   'landsknecht',
@@ -56,7 +56,8 @@ const PATCH_ABILITY_IDS = [
   'ability-quick-strike', 'ability-camel-unease',
   'ability-golden-age-tier-4', 'ability-golden-age-tier-5',
   'ability-conversion', 'ability-proselytize', 'charge-attack',
-  'charge-attack-1',
+  'charge-attack-1', 'ability-tactical-charge', 'ability-atabeg-supervision',
+  'ability-swap-weapon-kinetic', 'ability-swap-weapon-incendiary',
 ];
 
 const PATCH_TECH_IDS = [
