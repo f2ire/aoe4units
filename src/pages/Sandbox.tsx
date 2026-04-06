@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { aoe4Units, AoE4Unit, getAvailableAges, getPrimaryWeapon, getTotalCost } from "@/data/unified-units";
 import type { UnifiedVariation } from "@/data/unified-units";
 import { CIVILIZATIONS } from "@/data/civilizations";
@@ -72,7 +71,6 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
 };
 
 const Sandbox = () => {
-  const navigate = useNavigate();
   const [isVersus, setIsVersus] = useState<boolean>(false);
   const [atEqualCost, setAtEqualCost] = useState<boolean>(false);
   const [allowKiting, setAllowKiting] = useState<boolean>(false);
@@ -426,7 +424,6 @@ const Sandbox = () => {
           <h2 className="text-2xl font-bold text-red-500 mb-4">Erreur de chargement</h2>
           <p className="text-muted-foreground">Les données des unités n'ont pas pu être chargées.</p>
           <p className="text-sm text-muted-foreground mt-2">Vérifiez la console pour plus de détails.</p>
-          <Button onClick={() => navigate("/")} className="mt-4">Retour à l'accueil</Button>
         </div>
       </div>
     );
@@ -1039,11 +1036,6 @@ const Sandbox = () => {
           </div>
         )}
 
-        <div className="text-center mt-8">
-          <Button variant="secondary" onClick={() => navigate("/")}>
-            Back to Home
-          </Button>
-        </div>
       </motion.div>
     </div>
   );
