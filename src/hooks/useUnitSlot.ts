@@ -1,14 +1,16 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { aoe4Units, AoE4Unit, getUnitVariation, getMaxAge, getPrimaryWeapon, getArmorValue } from "@/data/unified-units";
+import { aoe4Units, AoE4Unit, getUnitVariation, getMaxAge, getPrimaryWeapon, getArmorValue, getResistanceValue } from "@/data/unified-units";
 import type { UnifiedVariation } from "@/data/unified-units";
 import { getTechnologiesForUnit, getActiveTechnologyVariationsWithTiers, applyTechnologyEffects, getAllTiersFromSameLine, allTechnologies, type UnitStats } from "@/data/unified-technologies";
 import { getAbilitiesForUnit, getActiveAbilityVariations } from "@/data/unified-abilities";
+import { techAbilityInteractions } from "@/data/patches/abilities";
 import type { Ability, AbilityVariation } from "@/data/unified-abilities";
 
-export function categorizeUnit(unit: AoE4Unit): string {
+export function categorizeUnit(unit: AoE4Unit, selectedCiv?: string): string {
   const classes = unit.classes.map(c => c.toLowerCase());
   if (classes.includes('worker_elephant')) return 'other';
   if (classes.includes('worker')) return 'other'; // trade/support units (e.g. atabeg)
+  if (classes.includes('mercenary_byz') && selectedCiv === 'by') return 'mercenary';
   if (classes.includes('ballista_elephant')) return 'siege';
   if (classes.includes('infantry') && classes.includes('melee')) return 'melee_infantry';
   if (classes.includes('ranged') && !classes.includes('siege') && !classes.includes('ship') && !classes.includes('naval_unit')) return 'ranged';
@@ -27,6 +29,7 @@ const DEFAULT_OPEN_CATEGORIES: Record<string, boolean> = {
   monk: true,
   ship: true,
   other: true,
+  mercenary: false,
 };
 
 export function useUnitSlot() {
@@ -43,11 +46,10 @@ export function useUnitSlot() {
 
   const setUnit = useCallback((u: AoE4Unit | null, preferredAbility?: string) => {
     setUnitInternal(u);
-    if (!u) {
-      setVariation(null);
-      setActiveTechnologies(new Set());
-      setActiveAbilities(new Set());
-    } else if (preferredAbility) {
+    setVariation(null);
+    setActiveTechnologies(new Set());
+    setActiveAbilities(new Set());
+    if (u && preferredAbility) {
       pendingAbilityRef.current = preferredAbility;
     }
   }, []);
@@ -132,7 +134,7 @@ export function useUnitSlot() {
   const categorizedUnits = useMemo(() => {
     const categories: Record<string, AoE4Unit[]> = {};
     filteredUnits.forEach(u => {
-      const category = categorizeUnit(u);
+      const category = categorizeUnit(u, selectedCiv);
       if (!categories[category]) categories[category] = [];
       categories[category].push(u);
     });
@@ -257,7 +259,7 @@ export function useUnitSlot() {
     const data = effectiveVariation || unit;
     if (!data) return {
       hitpoints: 0, meleeAttack: 0, rangedAttack: 0,
-      meleeArmor: 0, rangedArmor: 0, moveSpeed: 0, attackSpeed: 0, bonusDamage: [],
+      meleeArmor: 0, rangedArmor: 0, moveSpeed: 0, attackSpeed: 0, bonusDamage: [], rangedResistance: 0,
     };
 
     const weapon = getPrimaryWeapon(data);
@@ -272,12 +274,25 @@ export function useUnitSlot() {
       maxRange: weapon?.range?.max || 0,
       burst: weapon?.burst?.count || 1,
       bonusDamage: weapon?.modifiers || [],
+      rangedResistance: getResistanceValue(data, 'ranged'),
     };
 
     const techVariations = getActiveTechnologyVariationsWithTiers(activeTechnologies, selectedCiv, selectedAge);
     const abilityVariations = getActiveAbilityVariations(activeAbilities, selectedCiv, selectedAge);
     const withTechs = applyTechnologyEffects(baseStats, effectiveClasses, techVariations, unit?.id);
-    return applyTechnologyEffects(withTechs, effectiveClasses, abilityVariations, unit?.id);
+    let result = applyTechnologyEffects(withTechs, effectiveClasses, abilityVariations, unit?.id);
+
+    for (const interaction of techAbilityInteractions) {
+      if (
+        activeTechnologies.has(interaction.requiredTech) &&
+        activeAbilities.has(interaction.requiredAbility) &&
+        (!interaction.unitId || unit?.id === interaction.unitId)
+      ) {
+        result = interaction.apply(result);
+      }
+    }
+    if (result.moveSpeed > 2) result = { ...result, moveSpeed: 2 };
+    return result;
   }, [unit, variation, effectiveClasses, activeTechnologies, activeAbilities, selectedCiv, selectedAge]);
 
   return {

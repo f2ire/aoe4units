@@ -1,5 +1,22 @@
 import { TechnologyPatch, deepMerge } from "./types";
 import { Ability, AbilityVariation } from "../unified-abilities";
+import type { UnitStats } from "../unified-technologies";
+
+export interface TechAbilityInteraction {
+  requiredTech: string;
+  requiredAbility: string;
+  unitId?: string; // if omitted, applies to any unit
+  apply: (stats: UnitStats) => UnitStats;
+}
+
+export const techAbilityInteractions: TechAbilityInteraction[] = [
+  {
+    requiredTech: 'ferocious-speed',
+    requiredAbility: 'ability-berserking',
+    unitId: 'varangian-guard',
+    apply: (stats) => ({ ...stats, moveSpeed: stats.moveSpeed * 1.3 }),
+  },
+];
 
 export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   {
@@ -121,6 +138,36 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     id: 'ability-proselytize',
     reason: 'UI-only: Proselytize is a monk ability that has no direct impact on unit combat stats. Hidden to avoid confusion in the ability selector.',
     after: (ability: Ability) => ({ ...ability, hidden: true })
+  },
+  {
+    id: 'ability-shield-wall',
+    reason: 'Raw variation effects are wrong: moveSpeed change+25 (would be +25%, should be ×0.75 = −25%), attackSpeed change+30 (adds 30s to cycle, should be ×0.75 = 25% faster), rangedArmor change+30 (adds armor, should be 30% ranged damage resistance). Rewritten to: moveSpeed ×0.75, attackSpeed ×0.75, rangedResistance +30.',
+    after: (ability: Ability) => ({
+      ...ability,
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        effects: [
+          { property: 'moveSpeed', select: { id: ['limitanei'] }, effect: 'multiply', value: 0.75, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['limitanei'] }, effect: 'multiply', value: 0.75, type: 'ability' },
+          { property: 'rangedResistance', select: { id: ['limitanei'] }, effect: 'change', value: 30, type: 'ability' },
+        ]
+      }))
+    })
+  },
+  {
+    id: "ability-berserking",
+    reason: 'Raw value was +30 (wrong), correct value is +6.',
+    after: (ability) => ({
+      ...ability,
+      variations: ability.variations.map(v => ({
+        ...v,
+        effects: [
+          { property: 'meleeAttack', select: { id: ["varangian-guard"] }, effect: 'change', value: 6, type: 'ability' },
+          { property: 'meleeArmor', select: { id: ["varangian-guard"] }, effect: 'change', value: -4, type: 'ability' },
+          { property: 'rangedArmor', select: { id: ["varangian-guard"] }, effect: 'change', value: -4, type: 'ability' },
+        ]
+      }))
+    })
   }
 ];
 
@@ -134,8 +181,8 @@ function createChargeAttackAbility(): Ability {
     {
       property: 'moveSpeed',
       select: { class: [['melee']] },
-      effect: 'change',
-      value: 0.2, // +20% speed until first attack
+      effect: 'multiply',
+      value: 1.2, // +20% speed until first attack
       type: 'ability',
     },
     // Extra damage on first hit — knight only
@@ -167,7 +214,6 @@ function createChargeAttackAbility(): Ability {
     icon: 'https://data.aoe4world.com/images/abilities/ability-tactical-charge-1.png',
     description: 'All melee: +20% move speed until first attack. Knights & Ghulams also deal bonus damage on first hit.',
     unique: false,
-    active: 'always',
     effects: chargeEffects,
     variations: [
       {
@@ -202,7 +248,7 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     if (!patch) return ability;
 
     let updated = { ...ability };
-    
+
     if (patch.update) {
       updated = deepMerge(updated, patch.update);
     }

@@ -78,7 +78,8 @@ const combatProperties = [
   'siegeAttack',      // Siege damage (special property for siege weapons)
   'gunpowderAttack',  // Gunpowder damage (special property for gunpowder weapons)
   'burst',            // Number of projectiles
-  'costReduction'     // Unit production cost multiplier
+  'costReduction',    // Unit production cost multiplier
+  'rangedResistance'  // Ranged damage resistance (%)
 ];
 
 // Non-combatant target classes to exclude
@@ -289,6 +290,7 @@ export interface UnitStats {
   burst?: number;
   bonusDamage?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   costMultiplier?: number; // Production cost multiplier (e.g. 0.8 = -20%)
+  rangedResistance?: number; // Ranged damage resistance percentage (0-100), e.g. 30 = 30% reduction
 }
 
 export function applyTechnologyEffects(
@@ -375,7 +377,7 @@ export function applyTechnologyEffects(
       if (!combatProperties.includes(property)) continue;
 
       // Handle special properties
-      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'costReduction') {
+      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'costReduction' || property === 'rangedResistance') {
         specialEffects.push({
           property,
           effectType: effect.effect as 'change' | 'multiply',
@@ -502,6 +504,18 @@ export function applyTechnologyEffects(
         modifiedStats.costMultiplier *= effect.value;
       } else if (effect.effectType === 'change') {
         modifiedStats.costMultiplier += effect.value;
+      }
+    }
+  }
+
+  // Apply rangedResistance
+  for (const effect of specialEffects) {
+    if (effect.property === 'rangedResistance') {
+      const current = modifiedStats.rangedResistance ?? 0;
+      if (effect.effectType === 'change') {
+        modifiedStats.rangedResistance = current + effect.value;
+      } else if (effect.effectType === 'multiply') {
+        modifiedStats.rangedResistance = current * effect.value;
       }
     }
   }

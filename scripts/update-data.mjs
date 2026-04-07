@@ -58,6 +58,7 @@ const PATCH_ABILITY_IDS = [
   'ability-conversion', 'ability-proselytize', 'charge-attack',
   'charge-attack-1', 'ability-tactical-charge', 'ability-atabeg-supervision',
   'ability-swap-weapon-kinetic', 'ability-swap-weapon-incendiary',
+  'ability-shield-wall',
 ];
 
 const PATCH_TECH_IDS = [

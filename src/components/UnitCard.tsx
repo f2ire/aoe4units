@@ -224,6 +224,13 @@ export const UnitCard = ({
   if (mode === 'versus' && versusMetrics?.opponentClasses && primaryWeapon?.modifiers?.length) {
     const opp = versusMetrics.opponentClasses.map(c => c.toLowerCase());
     const expandedOpp = new Set<string>(opp);
+    for (const cls of opp) {
+      if (cls.includes('_')) {
+        for (const part of cls.split('_')) {
+          if (part) expandedOpp.add(part);
+        }
+      }
+    }
 
     for (const mod of primaryWeapon.modifiers as any[]) { // eslint-disable-line @typescript-eslint/no-explicit-any
       const spec = mod.target?.class;

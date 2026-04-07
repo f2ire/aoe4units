@@ -28,7 +28,15 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
           ]
         }
       }
-    ]
+    ],
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    })
   },
 
   {
@@ -212,6 +220,21 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         }
       }
     ]
+  },
+  {
+    id: "ferocious-speed",
+    reason: "effects are only during Berserking ability",
+    update: {
+      effects: [
+        {
+          property: "moveSpeed",
+          select: { id: ["verangian-guard"] },
+          effect: "multiply",
+          value: 0,
+          type: "passive"
+        }
+      ]
+    }
   }
 ];
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { aoe4Units, AoE4Unit, getAvailableAges, getPrimaryWeapon, getTotalCost } from "@/data/unified-units";
 import type { UnifiedVariation } from "@/data/unified-units";
 import { CIVILIZATIONS } from "@/data/civilizations";
@@ -20,7 +20,8 @@ const categoryNames: Record<string, string> = {
   siege: 'Siege',
   monk: 'Monks',
   ship: 'Ships',
-  other: 'Other'
+  other: 'Other',
+  mercenary: 'Mercenaries',
 };
 
 const categoryIcons: Record<string, string> = {
@@ -30,10 +31,23 @@ const categoryIcons: Record<string, string> = {
   siege: 'https://data.aoe4world.com/images/buildings/siege-workshop.png',
   monk: 'https://data.aoe4world.com/images/buildings/monastery.png',
   ship: 'https://data.aoe4world.com/images/buildings/dock.png',
-  other: 'https://data.aoe4world.com/images/buildings/house.png'
+  other: 'https://data.aoe4world.com/images/buildings/house.png',
+  mercenary: 'https://data.aoe4world.com/images/buildings/barracks.png',
 };
 
-const categoryOrder = ['melee_infantry', 'ranged', 'cavalry', 'siege', 'monk', 'ship', 'other'];
+const categoryOrder = ['melee_infantry', 'ranged', 'cavalry', 'siege', 'mercenary', 'monk', 'ship', 'other'];
+
+function getMercenarySubCategory(unit: { classes: string[] }): string {
+  const cls = unit.classes.map(c => c.toLowerCase());
+  if (cls.includes('siege')) return 'Siege';
+  if (cls.includes('cavalry') && cls.includes('ranged')) return 'Ranged Cavalry';
+  if (cls.includes('cavalry')) return 'Melee Cavalry';
+  if (cls.includes('ranged')) return 'Ranged Infantry';
+  if (cls.includes('melee')) return 'Melee Infantry';
+  return 'Other';
+}
+
+const MERCENARY_SUB_ORDER = ['Melee Infantry', 'Ranged Infantry', 'Melee Cavalry', 'Ranged Cavalry', 'Siege', 'Other'];
 
 // Function to calculate the charge bonus for a unit
 const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activeAbilities: Set<string>, age: number): number => {
@@ -143,6 +157,10 @@ const Sandbox = () => {
         { type: 'melee', value: modifiedAllyStats.meleeArmor },
         { type: 'ranged', value: modifiedAllyStats.rangedArmor }
       ],
+      resistance: [
+        ...(variationAlly.resistance || []).filter((r: { type: string }) => r.type !== 'ranged'),
+        ...((modifiedAllyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedAllyStats.rangedResistance! }] : [])
+      ],
       costs: modifiedAllyStats.costMultiplier != null && modifiedAllyStats.costMultiplier !== 1.0 ? {
         ...variationAlly.costs,
         food: Math.round((variationAlly.costs.food || 0) * modifiedAllyStats.costMultiplier),
@@ -180,6 +198,10 @@ const Sandbox = () => {
       armor: [
         { type: 'melee', value: modifiedEnemyStats.meleeArmor },
         { type: 'ranged', value: modifiedEnemyStats.rangedArmor }
+      ],
+      resistance: [
+        ...(variationEnemy.resistance || []).filter((r: { type: string }) => r.type !== 'ranged'),
+        ...((modifiedEnemyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedEnemyStats.rangedResistance! }] : [])
       ],
       costs: modifiedEnemyStats.costMultiplier != null && modifiedEnemyStats.costMultiplier !== 1.0 ? {
         ...variationEnemy.costs,
@@ -224,6 +246,10 @@ const Sandbox = () => {
         { type: 'melee', value: modifiedAllyStats.meleeArmor },
         { type: 'ranged', value: modifiedAllyStats.rangedArmor }
       ],
+      resistance: [
+        ...(unit1.resistance || []).filter((r: { type: string }) => r.type !== 'ranged'),
+        ...((modifiedAllyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedAllyStats.rangedResistance! }] : [])
+      ],
       movement: unit1.movement ? {
         ...unit1.movement,
         speed: modifiedAllyStats.moveSpeed
@@ -254,6 +280,10 @@ const Sandbox = () => {
       armor: [
         { type: 'melee', value: modifiedEnemyStats.meleeArmor },
         { type: 'ranged', value: modifiedEnemyStats.rangedArmor }
+      ],
+      resistance: [
+        ...(unit2.resistance || []).filter((r: { type: string }) => r.type !== 'ranged'),
+        ...((modifiedEnemyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedEnemyStats.rangedResistance! }] : [])
       ],
       movement: unit2.movement ? {
         ...unit2.movement,
@@ -619,7 +649,28 @@ const Sandbox = () => {
                           <span>{categoryNames[categoryKey]} ({units.length})</span>
                         </SelectLabel>
                       </div>
-                      {isOpen && units.map((unit) => (
+                      {isOpen && categoryKey === 'mercenary' ? (() => {
+                        const grouped: Record<string, typeof units> = {};
+                        for (const u of units) {
+                          const sub = getMercenarySubCategory(u);
+                          if (!grouped[sub]) grouped[sub] = [];
+                          grouped[sub].push(u);
+                        }
+                        return MERCENARY_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
+                          <React.Fragment key={sub}>
+                            <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
+                            {grouped[sub].map((unit) => (
+                              <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-10 group">
+                                <div className="flex items-center gap-2">
+                                  <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
+                                  <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
+                                  {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </React.Fragment>
+                        ));
+                      })() : isOpen && units.map((unit) => (
                         <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-8 group">
                           <div className="flex items-center gap-2">
                             <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
@@ -724,7 +775,28 @@ const Sandbox = () => {
                           <span>{categoryNames[categoryKey]} ({units.length})</span>
                         </SelectLabel>
                       </div>
-                      {isOpen && units.map((unit) => (
+                      {isOpen && categoryKey === 'mercenary' ? (() => {
+                        const grouped: Record<string, typeof units> = {};
+                        for (const u of units) {
+                          const sub = getMercenarySubCategory(u);
+                          if (!grouped[sub]) grouped[sub] = [];
+                          grouped[sub].push(u);
+                        }
+                        return MERCENARY_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
+                          <React.Fragment key={sub}>
+                            <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
+                            {grouped[sub].map((unit) => (
+                              <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-10 group">
+                                <div className="flex items-center gap-2">
+                                  <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
+                                  <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
+                                  {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </React.Fragment>
+                        ));
+                      })() : isOpen && units.map((unit) => (
                         <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-8 group">
                           <div className="flex items-center gap-2">
                             <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />

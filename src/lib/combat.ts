@@ -151,10 +151,17 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
   let bonusDamage = 0;
   if (weapon.modifiers && defender.classes && defender.classes.length > 0) {
     const defenderClassesLower = defender.classes.map(c => c.toLowerCase());
-    // Build a set containing all defender classes
+    // Build a set containing all defender classes plus the individual parts of compound classes.
+    // e.g. "light_melee_infantry" also adds "light", "melee", "infantry" so that raw modifier
+    // targets encoded as [["light","melee","infantry"]] match correctly.
     const expandedTokens = new Set<string>();
     for (const cls of defenderClassesLower) {
       expandedTokens.add(cls);
+      if (cls.includes('_')) {
+        for (const part of cls.split('_')) {
+          if (part) expandedTokens.add(part);
+        }
+      }
     }
     for (const mod of weapon.modifiers) {
       // Apply normal modifiers and siegeAttack (property is just a label, not a reason to ignore)
