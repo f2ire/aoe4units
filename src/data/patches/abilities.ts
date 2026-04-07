@@ -168,6 +168,25 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         ]
       }))
     })
+  },
+  {
+    id: "ability-trample",
+    reason: 'Trample is a charge-style ability — +12 bonus on first hit only (handled by getChargeBonus in Sandbox.tsx). Raw meleeAttack +12 zeroed in variations to avoid permanent buff. Speed boost +25% modelled via moveSpeed multiply.',
+    update: {
+      effects: [
+        {
+          property: "moveSpeed",
+          select: { id: ["cataphract"] },
+          effect: "multiply",
+          value: 1.25,
+          type: "ability",
+        },
+      ]
+    },
+    after: (ability: Ability) => ({
+      ...ability,
+      variations: ability.variations.map((v: AbilityVariation) => ({ ...v, effects: [] }))
+    })
   }
 ];
 

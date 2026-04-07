@@ -51,11 +51,16 @@ const MERCENARY_SUB_ORDER = ['Melee Infantry', 'Ranged Infantry', 'Melee Cavalry
 
 // Function to calculate the charge bonus for a unit
 const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activeAbilities: Set<string>, age: number): number => {
-  if (!activeAbilities.has('charge-attack') || !unitData) return 0;
-  
+  if (!unitData) return 0;
+
   // Get the base ID for variations
   const baseId = ('baseId' in unitData) ? unitData.baseId : unitData.id;
   const unitClasses = unitData.classes || [];
+
+  // Cataphract: ability-trample behaves like a charge — +12 bonus on first hit only
+  if (activeAbilities.has('ability-trample') && baseId === 'cataphract') return 12;
+
+  if (!activeAbilities.has('charge-attack')) return 0;
   
   const isKnight = unitClasses.some(c => c.toLowerCase() === 'knight');
   const isGhulam = baseId === 'ghulam' || unitClasses.some(c => c.toLowerCase() === 'merc_ghulam');

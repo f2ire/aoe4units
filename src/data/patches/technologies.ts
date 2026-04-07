@@ -235,6 +235,21 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         }
       ]
     }
+  },
+  {
+    id: "numeri",
+    reason: "effects are only during Berserking ability",
+    update: {
+      effects: [
+        {
+          property: "meleeAttack",
+          select: { id: ["cataphract"] },
+          effect: "multiply",
+          value: 1.15,
+          type: "passive"
+        }
+      ]
+    }
   }
 ];
 

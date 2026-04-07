@@ -138,9 +138,9 @@ export function useUnitSlot() {
       if (!categories[category]) categories[category] = [];
       categories[category].push(u);
     });
-    // Desert Raider also appears in cavalry (with sword/blade as default)
+    // Desert Raider also appears in cavalry (blade mode default) — but NOT when it's a mercenary for the current civ
     const desertRaider = filteredUnits.find(u => u.id === 'desert-raider');
-    if (desertRaider) {
+    if (desertRaider && categorizeUnit(desertRaider, selectedCiv) !== 'mercenary') {
       if (!categories['cavalry']) categories['cavalry'] = [];
       categories['cavalry'].push({ ...desertRaider, id: 'desert-raider_cavalry' });
     }
@@ -181,8 +181,8 @@ export function useUnitSlot() {
   const abilities = useMemo<Ability[]>(() => {
     if (!unit) return [];
     const all = getAbilitiesForUnit(effectiveClasses, selectedCiv, selectedAge, unit.id);
-    // Desert Raider has no charge attack (neither bow nor blade mode)
-    if (unit.id === 'desert-raider') return all.filter(a => a.id !== 'charge-attack');
+    // Desert Raider and Cataphract have no charge attack
+    if (unit.id === 'desert-raider' || unit.id === 'cataphract') return all.filter(a => a.id !== 'charge-attack');
     return all;
   }, [unit, effectiveClasses, selectedCiv, selectedAge]);
 
