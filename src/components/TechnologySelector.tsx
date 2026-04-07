@@ -1,5 +1,5 @@
 import { Technology, categorizeTechnology, getTechnologyTier, getTechnologyBaseName } from "@/data/unified-technologies";
-import { technologyPatches } from "@/data/patches/technologies";
+import { technologyPatches, foreignEngineeringTechIds } from "@/data/patches/technologies";
 import {
   Tooltip,
   TooltipContent,
@@ -12,13 +12,15 @@ interface TechnologySelectorProps {
   activeTechnologies: Set<string>;
   onToggle: (techId: string) => void;
   orientation?: "left" | "right";
+  selectedCiv?: string;
 }
 
 export const TechnologySelector = ({
   technologies,
   activeTechnologies,
   onToggle,
-  orientation = "left"
+  orientation = "left",
+  selectedCiv,
 }: TechnologySelectorProps) => {
   if (technologies.length === 0) return null;
 
@@ -133,7 +135,13 @@ export const TechnologySelector = ({
                     const iconFileName = tech.icon.split('/').pop() || '';
                     const iconPath = `/technologies/${iconFileName}`;
                     const patch = technologyPatches.find(p => p.id === tech.id);
-                    const patchTooltip = patch?.uiTooltip || patch?.variations?.find(vp => vp.uiTooltip)?.uiTooltip;
+                    const isForeignEngineering = selectedCiv === 'by' && foreignEngineeringTechIds.has(tech.id);
+                    // For FEC techs, only show the uiTooltip when playing as Byzantine
+                    const patchTooltip = isForeignEngineering
+                      ? patch?.uiTooltip
+                      : (!foreignEngineeringTechIds.has(tech.id)
+                          ? (patch?.uiTooltip || patch?.variations?.find(vp => vp.uiTooltip)?.uiTooltip)
+                          : undefined);
                     return (
                       <div key={tech.id} className="relative">
                         <TooltipProvider delayDuration={750}>
@@ -144,9 +152,11 @@ export const TechnologySelector = ({
                                 className={`
                                   w-12 h-12 rounded border-2 transition-all relative
                                   hover:scale-105 active:scale-95 overflow-hidden
-                                  ${isActive 
-                                    ? 'border-green-500 bg-green-500/10' 
-                                    : 'border-border/50 bg-secondary/50 opacity-60'
+                                  ${isActive
+                                    ? 'border-green-500 bg-green-500/10'
+                                    : isForeignEngineering
+                                      ? 'border-orange-500/60 bg-orange-950/40 opacity-80'
+                                      : 'border-border/50 bg-secondary/50 opacity-60'
                                   }
                                 `}
                               >

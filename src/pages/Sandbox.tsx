@@ -843,12 +843,14 @@ const Sandbox = () => {
                       activeTechnologies={activeTechnologiesAlly}
                       onToggle={toggleTechnologyAlly}
                       orientation="left"
+                      selectedCiv={selectedCivAlly}
                     />
                     <AbilitySelector
                       abilities={abilitiesAlly}
                       activeAbilities={activeAbilitiesAlly}
                       onToggle={toggleAbilityAlly}
                       orientation="left"
+                      selectedCiv={selectedCivAlly}
                     />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -923,12 +925,14 @@ const Sandbox = () => {
                       activeTechnologies={activeTechnologiesEnemy}
                       orientation="right"
                       onToggle={toggleTechnologyEnemy}
+                      selectedCiv={selectedCivEnemy}
                     />
                     <AbilitySelector
                       abilities={abilitiesEnemy}
                       activeAbilities={activeAbilitiesEnemy}
                       onToggle={toggleAbilityEnemy}
                       orientation="right"
+                      selectedCiv={selectedCivEnemy}
                     />
                   </div>
                 </div>
@@ -1076,12 +1080,14 @@ const Sandbox = () => {
                           activeTechnologies={activeTechnologiesAlly}
                           onToggle={toggleTechnologyAlly}
                           orientation="left"
+                          selectedCiv={selectedCivAlly}
                         />
                         <AbilitySelector
                           abilities={abilitiesAlly}
                           activeAbilities={activeAbilitiesAlly}
                           onToggle={toggleAbilityAlly}
                           orientation="left"
+                          selectedCiv={selectedCivAlly}
                         />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1125,12 +1131,14 @@ const Sandbox = () => {
                           activeTechnologies={activeTechnologiesEnemy}
                           onToggle={toggleTechnologyEnemy}
                           orientation="right"
+                          selectedCiv={selectedCivEnemy}
                         />
                         <AbilitySelector
                           abilities={abilitiesEnemy}
                           activeAbilities={activeAbilitiesEnemy}
                           onToggle={toggleAbilityEnemy}
                           orientation="right"
+                          selectedCiv={selectedCivEnemy}
                         />
                       </div>
                     </div>

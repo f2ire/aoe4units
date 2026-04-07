@@ -1,4 +1,5 @@
 import type { Ability, AbilityVariation } from "@/data/unified-abilities";
+import { abilityPatches, foreignEngineeringAbilityIds } from "@/data/patches/abilities";
 import {
   Tooltip,
   TooltipContent,
@@ -16,13 +17,15 @@ interface AbilitySelectorProps {
   activeAbilities: Set<string>;
   onToggle: (abilityId: string) => void;
   orientation?: "left" | "right";
+  selectedCiv?: string;
 }
 
 export const AbilitySelector = ({
   abilities,
   activeAbilities,
   onToggle,
-  orientation = "left"
+  orientation = "left",
+  selectedCiv,
 }: AbilitySelectorProps) => {
   if (abilities.length === 0) return null;
 
@@ -47,11 +50,11 @@ export const AbilitySelector = ({
           <div key={age} className="w-12 flex flex-col gap-2">
             {ageAbilities.map(ability => {
               const isActive = activeAbilities.has(ability.id);
-              // Detect if this ability is "active" by default (e.g. aura)
-              // Check both at the ability level and in variations
               const isDefaultAlways = (hasActiveProperty(ability) && ability.active === 'always') || ability.variations?.some((v: AbilityVariation) => v.active === 'always');
-              // Use the icon from the aoe4world.com URL
               const iconPath = ability.icon;
+              const isForeignEngineering = selectedCiv === 'by' && foreignEngineeringAbilityIds.has(ability.id);
+              const patch = abilityPatches.find(p => p.id === ability.id);
+              const patchTooltip = isForeignEngineering ? patch?.uiTooltip : undefined;
 
               return (
                 <div key={ability.id} className="relative">
@@ -65,7 +68,9 @@ export const AbilitySelector = ({
                             hover:scale-105 active:scale-95 overflow-hidden
                             ${isActive
                               ? 'border-purple-500 bg-purple-500/10'
-                              : 'border-border/50 bg-secondary/50 opacity-60'
+                              : isForeignEngineering
+                                ? 'border-orange-500/60 bg-orange-950/40 opacity-80'
+                                : 'border-border/50 bg-secondary/50 opacity-60'
                             }
                           `}
                         >
@@ -94,6 +99,24 @@ export const AbilitySelector = ({
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
+
+                  {patchTooltip && (
+                    <TooltipProvider delayDuration={750}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span
+                            className="absolute top-0 right-0 text-[10px] font-bold text-yellow-500 bg-black/50 px-1 rounded-bl cursor-help z-10 pointer-events-auto"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            *
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-xs z-50">
+                          <p className="text-xs text-yellow-400">{patchTooltip}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
                 </div>
               );
             })}

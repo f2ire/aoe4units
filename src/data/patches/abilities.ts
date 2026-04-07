@@ -18,6 +18,12 @@ export const techAbilityInteractions: TechAbilityInteraction[] = [
   },
 ];
 
+//_________________
+//
+// ABBASID DYNASTY
+//
+//_________________
+
 export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   {
     id: 'ability-quick-strike',
@@ -38,9 +44,18 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
           value: 0.5,
           type: 'ability'
         }
-      ]
-    }
+      ],
+    },
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
   },
+
   {
     id: 'ability-camel-unease',
     reason: 'Synthetic gameplay rule: aoe4world does not model the Camel Unease debuff. In-game, camel units passively reduce the attack of nearby horse cavalry by 20%. Modelled here as a versusOpponentDamageDebuff effect (×0.8). Marked active:always so it auto-activates on unit select.',
@@ -68,8 +83,23 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
           type: 'ability'
         }
       ]
-    }
+    },
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
   },
+
+  //_________
+  //
+  // AYYUBIDS
+  //
+  //_________
+
   {
     id: 'ability-golden-age-tier-4',
     reason: 'Ayyubid Golden Age Tier 4: siege units cost 20% less. Property "unknown" mapped to "costReduction". minAge fixed from 5 to 4 (no Age V exists).',
@@ -139,6 +169,13 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     reason: 'UI-only: Proselytize is a monk ability that has no direct impact on unit combat stats. Hidden to avoid confusion in the ability selector.',
     after: (ability: Ability) => ({ ...ability, hidden: true })
   },
+
+  //___________
+  //
+  // Byzantines
+  //
+  //___________
+
   {
     id: 'ability-shield-wall',
     reason: 'Raw variation effects are wrong: moveSpeed change+25 (would be +25%, should be ×0.75 = −25%), attackSpeed change+30 (adds 30s to cycle, should be ×0.75 = 25% faster), rangedArmor change+30 (adds armor, should be 30% ranged damage resistance). Rewritten to: moveSpeed ×0.75, attackSpeed ×0.75, rangedResistance +30.',
@@ -187,8 +224,66 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
       ...ability,
       variations: ability.variations.map((v: AbilityVariation) => ({ ...v, effects: [] }))
     })
-  }
+  },
+
+  //___________
+  //
+  // ENGLISH
+  //
+  //___________
+
+  {
+    id: "ability-arrow-volley",
+    reason: 'Available for Byzantines after building Foreign Engineering Company.',
+    after: (abilities) => ({
+      ...abilities,
+      civs: [...abilities.civs, 'by'],
+      variations: abilities.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['longbowman'],
+    uiTooltip: 'Available only with Foreign Engineering Company',
+  },
+
+  {
+    id: 'ability-place-palings',
+    reason: 'UI-only: Ability that has no direct impact on unit combat stats. Hidden to avoid confusion in the ability selector.',
+    after: (ability: Ability) => ({ ...ability, hidden: true })
+  },
+
+  //___________
+  //
+  // RUS
+  //
+  //___________
+
+  {
+    id: "ability-static-deployment",
+    reason: 'Available for Byzantines.',
+    after: (abilities) => ({
+      ...abilities,
+      civs: [...abilities.civs, 'by'],
+      variations: abilities.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+  },
+
 ];
+
+export const foreignEngineeringAbilityIds: Set<string> = new Set(
+  abilityPatches.filter(p => p.foreignEngineering).map(p => p.id)
+);
+
+export const foreignEngineeringAbilityUnitRestrictions: Map<string, string[]> = new Map(
+  abilityPatches
+    .filter(p => p.foreignEngineering && p.foreignEngineeringUnits)
+    .map(p => [p.id, p.foreignEngineeringUnits!])
+);
 
 // Synthetic ability — not a patch on existing data.
 // ALL melee units can charge: +20% movement speed until the first attack.

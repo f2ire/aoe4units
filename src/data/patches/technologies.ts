@@ -3,41 +3,12 @@ import { deepMerge } from './types';
 import type { Technology, TechnologyVariation } from '../unified-technologies';
 
 export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>[] = [
-  {
-    id: 'camel-support',
-    reason: 'aoe4world only lists one armor type for this tech; the actual in-game effect grants +2 melee AND +2 ranged armor to infantry. Both effects are declared explicitly here.',
-    variations: [
-      {
-        match: { id: 'camel-support-4' },
-        update: {
-          effects: [
-            {
-              property: 'meleeArmor',
-              select: { class: [['infantry']] },
-              effect: 'change',
-              value: 2,
-              type: 'ability'
-            },
-            {
-              property: 'rangedArmor',
-              select: { class: [['infantry']] },
-              effect: 'change',
-              value: 2,
-              type: 'ability'
-            }
-          ]
-        }
-      }
-    ],
-    after: (tech) => ({
-      ...tech,
-      civs: [...tech.civs, 'by'],
-      variations: tech.variations.map(v => ({
-        ...v,
-        civs: [...(v.civs || []), "by"]
-      }))
-    })
-  },
+
+  //___________
+  //
+  // BASE GAME
+  //
+  //___________
 
   {
     id: 'adjustable-crossbars',
@@ -53,56 +24,6 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         }
       ]
     }
-  },
-
-  {
-    id: 'ability-quick-strike',
-    reason: 'aoe4world reports this ability with incomplete effects for Ghulam. In-game it reduces attack cycle time by 0.5s then multiplies it by 0.5 — both effects are required to match observed DPS.',
-    variations: [
-      {
-        match: { id: 'ability-quick-strike-1' },
-        update: {
-          effects: [
-            {
-              property: 'attackSpeed',
-              select: { id: ['ghulam'] },
-              effect: 'change',
-              value: 0.5,
-              type: 'ability'
-            },
-            {
-              property: 'attackSpeed',
-              select: { id: ['ghulam'] },
-              effect: 'multiply',
-              value: 0.5,
-              type: 'ability'
-            }
-          ]
-        }
-      }
-    ]
-  },
-
-  {
-    id: 'composite-bows',
-    reason: 'aoe4world reports the attack speed multiplier as 0.75 (−25%) but in-game testing shows the actual reduction is ~−23% (×0.76923). The tooltip in-game is also misleading (claims −33%).',
-    uiTooltip: '⚠️ The actual attack speed reduction is -30%, not -33% as shown in the tooltip.',
-    variations: [
-      {
-        match: { id: 'composite-bows-3' },
-        update: {
-          effects: [
-            {
-              property: 'attackSpeed',
-              select: { class: [['archer', 'infantry']] },
-              effect: 'multiply',
-              value: 0.76923,
-              type: 'passive'
-            }
-          ]
-        }
-      }
-    ]
   },
 
   {
@@ -164,7 +85,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
           effect: 'multiply',
           value: 1.25,
           type: 'bonus',
-          target: { class: [['naval_unit']] }
+          target: { class: [['naval', 'unit']] }
         },
         {
           property: 'siegeAttack',
@@ -185,6 +106,172 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
       ]
     }
   },
+
+
+  //_________________
+  //
+  // ABBASID DYNASTY
+  //
+  //_________________
+
+  {
+    id: 'camel-support',
+    reason: 'aoe4world only lists one armor type for this tech; the actual in-game effect grants +2 melee AND +2 ranged armor to infantry. Both effects are declared explicitly here.',
+    variations: [
+      {
+        match: { id: 'camel-support-4' },
+        update: {
+          effects: [
+            {
+              property: 'meleeArmor',
+              select: { class: [['infantry']] },
+              effect: 'change',
+              value: 2,
+              type: 'ability'
+            },
+            {
+              property: 'rangedArmor',
+              select: { class: [['infantry']] },
+              effect: 'change',
+              value: 2,
+              type: 'ability'
+            }
+          ]
+        }
+      }
+    ],
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    uiTooltip: 'Available only with Foreign Engineering Company',
+  },
+
+
+  {
+    id: 'ability-quick-strike',
+    reason: 'aoe4world reports this ability with incomplete effects for Ghulam. In-game it reduces attack cycle time by 0.5s then multiplies it by 0.5 — both effects are required to match observed DPS.',
+    variations: [
+      {
+        match: { id: 'ability-quick-strike-1' },
+        update: {
+          effects: [
+            {
+              property: 'attackSpeed',
+              select: { id: ['ghulam'] },
+              effect: 'change',
+              value: 0.5,
+              type: 'ability'
+            },
+            {
+              property: 'attackSpeed',
+              select: { id: ['ghulam'] },
+              effect: 'multiply',
+              value: 0.5,
+              type: 'ability'
+            }
+          ]
+        }
+      }
+    ]
+  },
+
+  {
+    id: 'composite-bows',
+    reason: 'aoe4world reports the attack speed multiplier as 0.75 (−25%) but in-game testing shows the actual reduction is ~−23% (×0.76923). The tooltip in-game is also misleading (claims −33%).',
+    uiTooltip: '⚠️ The actual attack speed reduction is -30%, not -33% as shown in the tooltip.',
+    variations: [
+      {
+        match: { id: 'composite-bows-3' },
+        update: {
+          effects: [
+            {
+              property: 'attackSpeed',
+              select: { class: [['archer', 'infantry']] },
+              effect: 'multiply',
+              value: 0.76923,
+              type: 'passive'
+            }
+          ]
+        }
+      }
+    ]
+  },
+
+  {
+    id: "boot-camp",
+    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['ghulam'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  {
+    id: "camel-rider-shields",
+    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['camel-rider'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  {
+    id: "camel-rider-barding",
+    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['camel-rider'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  {
+    id: "camel-handling",
+    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['camel-rider'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  //_________
+  //
+  // AYYUBIDS
+  //
+  //_________
 
   {
     id: 'sultans-mamluks',
@@ -221,6 +308,13 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
       }
     ]
   },
+
+  //___________
+  //
+  // Byzantines
+  //
+  //___________
+
   {
     id: "ferocious-speed",
     reason: "effects are only during Berserking ability",
@@ -250,8 +344,182 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         }
       ]
     }
-  }
+  },
+  {
+    id: 'greek-fire-projectiles',
+    reason: 'aoe4world does not include trebuchets in the effect targets for this tech. In-game, Geometry grants +30% damage.',
+    update: {
+      effects: [
+        {
+          property: 'rangedAttack',
+          select: { id: ['huihui-pao', 'counterweight-trebuchet', 'traction-trebuchet'] },
+          effect: 'multiply',
+          value: 1.3,
+          type: 'passive'
+        },
+        {
+          property: 'siegeAttack',
+          select: { id: ['huihui-pao', 'counterweight-trebuchet', 'traction-trebuchet'] },
+          effect: 'multiply',
+          value: 1.3,
+          type: 'bonus',
+          target: { class: [['building']] }
+        },
+        {
+          property: 'siegeAttack',
+          select: { id: ['huihui-pao', 'counterweight-trebuchet', 'traction-trebuchet'] },
+          effect: 'multiply',
+          value: 1.3,
+          type: 'bonus',
+          target: { class: [['naval', 'unit']] }
+        }
+      ]
+    }
+  },
+
+  {
+    id: 'incendiary-arrows',
+    reason: 'Byzantine javelin-thrower does not have access to Incendiary Arrows in-game.',
+    excludedUnits: ['javelin-thrower'],
+  },
+
+  //___________
+  //
+  // ENGLISH
+  //
+  //___________
+
+
+  //___________
+  //
+  // FRENCH
+  //
+  //___________
+
+  {
+    id: "gambesons",
+    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['arbaletrier'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  {
+    id: "crossbow-stirrups",
+    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['arbaletrier'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  //___________
+  //
+  // MALIANS
+  //
+  //___________
+
+  {
+    id: "precision-training",
+    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['javelin-thrower'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  //___________
+  //
+  // MONGOLS
+  //
+  //___________
+
+  {
+    id: "biology-improved",
+    reason: "Available for Byzantines after building Foreign Engineering Company. Increase hp by 10%.",
+    update: {
+      effects: [
+        {
+          "property": "hitpoints",
+          "select": {
+            "class": [["cavalry"]]
+          },
+          "effect": "multiply",
+          "value": 1.1,
+          "type": "passive"
+        }
+      ]
+    },
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['keshik'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  {
+    id: "steppe-lancers-improved",
+    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['keshik'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
 ];
+
+// Maps tech ID → unit IDs that should never see this tech
+export const techUnitExclusions: Map<string, string[]> = new Map(
+  technologyPatches
+    .filter(p => p.excludedUnits)
+    .map(p => [p.id, p.excludedUnits!])
+);
+
+export const foreignEngineeringTechIds: Set<string> = new Set(
+  technologyPatches.filter(p => p.foreignEngineering).map(p => p.id)
+);
+
+// Maps tech ID → allowed unit IDs when accessed via FEC by Byzantines (undefined = no restriction)
+export const foreignEngineeringUnitRestrictions: Map<string, string[]> = new Map(
+  technologyPatches
+    .filter(p => p.foreignEngineering && p.foreignEngineeringUnits)
+    .map(p => [p.id, p.foreignEngineeringUnits!])
+);
 
 export function applyTechnologyPatches(allTechs: Technology[]): Technology[] {
   if (!Array.isArray(allTechs) || technologyPatches.length === 0) return allTechs;

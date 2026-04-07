@@ -4,6 +4,8 @@ import type { UnifiedVariation } from "@/data/unified-units";
 import { getTechnologiesForUnit, getActiveTechnologyVariationsWithTiers, applyTechnologyEffects, getAllTiersFromSameLine, allTechnologies, type UnitStats } from "@/data/unified-technologies";
 import { getAbilitiesForUnit, getActiveAbilityVariations } from "@/data/unified-abilities";
 import { techAbilityInteractions } from "@/data/patches/abilities";
+import { foreignEngineeringUnitRestrictions, techUnitExclusions } from "@/data/patches/technologies";
+import { foreignEngineeringAbilityUnitRestrictions } from "@/data/patches/abilities";
 import type { Ability, AbilityVariation } from "@/data/unified-abilities";
 
 export function categorizeUnit(unit: AoE4Unit, selectedCiv?: string): string {
@@ -163,9 +165,22 @@ export function useUnitSlot() {
   const techs = useMemo(() => {
     if (!unit) return [];
     const all = getTechnologiesForUnit(effectiveClasses, selectedCiv, selectedAge, unit.id);
+
+    // For Byzantine FEC techs with unit restrictions, only show to the allowed unit IDs
+    // Also filter out techs that explicitly exclude this unit
+    const filtered = all.filter(t => {
+      const excluded = techUnitExclusions.get(t.id);
+      if (excluded?.includes(unit.id)) return false;
+      if (selectedCiv === 'by') {
+        const restriction = foreignEngineeringUnitRestrictions.get(t.id);
+        if (restriction && !restriction.includes(unit.id)) return false;
+      }
+      return true;
+    });
+
     // Blade mode: strip techs whose only relevant effect is rangedAttack (e.g. Steeled Arrow, Incendiary Arrows)
     if (unit.id === 'desert-raider' && activeAbilities.has('ability-desert-raider-blade')) {
-      return all.filter(t => {
+      return filtered.filter(t => {
         const allEffects = [
           ...(t.effects || []),
           ...t.variations.flatMap((v: any) => v.effects || []) // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -175,15 +190,25 @@ export function useUnitSlot() {
         return !relevant.every((e: any) => e.property === 'rangedAttack'); // eslint-disable-line @typescript-eslint/no-explicit-any
       });
     }
-    return all;
+    return filtered;
   }, [unit, effectiveClasses, selectedCiv, selectedAge, activeAbilities]);
 
   const abilities = useMemo<Ability[]>(() => {
     if (!unit) return [];
     const all = getAbilitiesForUnit(effectiveClasses, selectedCiv, selectedAge, unit.id);
     // Desert Raider and Cataphract have no charge attack
-    if (unit.id === 'desert-raider' || unit.id === 'cataphract') return all.filter(a => a.id !== 'charge-attack');
-    return all;
+    let filtered = (unit.id === 'desert-raider' || unit.id === 'cataphract' || unit.id == "camel-rider")
+      ? all.filter(a => a.id !== 'charge-attack')
+      : all;
+    // FEC ability unit restrictions: only show to allowed unit IDs when playing as Byzantine
+    if (selectedCiv === 'by') {
+      filtered = filtered.filter(a => {
+        const restriction = foreignEngineeringAbilityUnitRestrictions.get(a.id);
+        if (restriction && !restriction.includes(unit.id)) return false;
+        return true;
+      });
+    }
+    return filtered;
   }, [unit, effectiveClasses, selectedCiv, selectedAge]);
 
   // Auto-activate abilities marked as 'always' active + weapon-swap unit defaults
@@ -291,6 +316,14 @@ export function useUnitSlot() {
         result = interaction.apply(result);
       }
     }
+    // HRE infantry passive: +10% move speed (formerly a technology, now a baked-in passive not present in data)
+    // Also applies to landsknecht when used as Byzantine mercenary
+    const isHREInfantry = selectedCiv === 'hr' && effectiveClasses.some(c => c === 'infantry' || c.includes('infantry'));
+    const isLandsknecht = unit?.id === 'landsknecht' && selectedCiv === 'by';
+    if (isHREInfantry || isLandsknecht) {
+      result = { ...result, moveSpeed: result.moveSpeed * 1.1 };
+    }
+
     if (result.moveSpeed > 2) result = { ...result, moveSpeed: 2 };
     return result;
   }, [unit, variation, effectiveClasses, activeTechnologies, activeAbilities, selectedCiv, selectedAge]);

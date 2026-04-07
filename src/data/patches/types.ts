@@ -46,6 +46,12 @@ export interface TechnologyPatch<Technology, TechnologyVariation> {
   after?: (tech: Technology) => Technology;
   // Optionally attach a UI tooltip at the technology level
   uiTooltip?: string;
+  // Mark techs only accessible via Byzantine Foreign Engineering Company age-up
+  foreignEngineering?: boolean;
+  // When foreignEngineering is true, restrict to these unit IDs only (for Byzantine)
+  foreignEngineeringUnits?: string[];
+  // Unit IDs that should never see this tech (regardless of civ)
+  excludedUnits?: string[];
 }
 
 // Small deep-merge utility (non-mutating)

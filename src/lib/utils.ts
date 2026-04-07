@@ -37,5 +37,5 @@ export function formatClassNames(classes: string[] | string[][]): string {
   // Sinon formater chaque classe et joindre avec des espaces
   return (classes as string[])
     .map(formatClassName)
-    .join(', ');
+    .join(' ');
 }
