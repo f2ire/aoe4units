@@ -21,6 +21,7 @@ export interface CombatEntity {
   moveSpeed: number; // tiles/s (movement.speed from unit data)
   healingRate?: number; // HP healed per hit the unit lands (e.g. Keshik: 3 HP/hit)
   continuousMovement?: boolean; // unit can move throughout entire attack cycle (e.g. Mangudai)
+  selfDestructs?: boolean; // unit self-destructs on first hit — if hitsToKill > 1, it can never kill
 }
 
 export interface VersusMetrics {
@@ -59,6 +60,7 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     moveSpeed: source.movement?.speed ?? 0,
     healingRate: (source as any).healingRate ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     continuousMovement: (source as any).continuousMovement ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
+    selfDestructs: (source as any).selfDestructs ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
   };
 }
 
@@ -540,6 +542,13 @@ function computeMetrics(
     const unitDPS = round(normalAttackData.value / attackSpeed, 2);
     const cost = totalCost(attacker);
     dpsPerCost = cost > 0 ? round(unitDPS / cost, 2) : null;
+  }
+
+  // Special case: self-destructing unit (e.g. demolition ship) — only kills if hitsToKill === 1
+  if (attacker.selfDestructs && hitsToKill !== null && hitsToKill > 1) {
+    hitsToKill = null;
+    timeToKill = null;
+    dps = null;
   }
 
   // Special case: attacker cannot attack units (e.g. ram)

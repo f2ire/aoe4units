@@ -292,6 +292,30 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     })
   },
 
+  {
+    id: "ability-irrigated",
+    reason: "UI-only: Conversion is a monk ability that has no direct impact on unit combat stats. Hidden to avoid confusion in the ability selector.",
+    after: (ability: Ability) => ({ ...ability, hidden: true }),
+  },
+
+  {
+    id: "ability-oil-commerce",
+    reason: "UI-only: Useless, hidden to avoid confusion in the ability selector.",
+    after: (ability: Ability) => ({ ...ability, hidden: true }),
+  },
+
+  {
+    id: "ability-field-stones",
+    reason: "UI-only: Useless, hidden to avoid confusion in the ability selector.",
+    after: (ability: Ability) => ({ ...ability, hidden: true }),
+  },
+
+  {
+    id: "ability-synergistic-crops",
+    reason: "UI-only: Useless, hidden to avoid confusion in the ability selector.",
+    after: (ability: Ability) => ({ ...ability, hidden: true }),
+  },
+
 
   //___________
   //

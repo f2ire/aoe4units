@@ -25,7 +25,31 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
       ]
     }
   },
-
+  {
+    id: 'extra-hammocks',
+    reason: 'aoe4world does not model the burst projectile increase for archer ship. This tech adds +1 projectile per volley in-game, represented here as a burst +1 effect.',
+    update: {
+      effects: [
+        {
+          property: 'burst',
+          select: {
+            id: ["archer_ship"]
+          },
+          effect: 'change',
+          value: 1,
+          type: 'passive'
+        }
+      ]
+    }
+  },
+  {
+    id: 'heated-shot',
+    reason: 'Aoe4world data are not correct. To patch later.',
+    update: {
+      effects: [
+      ]
+    }
+  },
   {
     id: 'geometry',
     reason: 'aoe4world does not include trebuchets in the effect targets for this tech. In-game, Geometry grants +20% ranged attack and +20% bonus damage vs buildings/naval to all trebuchet variants.',
@@ -106,7 +130,6 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
       ]
     }
   },
-
 
   //_________________
   //

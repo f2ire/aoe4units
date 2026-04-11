@@ -48,6 +48,20 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
   //
   //_________
 
+  // Demolition ships self-destruct on contact — they can only kill if hitsToKill === 1
+  ...((['explosive-dhow', 'demolition-ship', 'explosive-junk', 'lodya-demolition-ship'] as const).map(id => ({
+    id,
+    reason: 'Self-destructs on first hit: can only kill if target dies in 1 hit.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      return {
+        ...u,
+        selfDestructs: true,
+        variations: (u.variations as Record<string, unknown>[]).map(v => ({ ...v, selfDestructs: true })),
+      };
+    },
+  }))),
+
   {
     id: 'huihui-pao',
     reason: 'Add mercenary_byz class so the unit appears in the Byzantine mercenary category.',

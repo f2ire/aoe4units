@@ -170,15 +170,16 @@ export function technologyAffectsUnit(
       );
     }
 
-    // Check by class
+    // Check by class — expand compound classes (e.g. "archer_ship" → "archer" + "ship")
     if (effect.select?.class) {
-      // For each class group, check whether the unit has ALL classes in the group (AND)
+      const expandedTokens = new Set<string>();
+      for (const cls of unitClasses) {
+        const lower = cls.toLowerCase();
+        expandedTokens.add(lower);
+        for (const part of lower.split('_')) expandedTokens.add(part);
+      }
       matchesByClass = effect.select.class.some(classGroup =>
-        classGroup.every(className =>
-          unitClasses.some(unitClass =>
-            unitClass.toLowerCase() === className.toLowerCase()
-          )
-        )
+        classGroup.every(className => expandedTokens.has(className.toLowerCase()))
       );
     }
 
@@ -217,10 +218,14 @@ export function getTechnologiesForUnit(
         }
 
         if (effect.select?.class) {
+          const expandedTokens = new Set<string>();
+          for (const cls of unitClasses) {
+            const lower = cls.toLowerCase();
+            expandedTokens.add(lower);
+            for (const part of lower.split('_')) expandedTokens.add(part);
+          }
           matchesByClass = effect.select.class.some(classGroup =>
-            classGroup.every(className =>
-              unitClasses.some(unitClass => unitClass.toLowerCase() === className.toLowerCase())
-            )
+            classGroup.every(className => expandedTokens.has(className.toLowerCase()))
           );
         }
 
@@ -363,13 +368,21 @@ export function applyTechnologyEffects(
       }
 
       // Check by class
+      // Build expanded token set: each class + all underscore-split parts
+      // e.g. "archer_ship" adds "archer", "ship" as individual tokens too
+      // This mirrors the expandedTokens logic in combat.ts so that
+      // ["archer","ship"] correctly matches a unit with class "archer_ship"
+      const expandedTokens = new Set<string>();
+      for (const cls of unitClasses) {
+        const lower = cls.toLowerCase();
+        expandedTokens.add(lower);
+        for (const part of lower.split('_')) {
+          expandedTokens.add(part);
+        }
+      }
       if (effect.select?.class) {
         matchesByClass = effect.select.class.some(classGroup =>
-          classGroup.every(className =>
-            unitClasses.some(unitClass =>
-              unitClass.toLowerCase() === className.toLowerCase()
-            )
-          )
+          classGroup.every(className => expandedTokens.has(className.toLowerCase()))
         );
       }
 
@@ -422,6 +435,11 @@ export function applyTechnologyEffects(
           break;
         case 'moveSpeed':
           statKey = 'moveSpeed';
+          break;
+        case 'siegeAttack':
+        case 'gunpowderAttack':
+          // Siege/gunpowder weapons store their damage in rangedAttack (same slot)
+          statKey = 'rangedAttack';
           break;
         default:
           continue;
