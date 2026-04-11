@@ -60,6 +60,17 @@ export function useUnitSlot() {
     setOpenCategories(prev => ({ ...prev, [category]: !prev[category] }));
   }, []);
 
+  // Tech mutual exclusion per civ: activating one removes the others in the group
+  const CIV_TECH_EXCLUSIVE_GROUPS: Record<string, string[][]> = {
+    'by': [
+      ['biology', 'royal-bloodlines'],
+    ],
+  };
+
+  // Ref so toggleTechnology can read selectedCiv without a closure dep
+  const selectedCivRef = useRef(selectedCiv);
+  selectedCivRef.current = selectedCiv;
+
   const toggleTechnology = useCallback((techId: string) => {
     const tech = allTechnologies.find(t => t.id === techId);
     if (!tech) return;
@@ -68,8 +79,22 @@ export function useUnitSlot() {
       const next = new Set(prev);
       if (next.has(techId)) {
         next.delete(techId);
+        // Deactivate abilities that require this tech
+        setActiveAbilities(prevAbi => {
+          const nextAbi = new Set(prevAbi);
+          Object.entries(ABILITY_TECH_DEPENDENCIES).forEach(([abilityId, reqTech]) => {
+            if (reqTech === techId) nextAbi.delete(abilityId);
+          });
+          return nextAbi;
+        });
       } else {
         allTierIds.forEach(id => next.delete(id));
+        // Remove mutually exclusive techs for the current civ
+        const civGroups = CIV_TECH_EXCLUSIVE_GROUPS[selectedCivRef.current] || [];
+        const exclusiveGroup = civGroups.find(g => g.includes(techId));
+        if (exclusiveGroup) {
+          exclusiveGroup.forEach(id => next.delete(id));
+        }
         next.add(techId);
       }
       return next;
@@ -88,6 +113,21 @@ export function useUnitSlot() {
     'manjaniq': 'ability-swap-weapon-kinetic',
   };
 
+  // Ability dependencies: a dependent ability can only be active when its required ability is active
+  const ABILITY_DEPENDENCIES: Record<string, string> = {
+    'ability-royal-knight-charge-damage': 'charge-attack',
+  };
+
+  // Tech-gated abilities: a dependent ability can only be active when the required tech is also active
+  const ABILITY_TECH_DEPENDENCIES: Record<string, string> = {
+    'ability-gallop': 'mounted-training',
+  };
+
+  // Ref so toggleAbility can access current abilities/technologies without closure dependencies
+  const abilitiesRef = useRef<Ability[]>([]);
+  const activeTechnologiesRef = useRef<Set<string>>(new Set());
+  activeTechnologiesRef.current = activeTechnologies;
+
   const toggleAbility = useCallback((abilityId: string) => {
     setActiveAbilities(prev => {
       const next = new Set(prev);
@@ -99,8 +139,25 @@ export function useUnitSlot() {
       } else {
         if (next.has(abilityId)) {
           next.delete(abilityId);
+          // Also deactivate abilities that depend on this one
+          Object.entries(ABILITY_DEPENDENCIES).forEach(([dep, req]) => {
+            if (req === abilityId) next.delete(dep);
+          });
         } else {
+          // Block if a required ability is not active
+          const req = ABILITY_DEPENDENCIES[abilityId];
+          if (req && !next.has(req)) return prev; // locked: no-op
+          // Block if a required technology is not active
+          const reqTech = ABILITY_TECH_DEPENDENCIES[abilityId];
+          if (reqTech && !activeTechnologiesRef.current.has(reqTech)) return prev; // locked: no-op
           next.add(abilityId);
+          // Auto-activate 'always'-active abilities that depend on this one
+          abilitiesRef.current.forEach(a => {
+            const depReq = ABILITY_DEPENDENCIES[a.id];
+            if (depReq === abilityId && (a.active === 'always' || a.variations?.some((v: AbilityVariation) => v.active === 'always'))) {
+              next.add(a.id);
+            }
+          });
         }
       }
       return next;
@@ -140,11 +197,22 @@ export function useUnitSlot() {
       if (!categories[category]) categories[category] = [];
       categories[category].push(u);
     });
-    // Desert Raider also appears in cavalry (blade mode default) — but NOT when it's a mercenary for the current civ
+    // Desert Raider also appears in cavalry (blade mode default).
+    // For non-mercenary civs: add to cavalry category.
+    // For Byzantine (mercenary): add a blade-mode duplicate inside mercenary category too.
     const desertRaider = filteredUnits.find(u => u.id === 'desert-raider');
-    if (desertRaider && categorizeUnit(desertRaider, selectedCiv) !== 'mercenary') {
-      if (!categories['cavalry']) categories['cavalry'] = [];
-      categories['cavalry'].push({ ...desertRaider, id: 'desert-raider_cavalry' });
+    if (desertRaider) {
+      const drCategory = categorizeUnit(desertRaider, selectedCiv);
+      if (drCategory !== 'mercenary') {
+        if (!categories['cavalry']) categories['cavalry'] = [];
+        categories['cavalry'].push({ ...desertRaider, id: 'desert-raider_cavalry' });
+      } else {
+        // Byzantine: add blade-mode duplicate in mercenary category with melee classes
+        if (!categories['mercenary']) categories['mercenary'] = [];
+        const RANGED_CLASSES = ['ranged', 'archer', 'cavalry_archer', 'ranged_hybrid'];
+        const bladeModeClasses = [...desertRaider.classes.filter(c => !RANGED_CLASSES.includes(c)), 'melee'];
+        categories['mercenary'].push({ ...desertRaider, id: 'desert-raider_cavalry', classes: bladeModeClasses });
+      }
     }
     return categories;
   }, [filteredUnits]);
@@ -211,6 +279,21 @@ export function useUnitSlot() {
     return filtered;
   }, [unit, effectiveClasses, selectedCiv, selectedAge]);
 
+  // Keep abilitiesRef current so toggleAbility can access it without closure deps
+  abilitiesRef.current = abilities;
+
+  // Derived: abilities that are locked because their required ability is not active
+  const lockedAbilities = useMemo(() => {
+    const locked = new Set<string>();
+    Object.entries(ABILITY_DEPENDENCIES).forEach(([dep, req]) => {
+      if (!activeAbilities.has(req)) locked.add(dep);
+    });
+    Object.entries(ABILITY_TECH_DEPENDENCIES).forEach(([abilityId, reqTech]) => {
+      if (!activeTechnologies.has(reqTech)) locked.add(abilityId);
+    });
+    return locked;
+  }, [activeAbilities, activeTechnologies]);
+
   // Auto-activate abilities marked as 'always' active + weapon-swap unit defaults
   useEffect(() => {
     if (!unit) return;
@@ -220,7 +303,8 @@ export function useUnitSlot() {
       const defaultAbility = WEAPON_SWAP_DEFAULTS[unit.id];
       const swapGroup = WEAPON_SWAP_GROUPS.find(g => g.includes(defaultAbility)) || ([] as readonly string[]);
       const alwaysDefaults = abilities
-        .filter(a => a.active === 'always' || a.variations?.some((v: AbilityVariation) => v.active === 'always'))
+        .filter(a => (a.active === 'always' || a.variations?.some((v: AbilityVariation) => v.active === 'always'))
+          && !(a.id in ABILITY_DEPENDENCIES)) // skip abilities with unmet dependencies
         .map(a => a.id);
       setActiveAbilities(prev => {
         if (!swapGroup.some(id => prev.has(id))) {
@@ -236,7 +320,8 @@ export function useUnitSlot() {
     }
 
     const defaults = abilities
-      .filter(a => a.active === 'always' || a.variations?.some((v: AbilityVariation) => v.active === 'always'))
+      .filter(a => (a.active === 'always' || a.variations?.some((v: AbilityVariation) => v.active === 'always'))
+        && !(a.id in ABILITY_DEPENDENCIES)) // skip abilities with unmet dependencies
       .map(a => a.id);
     if (defaults.length === 0) return;
     setActiveAbilities(prev => {
@@ -244,6 +329,17 @@ export function useUnitSlot() {
       return new Set([...prev, ...defaults]);
     });
   }, [unit, selectedCiv, selectedAge, abilities]);
+
+  // Auto-activate default technologies for specific civs on unit load
+  const DEFAULT_ACTIVE_TECHS: Record<string, string[]> = {
+    'by': ['howdahs'],
+  };
+  useEffect(() => {
+    if (!unit || !selectedCiv || !(selectedCiv in DEFAULT_ACTIVE_TECHS)) return;
+    const defaults = DEFAULT_ACTIVE_TECHS[selectedCiv].filter(id => techs.some(t => t.id === id));
+    if (defaults.length === 0) return;
+    setActiveTechnologies(prev => new Set([...prev, ...defaults]));
+  }, [unit, selectedCiv, techs]);
 
   // Weapon-swap units: reorder weapons so the active weapon is at index 0
   const effectiveVariation = useMemo<UnifiedVariation | null>(() => {
@@ -300,6 +396,8 @@ export function useUnitSlot() {
       burst: weapon?.burst?.count || 1,
       bonusDamage: weapon?.modifiers || [],
       rangedResistance: getResistanceValue(data, 'ranged'),
+      meleeVulnerability: 0,
+      healingRate: 0,
     };
 
     const techVariations = getActiveTechnologyVariationsWithTiers(activeTechnologies, selectedCiv, selectedAge);
@@ -328,6 +426,13 @@ export function useUnitSlot() {
     return result;
   }, [unit, variation, effectiveClasses, activeTechnologies, activeAbilities, selectedCiv, selectedAge]);
 
+  const lockedTechnologies = useMemo(() => {
+    const locked = new Set<string>();
+    const defaults = DEFAULT_ACTIVE_TECHS[selectedCiv] || [];
+    defaults.forEach(id => locked.add(id));
+    return locked;
+  }, [selectedCiv]);
+
   return {
     unit, setUnit,
     selectedCiv, setSelectedCiv,
@@ -343,5 +448,7 @@ export function useUnitSlot() {
     modifiedStats,
     toggleTechnology,
     toggleAbility,
+    lockedAbilities,
+    lockedTechnologies,
   };
 }

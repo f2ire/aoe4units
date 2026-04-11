@@ -253,17 +253,27 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
   {
     id: "camel-handling",
-    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    reason: "Available for Byzantines after building Foreign Engineering Company. Raw effects only target camel-rider and camel-archer — desert-raider added to variation effects so getTechnologiesForUnit picks it up.",
     after: (tech) => ({
       ...tech,
       civs: [...tech.civs, 'by'],
       variations: tech.variations.map(v => ({
         ...v,
-        civs: [...(v.civs || []), "by"]
+        civs: [...(v.civs || []), "by"],
+        effects: [
+          ...(v.effects || []),
+          {
+            property: 'moveSpeed',
+            select: { id: ['desert-raider'] },
+            effect: 'multiply',
+            value: 1.15,
+            type: 'passive'
+          }
+        ]
       }))
     }),
     foreignEngineering: true,
-    foreignEngineeringUnits: ['camel-rider'],
+    foreignEngineeringUnits: ['camel-rider', 'camel-archer', 'desert-raider'],
     uiTooltip: "Available only with Foreign Engineering Company",
   },
 
@@ -385,6 +395,40 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
   //___________
   //
+  // DELHI SULTANATE
+  //
+  //___________
+
+  {
+    id: "armored-beasts",
+    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['war-elephant'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  {
+    id: "howdahs",
+    reason: "Available for Byzantines after researching Elite Contract.",
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+  },
+  //___________
+  //
   // ENGLISH
   //
   //___________
@@ -428,6 +472,64 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     uiTooltip: "Available only with Foreign Engineering Company",
   },
 
+  {
+    id: "crossbow-stirrups",
+    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['arbaletrier'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  {
+    id: "cantled-saddles",
+    reason: "Available for Byzantines after building Foreign Engineering Company. Raw +10 bonus vs infantry/cavalry zeroed via value:0 (keeps tech visible in combatTechnologies) — conditional effect handled via techAbilityInteractions (requires charge-attack).",
+    update: {
+      effects: [
+        {
+          property: 'meleeAttack',
+          select: { id: ['royal-knight'] },
+          effect: 'change',
+          value: 0,
+          type: 'bonus'
+        }
+      ]
+    },
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"],
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['royal-knight'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  {
+    id: "royal-bloodlines",
+    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['royal-knight'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
   //___________
   //
   // MALIANS
@@ -450,6 +552,24 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     uiTooltip: "Available only with Foreign Engineering Company",
   },
 
+  {
+    id: "local-knowledge",
+    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['musofadi-warrior'],
+    uiTooltip: "Available only with Foreign Engineering Company. And duration is not yet considered",
+  },
+
+
+
   //___________
   //
   // MONGOLS
@@ -458,7 +578,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
   {
     id: "biology-improved",
-    reason: "Available for Byzantines after building Foreign Engineering Company. Increase hp by 10%.",
+    reason: "Tier 2 of the Biology line. When selected, the tier system also applies Biology (tier 1) first. Available for Byzantines after building Foreign Engineering Company.",
     update: {
       effects: [
         {
@@ -469,8 +589,9 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
           "effect": "multiply",
           "value": 1.1,
           "type": "passive"
-        }
-      ]
+        },
+      ],
+      displayClasses: ['Biology Technology 2/2']
     },
     after: (tech) => ({
       ...tech,
@@ -481,8 +602,13 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
       }))
     }),
     foreignEngineering: true,
-    foreignEngineeringUnits: ['keshik'],
+    foreignEngineeringUnits: ['keshik', 'mangudai'],
     uiTooltip: "Available only with Foreign Engineering Company",
+  },
+  {
+    id: 'biology',
+    reason: 'Biology and Biology (Improved) form a tier line: selecting Improved automatically includes Biology effects first.',
+    update: { displayClasses: ['Biology Technology 1/2'] },
   },
 
   {
@@ -500,6 +626,69 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     foreignEngineeringUnits: ['keshik'],
     uiTooltip: "Available only with Foreign Engineering Company",
   },
+  {
+    id: "siha-bow-limbs-improved",
+    reason: "Tier 2 of the Siha Bow Limbs line. Available for Byzantines after building Foreign Engineering Company.",
+    update: {
+      displayClasses: ['Siha Bow Limbs Technology 2/2']
+    },
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['keshik', 'mangudai'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+  {
+    id: 'siha-bow-limbs',
+    reason: 'Tier 1 of the Siha Bow Limbs line',
+    update: { displayClasses: ['Siha Bow Limbs Technology 1/2'] },
+  },
+
+
+  //___________
+  //
+  // RUS
+  //
+  //___________
+
+  {
+    id: "mounted-training",
+    reason: 'Available for Byzantines.',
+    after: (abilities) => ({
+      ...abilities,
+      civs: [...abilities.civs, 'by'],
+      variations: abilities.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['horse-archer'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  {
+    id: "boyars-fortitude",
+    reason: 'Available for Byzantines.',
+    after: (abilities) => ({
+      ...abilities,
+      civs: [...abilities.civs, 'by'],
+      variations: abilities.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['horse-archer'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
 
 ];
 

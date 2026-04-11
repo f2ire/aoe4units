@@ -13,6 +13,7 @@ interface TechnologySelectorProps {
   onToggle: (techId: string) => void;
   orientation?: "left" | "right";
   selectedCiv?: string;
+  lockedTechnologies?: Set<string>;
 }
 
 export const TechnologySelector = ({
@@ -21,6 +22,7 @@ export const TechnologySelector = ({
   onToggle,
   orientation = "left",
   selectedCiv,
+  lockedTechnologies,
 }: TechnologySelectorProps) => {
   if (technologies.length === 0) return null;
 
@@ -132,6 +134,7 @@ export const TechnologySelector = ({
                 <div key={age} className="w-12 flex flex-col gap-2">
                   {techs.map(tech => {
                     const isActive = activeTechnologies.has(tech.id);
+                    const isLocked = lockedTechnologies?.has(tech.id) ?? false;
                     const iconFileName = tech.icon.split('/').pop() || '';
                     const iconPath = `/technologies/${iconFileName}`;
                     const patch = technologyPatches.find(p => p.id === tech.id);
@@ -148,10 +151,10 @@ export const TechnologySelector = ({
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button
-                                onClick={() => onToggle(tech.id)}
+                                onClick={() => !isLocked && onToggle(tech.id)}
                                 className={`
-                                  w-12 h-12 rounded border-2 transition-all relative
-                                  hover:scale-105 active:scale-95 overflow-hidden
+                                  w-12 h-12 rounded border-2 transition-all relative overflow-hidden
+                                  ${isLocked ? 'opacity-30 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}
                                   ${isActive
                                     ? 'border-green-500 bg-green-500/10'
                                     : isForeignEngineering

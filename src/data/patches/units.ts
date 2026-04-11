@@ -40,6 +40,31 @@ function transformMultiClassTargets(value: unknown): unknown {
 }
 
 export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
+
+
+  //_________
+  //
+  // BASE UNITS
+  //
+  //_________
+
+  {
+    id: 'huihui-pao',
+    reason: 'Add mercenary_byz class so the unit appears in the Byzantine mercenary category.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      return {
+        ...u,
+        classes: [...(u.classes as string[]), 'mercenary_byz'],
+      };
+    },
+  },
+  //_________
+  //
+  // AYYUBIDS
+  //
+  //_________
+
   {
     id: 'bedouin-swordsman',
     reason: 'aoe4world data only has a single age-1 variation but the unit is feudal-minimum (age 2). Adding age-3 and age-4 variations with correct HP (160/192/230), attack (11/13/16), melee bonus (3/4/5), and gold cost (75/70/53) per in-game stats.',
@@ -115,6 +140,38 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       };
     },
   },
+
+  //_________
+  //
+  // FRENCH
+  //
+  //_________
+
+  {
+    id: 'royal-cannon',
+    reason: 'Add mercenary_byz class so the unit appears in the Byzantine mercenary category.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      return {
+        ...u,
+        classes: [...(u.classes as string[]), 'mercenary_byz'],
+      };
+    },
+  },
+
+
+  {
+    id: 'manjaniq',
+    reason: 'Same as culverin: composite class targets encoded as nested arrays ([["naval","unit"]]) need to be transformed to underscored identifiers ("naval_unit") for combat.ts. Applies to both kinetic and incendiary weapon modifiers.',
+    after: (unit: unknown) => transformMultiClassTargets(unit),
+  },
+
+  //_________
+  //
+  // HRE
+  //
+  //_________
+
   {
     id: 'landsknecht',
     reason: 'aoe4world data is missing infantry_light class on the hr (Holy Roman) variations. Both by and hr display "Light Melee Infantry" and behave identically — the hr omission is a data error.',
@@ -129,11 +186,33 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       },
     ],
   },
+
+  //_________
+  //
+  // MONGOLS
+  //
+  //_________
   {
-    id: 'manjaniq',
-    reason: 'Same as culverin: composite class targets encoded as nested arrays ([["naval","unit"]]) need to be transformed to underscored identifiers ("naval_unit") for combat.ts. Applies to both kinetic and incendiary weapon modifiers.',
-    after: (unit: unknown) => transformMultiClassTargets(unit),
+    id: 'mangudai',
+    reason: 'Shoots while moving: any melee unit slower than the Mangudai can never catch it in kiting mode.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      if (Array.isArray(u.variations)) {
+        u.variations = u.variations.map((v: unknown) => {
+          const variation = v as Record<string, unknown>;
+          if (Array.isArray(variation.weapons) && variation.weapons[0]) {
+            const weapon = { ...(variation.weapons[0] as Record<string, unknown>) };
+            const speed = weapon.speed as number;
+            weapon.durations = { ...(weapon.durations as object), winddown: speed, reload: 0 };
+            variation.weapons = [weapon, ...variation.weapons.slice(1)];
+          }
+          return { ...variation, continuousMovement: true };
+        });
+      }
+      return u;
+    },
   },
+
   {
     id: 'culverin',
     reason: 'aoe4world encodes composite class targets as nested string arrays (["naval","unit"]) instead of underscored identifiers ("naval_unit"). Applies transformMultiClassTargets to the whole unit, then fixes the remaining edge cases (naval_unit, war_elephant) on the age-4 variation.',
@@ -174,7 +253,8 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
         }
       }
     ]
-  }
+  },
+
 ];
 
 export function applyUnitPatches(unifiedUnits: unknown[]): unknown[] {

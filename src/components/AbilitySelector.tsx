@@ -18,6 +18,7 @@ interface AbilitySelectorProps {
   onToggle: (abilityId: string) => void;
   orientation?: "left" | "right";
   selectedCiv?: string;
+  lockedAbilities?: Set<string>;
 }
 
 export const AbilitySelector = ({
@@ -26,6 +27,7 @@ export const AbilitySelector = ({
   onToggle,
   orientation = "left",
   selectedCiv,
+  lockedAbilities,
 }: AbilitySelectorProps) => {
   if (abilities.length === 0) return null;
 
@@ -50,11 +52,14 @@ export const AbilitySelector = ({
           <div key={age} className="w-12 flex flex-col gap-2">
             {ageAbilities.map(ability => {
               const isActive = activeAbilities.has(ability.id);
+              const isLocked = lockedAbilities?.has(ability.id) ?? false;
               const isDefaultAlways = (hasActiveProperty(ability) && ability.active === 'always') || ability.variations?.some((v: AbilityVariation) => v.active === 'always');
               const iconPath = ability.icon;
               const isForeignEngineering = selectedCiv === 'by' && foreignEngineeringAbilityIds.has(ability.id);
               const patch = abilityPatches.find(p => p.id === ability.id);
-              const patchTooltip = isForeignEngineering ? patch?.uiTooltip : undefined;
+              const patchTooltip = isForeignEngineering
+                ? patch?.uiTooltip
+                : (!foreignEngineeringAbilityIds.has(ability.id) ? patch?.uiTooltip : undefined);
 
               return (
                 <div key={ability.id} className="relative">
@@ -62,15 +67,16 @@ export const AbilitySelector = ({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <button
-                          onClick={() => onToggle(ability.id)}
+                          onClick={() => !isLocked && onToggle(ability.id)}
                           className={`
-                            w-12 h-12 rounded border-2 transition-all relative
-                            hover:scale-105 active:scale-95 overflow-hidden
-                            ${isActive
-                              ? 'border-purple-500 bg-purple-500/10'
-                              : isForeignEngineering
-                                ? 'border-orange-500/60 bg-orange-950/40 opacity-80'
-                                : 'border-border/50 bg-secondary/50 opacity-60'
+                            w-12 h-12 rounded border-2 transition-all relative overflow-hidden
+                            ${isLocked
+                              ? 'border-border/30 bg-secondary/20 opacity-30 cursor-not-allowed'
+                              : isActive
+                                ? 'border-purple-500 bg-purple-500/10 hover:scale-105 active:scale-95'
+                                : isForeignEngineering
+                                  ? 'border-orange-500/60 bg-orange-950/40 opacity-80 hover:scale-105 active:scale-95'
+                                  : 'border-border/50 bg-secondary/50 opacity-60 hover:scale-105 active:scale-95'
                             }
                           `}
                         >

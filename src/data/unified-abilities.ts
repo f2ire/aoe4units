@@ -225,8 +225,10 @@ export function getAbilitiesForUnit(
       if (variation.civs.length > 0 && civAbbr !== 'all' && !variation.civs.includes(civAbbr)) return false;
 
       // If this ability is unlocked by a technology (e.g. "technologies/camel-support")
-      // and the technology with the same name/ID already applies to the unit, ignore the ability
-      if (variation.unlockedBy && Array.isArray(variation.unlockedBy)) {
+      // and the technology with the same name/ID already applies to the unit, ignore the ability.
+      // Exception: manual abilities are kept visible even when their unlocking tech is present
+      // (the tech unlocks it in-game; the app handles locking via ABILITY_TECH_DEPENDENCIES).
+      if (variation.unlockedBy && Array.isArray(variation.unlockedBy) && (variation as AbilityVariation).active !== 'manual') {
         const techRefs = variation.unlockedBy
           .map(u => typeof u === 'string' ? u : '')
           .filter(Boolean)

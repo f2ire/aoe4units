@@ -198,6 +198,7 @@ export const UnitCard = ({
   const meleeArmor = getArmorValue(displayData, 'melee');
   const rangedArmor = getArmorValue(displayData, 'ranged');
   const rangedResistance = getResistanceValue(displayData, 'ranged');
+  const meleeVulnerability = getResistanceValue(displayData, 'melee_vulnerability');
   const totalCost = variation ? getTotalCost(variation) : (unit ? getTotalCost(unit) : 0);
   const costs = variation ? variation.costs : unit!.costs;
   const productionTime = (costs as unknown as { time?: number })?.time;
@@ -226,8 +227,15 @@ export const UnitCard = ({
     const expandedOpp = new Set<string>(opp);
     for (const cls of opp) {
       if (cls.includes('_')) {
-        for (const part of cls.split('_')) {
-          if (part) expandedOpp.add(part);
+        const parts = cls.split('_');
+        const negatedTokens = new Set<string>();
+        for (let i = 0; i < parts.length - 1; i++) {
+          if (parts[i] === 'non') negatedTokens.add(parts[i + 1]);
+        }
+        for (const part of parts) {
+          if (part && part !== 'non' && !negatedTokens.has(part)) {
+            expandedOpp.add(part);
+          }
         }
       }
     }
@@ -386,7 +394,11 @@ export const UnitCard = ({
               <span className="text-muted-foreground">Melee Armor</span>
               <span className={cn('flex items-center gap-1', getComparisonColor(meleeArmor, compareMeleeArmor).color)}>
                 {getComparisonColor(meleeArmor, compareMeleeArmor).symbol && <span className="text-xs">{getComparisonColor(meleeArmor, compareMeleeArmor).symbol}</span>}
-                {Math.round(meleeArmor)}
+                <span
+                  title={meleeVulnerability > 0 ? `+${meleeVulnerability}% melee damage taken (applied after armor)` : undefined}
+                  className={meleeVulnerability > 0 ? 'underline decoration-dotted cursor-help text-orange-400' : undefined}>
+                  {Math.round(meleeArmor)}
+                </span>
               </span>
             </div>
             <div className="flex justify-between">
@@ -810,7 +822,20 @@ export const UnitCard = ({
               </div>
               <div>
                 <div className="flex justify-between"><span className="text-muted-foreground">HP</span><span>{Math.round(displayData.hitpoints)}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Melee Armor</span><span>{Math.round(meleeArmor)}</span></div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Melee Armor</span>
+                  <span
+                    title={meleeVulnerability > 0 ? `+${meleeVulnerability}% melee damage taken (applied after armor)` : undefined}
+                    className={meleeVulnerability > 0 ? 'underline decoration-dotted cursor-help text-orange-400' : undefined}>
+                    {Math.round(meleeArmor)}
+                  </span>
+                </div>
+                {meleeVulnerability > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Melee Vuln.</span>
+                    <span className="text-orange-400">+{meleeVulnerability}%</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Ranged Armor</span>
                   <span
@@ -819,6 +844,15 @@ export const UnitCard = ({
                     {Math.round(rangedArmor)}
                   </span>
                 </div>
+                {movement && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Speed</span>
+                    <span className={cn('flex items-center gap-1', getComparisonColor(movement.speed, compareSpeed).color)}>
+                      {getComparisonColor(movement.speed, compareSpeed).symbol && <span className="text-[10px]">{getComparisonColor(movement.speed, compareSpeed).symbol}</span>}
+                      {movement.speed.toFixed(2)}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 

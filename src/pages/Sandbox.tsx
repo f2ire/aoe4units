@@ -119,6 +119,8 @@ const Sandbox = () => {
     modifiedStats: modifiedAllyStats,
     toggleTechnology: toggleTechnologyAlly,
     toggleAbility: toggleAbilityAlly,
+    lockedAbilities: lockedAbilitiesAlly,
+    lockedTechnologies: lockedTechnologiesAlly,
   } = ally;
 
   const {
@@ -136,6 +138,8 @@ const Sandbox = () => {
     modifiedStats: modifiedEnemyStats,
     toggleTechnology: toggleTechnologyEnemy,
     toggleAbility: toggleAbilityEnemy,
+    lockedAbilities: lockedAbilitiesEnemy,
+    lockedTechnologies: lockedTechnologiesEnemy,
   } = enemy;
 
   // Build variations with applied technologies
@@ -163,8 +167,9 @@ const Sandbox = () => {
         { type: 'ranged', value: modifiedAllyStats.rangedArmor }
       ],
       resistance: [
-        ...(variationAlly.resistance || []).filter((r: { type: string }) => r.type !== 'ranged'),
-        ...((modifiedAllyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedAllyStats.rangedResistance! }] : [])
+        ...(variationAlly.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee_vulnerability'),
+        ...((modifiedAllyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedAllyStats.rangedResistance! }] : []),
+        ...((modifiedAllyStats.meleeVulnerability ?? 0) > 0 ? [{ type: 'melee_vulnerability', value: modifiedAllyStats.meleeVulnerability! }] : [])
       ],
       costs: modifiedAllyStats.costMultiplier != null && modifiedAllyStats.costMultiplier !== 1.0 ? {
         ...variationAlly.costs,
@@ -177,7 +182,8 @@ const Sandbox = () => {
       movement: variationAlly.movement ? {
         ...variationAlly.movement,
         speed: modifiedAllyStats.moveSpeed
-      } : undefined
+      } : undefined,
+      healingRate: modifiedAllyStats.healingRate ?? 0,
     };
   })() : undefined;
 
@@ -205,8 +211,9 @@ const Sandbox = () => {
         { type: 'ranged', value: modifiedEnemyStats.rangedArmor }
       ],
       resistance: [
-        ...(variationEnemy.resistance || []).filter((r: { type: string }) => r.type !== 'ranged'),
-        ...((modifiedEnemyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedEnemyStats.rangedResistance! }] : [])
+        ...(variationEnemy.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee_vulnerability'),
+        ...((modifiedEnemyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedEnemyStats.rangedResistance! }] : []),
+        ...((modifiedEnemyStats.meleeVulnerability ?? 0) > 0 ? [{ type: 'melee_vulnerability', value: modifiedEnemyStats.meleeVulnerability! }] : [])
       ],
       costs: modifiedEnemyStats.costMultiplier != null && modifiedEnemyStats.costMultiplier !== 1.0 ? {
         ...variationEnemy.costs,
@@ -219,7 +226,8 @@ const Sandbox = () => {
       movement: variationEnemy.movement ? {
         ...variationEnemy.movement,
         speed: modifiedEnemyStats.moveSpeed
-      } : undefined
+      } : undefined,
+      healingRate: modifiedEnemyStats.healingRate ?? 0,
     };
   })() : undefined;
   
@@ -252,13 +260,15 @@ const Sandbox = () => {
         { type: 'ranged', value: modifiedAllyStats.rangedArmor }
       ],
       resistance: [
-        ...(unit1.resistance || []).filter((r: { type: string }) => r.type !== 'ranged'),
-        ...((modifiedAllyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedAllyStats.rangedResistance! }] : [])
+        ...(unit1.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee_vulnerability'),
+        ...((modifiedAllyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedAllyStats.rangedResistance! }] : []),
+        ...((modifiedAllyStats.meleeVulnerability ?? 0) > 0 ? [{ type: 'melee_vulnerability', value: modifiedAllyStats.meleeVulnerability! }] : [])
       ],
       movement: unit1.movement ? {
         ...unit1.movement,
         speed: modifiedAllyStats.moveSpeed
-      } : undefined
+      } : undefined,
+      healingRate: modifiedAllyStats.healingRate ?? 0,
     };
   })() : undefined;
   
@@ -287,13 +297,15 @@ const Sandbox = () => {
         { type: 'ranged', value: modifiedEnemyStats.rangedArmor }
       ],
       resistance: [
-        ...(unit2.resistance || []).filter((r: { type: string }) => r.type !== 'ranged'),
-        ...((modifiedEnemyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedEnemyStats.rangedResistance! }] : [])
+        ...(unit2.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee_vulnerability'),
+        ...((modifiedEnemyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedEnemyStats.rangedResistance! }] : []),
+        ...((modifiedEnemyStats.meleeVulnerability ?? 0) > 0 ? [{ type: 'melee_vulnerability', value: modifiedEnemyStats.meleeVulnerability! }] : [])
       ],
       movement: unit2.movement ? {
         ...unit2.movement,
         speed: modifiedEnemyStats.moveSpeed
-      } : undefined
+      } : undefined,
+      healingRate: modifiedEnemyStats.healingRate ?? 0,
     };
   })() : undefined;
   
@@ -844,6 +856,7 @@ const Sandbox = () => {
                       onToggle={toggleTechnologyAlly}
                       orientation="left"
                       selectedCiv={selectedCivAlly}
+                      lockedTechnologies={lockedTechnologiesAlly}
                     />
                     <AbilitySelector
                       abilities={abilitiesAlly}
@@ -851,6 +864,7 @@ const Sandbox = () => {
                       onToggle={toggleAbilityAlly}
                       orientation="left"
                       selectedCiv={selectedCivAlly}
+                      lockedAbilities={lockedAbilitiesAlly}
                     />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -926,6 +940,7 @@ const Sandbox = () => {
                       orientation="right"
                       onToggle={toggleTechnologyEnemy}
                       selectedCiv={selectedCivEnemy}
+                      lockedTechnologies={lockedTechnologiesEnemy}
                     />
                     <AbilitySelector
                       abilities={abilitiesEnemy}
@@ -933,6 +948,7 @@ const Sandbox = () => {
                       onToggle={toggleAbilityEnemy}
                       orientation="right"
                       selectedCiv={selectedCivEnemy}
+                      lockedAbilities={lockedAbilitiesEnemy}
                     />
                   </div>
                 </div>
@@ -1081,6 +1097,7 @@ const Sandbox = () => {
                           onToggle={toggleTechnologyAlly}
                           orientation="left"
                           selectedCiv={selectedCivAlly}
+                          lockedTechnologies={lockedTechnologiesAlly}
                         />
                         <AbilitySelector
                           abilities={abilitiesAlly}
@@ -1088,6 +1105,7 @@ const Sandbox = () => {
                           onToggle={toggleAbilityAlly}
                           orientation="left"
                           selectedCiv={selectedCivAlly}
+                          lockedAbilities={lockedAbilitiesAlly}
                         />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1132,6 +1150,7 @@ const Sandbox = () => {
                           onToggle={toggleTechnologyEnemy}
                           orientation="right"
                           selectedCiv={selectedCivEnemy}
+                          lockedTechnologies={lockedTechnologiesEnemy}
                         />
                         <AbilitySelector
                           abilities={abilitiesEnemy}
@@ -1139,6 +1158,7 @@ const Sandbox = () => {
                           onToggle={toggleAbilityEnemy}
                           orientation="right"
                           selectedCiv={selectedCivEnemy}
+                          lockedAbilities={lockedAbilitiesEnemy}
                         />
                       </div>
                     </div>

@@ -19,6 +19,8 @@ export interface CombatEntity {
   classes: string[];
   activeAbilities?: string[]; // IDs of active abilities
   moveSpeed: number; // tiles/s (movement.speed from unit data)
+  healingRate?: number; // HP healed per hit the unit lands (e.g. Keshik: 3 HP/hit)
+  continuousMovement?: boolean; // unit can move throughout entire attack cycle (e.g. Mangudai)
 }
 
 export interface VersusMetrics {
@@ -55,6 +57,8 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     classes: source.classes || [],
     activeAbilities: activeAbilities || [],
     moveSpeed: source.movement?.speed ?? 0,
+    healingRate: (source as any).healingRate ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
+    continuousMovement: (source as any).continuousMovement ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
   };
 }
 
@@ -158,8 +162,17 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
     for (const cls of defenderClassesLower) {
       expandedTokens.add(cls);
       if (cls.includes('_')) {
-        for (const part of cls.split('_')) {
-          if (part) expandedTokens.add(part);
+        const parts = cls.split('_');
+        // Identify negated tokens: any token immediately following "non"
+        // e.g. "find_non_siege_land_military" → "siege" is negated, must NOT be added
+        const negatedTokens = new Set<string>();
+        for (let i = 0; i < parts.length - 1; i++) {
+          if (parts[i] === 'non') negatedTokens.add(parts[i + 1]);
+        }
+        for (const part of parts) {
+          if (part && part !== 'non' && !negatedTokens.has(part)) {
+            expandedTokens.add(part);
+          }
         }
       }
     }
@@ -228,10 +241,20 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
     resistanceApplied = resistancePct;
   }
 
+  // Apply melee vulnerability (e.g. Sipahi during Fortitude: +50% melee damage taken)
+  let vulnerabilityApplied: number | undefined;
+  if (weapon.type === 'melee') {
+    const vulnerabilityPct = getResistanceValue(defender as unknown as AoE4Unit, 'melee_vulnerability');
+    if (vulnerabilityPct > 0) {
+      damagePerProjectile = damagePerProjectile * (1 + vulnerabilityPct / 100);
+      vulnerabilityApplied = vulnerabilityPct;
+    }
+  }
+
   const clampedPerProjectile = damagePerProjectile < 1 ? 1 : damagePerProjectile;
   const totalDamage = clampedPerProjectile * burstCount;
 
-  return { value: totalDamage, base: baseDamage * burstCount, bonus: (bonusDamage + chargeBonus_applied) * burstCount, armorApplied: armorValue, weapon, debuffMultiplier: debuffMultiplier !== 1.0 ? debuffMultiplier : undefined, resistanceApplied };
+  return { value: totalDamage, base: baseDamage * burstCount, bonus: (bonusDamage + chargeBonus_applied) * burstCount, armorApplied: armorValue, weapon, debuffMultiplier: debuffMultiplier !== 1.0 ? debuffMultiplier : undefined, resistanceApplied, vulnerabilityApplied };
 }
 
 function round(value: number, decimals: number): number {
@@ -351,6 +374,27 @@ function applyKitingToMetrics(
   // During one cycle: ranged retreats for (winddown + reload) → +speedRanged*retreatTime
   //                   melee advances for attackCycle          → -effectiveMeleeSpeed*attackCycle
   const delta = speedRanged * retreatTime - effectiveMeleeSpeed * attackCycle;
+
+  // ── Continuous movement override (e.g. Mangudai) ─────────────────────────
+  if (ranged.continuousMovement && speedRanged > effectiveMeleeSpeed) {
+    const note = `melee (${round(speedMelee, 2)} t/s) cannot catch ${ranged.name} (shoots while moving at ${round(speedRanged, 2)} t/s)`;
+    const newMRanged: VersusMetrics = {
+      ...mRanged,
+      formula: mRanged.formula + ` [Kiting: continuous movement — ${note}]`,
+    };
+    const newMMelee: VersusMetrics = {
+      ...mMelee,
+      dps: null,
+      dpsPerCost: null,
+      hitsToKill: null,
+      timeToKill: null,
+      effectiveDamagePerHit: null,
+      formula: mMelee.formula + ` [Kiting: ${note}]`,
+    };
+    return isAranged
+      ? { adjustedA: newMRanged, adjustedB: newMMelee }
+      : { adjustedA: newMMelee, adjustedB: newMRanged };
+  }
 
   // ── Melee can NEVER catch ranged ──────────────────────────────────────────
   if (delta >= 0) {
@@ -475,6 +519,22 @@ function computeMetrics(
       dps = round(unitDPS * attackerMultiplier, 2);
       hitsToKill = Math.ceil(totalDefenderHP / (normalAttackData.value * attackerMultiplier));
       timeToKill = round(hitsToKill * attackSpeed, 1);
+    }
+
+    // Defender self-healing: heals healingRate HP per hit it lands
+    const defenderHealPerHit = defender.healingRate ?? 0;
+    if (defenderHealPerHit > 0 && dps !== null) {
+      const defenderAttackSpeed = defender.weapons[0]?.speed ?? 0;
+      const healPerS = defenderAttackSpeed > 0 ? defenderHealPerHit / defenderAttackSpeed : 0;
+      const netDPS = dps - healPerS;
+      if (netDPS <= 0) {
+        hitsToKill = null;
+        timeToKill = null;
+      } else {
+        const totalDefHP = defender.hitpoints * defenderMultiplier;
+        timeToKill = round(totalDefHP / netDPS, 1);
+        hitsToKill = Math.ceil(timeToKill / attackSpeed);
+      }
     }
 
     const unitDPS = round(normalAttackData.value / attackSpeed, 2);

@@ -16,6 +16,12 @@ export const techAbilityInteractions: TechAbilityInteraction[] = [
     unitId: 'varangian-guard',
     apply: (stats) => ({ ...stats, moveSpeed: stats.moveSpeed * 1.3 }),
   },
+  {
+    requiredTech: "cantled-saddles",
+    requiredAbility: "ability-royal-knight-charge-damage",
+    unitId: "royal-knight",
+    apply: (stats) => ({ ...stats, meleeAttack: stats.meleeAttack + 7 }),
+  },
 ];
 
 //_________________
@@ -103,10 +109,9 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   {
     id: 'ability-golden-age-tier-4',
     reason: 'Ayyubid Golden Age Tier 4: siege units cost 20% less. Property "unknown" mapped to "costReduction". minAge fixed from 5 to 4 (no Age V exists).',
-    uiTooltip: 'Siege units cost 20% less to produce',
     after: (ability: Ability) => ({
       ...ability,
-      minAge: 4,
+      minAge: 1,
       effects: [
         {
           property: 'costReduction',
@@ -115,16 +120,19 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
           value: 0.8,
           type: 'ability'
         }
-      ]
+      ],
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        active: 'manual'
+      }))
     })
   },
   {
     id: 'ability-golden-age-tier-5',
     reason: 'Ayyubid Golden Age Tier 5: camel units attack 20% faster. Property "unknown" mapped to "attackSpeed". minAge fixed from 5 to 4 (no Age V exists).',
-    uiTooltip: 'Camel units attack 20% faster',
     after: (ability: Ability) => ({
       ...ability,
-      minAge: 4,
+      minAge: 1,
       effects: [
         {
           property: 'attackSpeed',
@@ -133,7 +141,11 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
           value: 1 / 1.2,
           type: 'ability'
         }
-      ]
+      ],
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        active: 'manual'
+      }))
     })
   },
   {
@@ -141,6 +153,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     reason: 'Atabeg Supervision: an Atabeg gives +20% HP to nearby land military units it supervises. Raw data has property:unknown targeting only atabeg itself (aoe4world does not model this buff). Patched to property:hitpoints ×1.2 targeting land_military class. Available for Ayyubid (civs:[ay]) only.',
     after: (ability: Ability) => ({
       ...ability,
+      minAge: 2,
       effects: [
         {
           property: 'hitpoints',
@@ -154,10 +167,8 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   },
   {
     id: 'ability-tactical-charge',
-    reason: 'Tactical Charge is always active for Camel Lancer — it is a passive characteristic, not a togglable ability. Marking active:always at the top level so it auto-activates on unit select (variation already had active:always but the top-level ability did not).',
-    update: {
-      active: 'always',
-    }
+    reason: 'Not considered now. The usual knight charge is considered',
+    after: (ability: Ability) => ({ ...ability, hidden: true })
   },
   {
     id: 'ability-conversion',
@@ -169,6 +180,33 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     reason: 'UI-only: Proselytize is a monk ability that has no direct impact on unit combat stats. Hidden to avoid confusion in the ability selector.',
     after: (ability: Ability) => ({ ...ability, hidden: true })
   },
+
+  {
+    id: "ability-desert-raider-blade",
+    reason: 'Available for Byzantines after building Foreign Engineering Company. Duration is not yet considered.',
+    after: (abilities) => ({
+      ...abilities,
+      civs: [...abilities.civs, 'by'],
+      variations: abilities.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+  },
+
+  {
+    id: "ability-desert-raider-bow",
+    reason: 'Available for Byzantines after building Foreign Engineering Company. Duration is not yet considered.',
+    after: (abilities) => ({
+      ...abilities,
+      civs: [...abilities.civs, 'by'],
+      variations: abilities.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+  },
+
 
   //___________
   //
@@ -208,23 +246,52 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   },
   {
     id: "ability-trample",
-    reason: 'Trample is a charge-style ability — +12 bonus on first hit only (handled by getChargeBonus in Sandbox.tsx). Raw meleeAttack +12 zeroed in variations to avoid permanent buff. Speed boost +25% modelled via moveSpeed multiply.',
-    update: {
-      effects: [
-        {
-          property: "moveSpeed",
-          select: { id: ["cataphract"] },
-          effect: "multiply",
-          value: 1.25,
-          type: "ability",
-        },
-      ]
-    },
+    reason: 'Trample is a charge-style ability — +12 bonus on first hit only (handled by getChargeBonus in Sandbox.tsx). Raw meleeAttack +12 zeroed in variations to avoid permanent buff. Speed boost +25% on variations (update.effects alone is ignored by getActiveAbilityVariations).',
     after: (ability: Ability) => ({
       ...ability,
-      variations: ability.variations.map((v: AbilityVariation) => ({ ...v, effects: [] }))
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        effects: [
+          {
+            property: 'moveSpeed',
+            select: { id: ['cataphract'] },
+            effect: 'multiply',
+            value: 1.25,
+            type: 'ability',
+          }
+        ]
+      }))
     })
   },
+  {
+    id: "ability-triumph",
+    reason: "Duration is not yet considered.",
+    uiTooltip: "Duration is not yet considered.",
+    after: (ability: Ability) => ({
+      ...ability,
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        effects: [
+          ...v.effects.filter((e: any) => e.property !== 'moveSpeed'),
+          {
+            property: 'rangedAttack',
+            select: { class: [['cavalry']] },
+            effect: 'change',
+            value: 4,
+            type: 'ability',
+          },
+          {
+            property: 'moveSpeed',
+            select: { class: [['cavalry']] },
+            effect: 'multiply',
+            value: 1.1,
+            type: 'ability',
+          }
+        ]
+      }))
+    })
+  },
+
 
   //___________
   //
@@ -234,7 +301,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
 
   {
     id: "ability-arrow-volley",
-    reason: 'Available for Byzantines after building Foreign Engineering Company.',
+    reason: 'Available for Byzantines after building Foreign Engineering Company. Duration is not yet considered.',
     after: (abilities) => ({
       ...abilities,
       civs: [...abilities.civs, 'by'],
@@ -245,7 +312,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     }),
     foreignEngineering: true,
     foreignEngineeringUnits: ['longbowman'],
-    uiTooltip: 'Available only with Foreign Engineering Company',
+    uiTooltip: 'Available only with Foreign Engineering Company. Duration is not yet considered.',
   },
 
   {
@@ -253,6 +320,87 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     reason: 'UI-only: Ability that has no direct impact on unit combat stats. Hidden to avoid confusion in the ability selector.',
     after: (ability: Ability) => ({ ...ability, hidden: true })
   },
+
+  //___________
+  //
+  // FRENCH
+  //
+  //___________
+
+  {
+    id: "ability-royal-knight-charge-damage",
+    reason: "Duration is not yet considered.",
+    uiTooltip: "Duration is not yet considered."
+  },
+
+  {
+    id: "ability-deploy-pavise",
+    reason: "Duration is not yet considered.",
+    uiTooltip: "Duration is not yet considered."
+  },
+
+  {
+    id: "ability-artillery-shot",
+    reason: "UI-only: Conversion is a monk ability that has no direct impact on unit combat stats. Hidden to avoid confusion in the ability selector.",
+    after: (ability: Ability) => ({ ...ability, hidden: true }),
+  },
+  //___________
+  //
+  // OTTOMANS
+  //
+  //___________
+
+  {
+    id: "ability-fortitude",
+    reason: 'Available for Byzantines.',
+    after: (abilities) => ({
+      ...abilities,
+      civs: [...abilities.civs, 'by'],
+      variations: abilities.variations.map(v => ({
+        ...v,
+        ...v,
+        civs: [...(v.civs || []), "by"],
+        effects: [
+          {
+            property: 'attackSpeed',
+            select: { id: ['sipahi'] },
+            effect: 'multiply',
+            value: 0.645,
+            type: 'ability',
+            duration: 10
+          },
+          {
+            property: 'meleeVulnerability',
+            select: { id: ['sipahi'] },
+            effect: 'change',
+            value: 50,
+            type: 'ability',
+            duration: 10
+          }
+        ]
+      }))
+    }),
+  },
+
+
+  //___________
+  //
+  // MONGOLS
+  //
+  //___________
+  {
+    id: "ability-battle-veteran",
+    reason: 'Available for Byzantines.',
+    after: (abilities) => ({
+      ...abilities,
+      civs: [...abilities.civs, 'by'],
+      variations: abilities.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+  },
+
 
   //___________
   //
@@ -268,9 +416,35 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
       civs: [...abilities.civs, 'by'],
       variations: abilities.variations.map(v => ({
         ...v,
-        civs: [...(v.civs || []), "by"]
+        civs: [...(v.civs || []), "by"],
       }))
     }),
+  },
+
+  {
+    id: "ability-gallop",
+    reason: 'Available for Byzantines.',
+    after: (abilities) => ({
+      ...abilities,
+      civs: [...abilities.civs, 'by'],
+      variations: abilities.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"],
+        effects: [
+          {
+            property: 'moveSpeed',
+            select: { id: ['horse-archer'] },
+            effect: "change",
+            value: 2,
+            type: "ability",
+            duration: 8
+          }
+        ]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['horse-archer'],
+    uiTooltip: 'Available only with Foreign Engineering Company. Duration is not yet considered.',
   },
 
 ];
@@ -345,7 +519,7 @@ function createChargeAttackAbility(): Ability {
         unique: false,
         costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
         producedBy: [],
-        effects: chargeEffects,
+        effects: [], // effects live at the ability level only (getAbilityVariation concatenates both)
       }
     ],
     shared: {}
