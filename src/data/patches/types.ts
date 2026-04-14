@@ -52,6 +52,8 @@ export interface TechnologyPatch<Technology, TechnologyVariation> {
   foreignEngineeringUnits?: string[];
   // Unit IDs that should never see this tech (regardless of civ)
   excludedUnits?: string[];
+  // Inject a secondary weapon from another unit (e.g. thunderclap-bombs → nest-of-bees)
+  injectWeapon?: { unitId: string; weaponIndex?: number };
 }
 
 // Small deep-merge utility (non-mutating)

@@ -131,6 +131,18 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     }
   },
 
+  {
+    id: "greased-axles",
+    reason: "Must exclude some sieges units that is not really siege units.",
+    excludedUnits: ['grenadier'],
+  },
+
+  {
+    id: 'court-architects',
+    reason: 'Villager has class golden_age_tier_3_building_abb which expands to "building" token, falsely matching this tech.',
+    excludedUnits: ['villager'],
+  },
+
   //_________________
   //
   // ABBASID DYNASTY
@@ -207,7 +219,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: 'composite-bows',
     reason: 'aoe4world reports the attack speed multiplier as 0.75 (−25%) but in-game testing shows the actual reduction is ~−23% (×0.76923). The tooltip in-game is also misleading (claims −33%).',
-    uiTooltip: '⚠️ The actual attack speed reduction is -30%, not -33% as shown in the tooltip.',
+    uiTooltip: 'The actual attack speed reduction is -30%, not -33% as shown in the tooltip.',
     variations: [
       {
         match: { id: 'composite-bows-3' },
@@ -414,6 +426,44 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     id: 'incendiary-arrows',
     reason: 'Byzantine javelin-thrower does not have access to Incendiary Arrows in-game.',
     excludedUnits: ['javelin-thrower'],
+  },
+
+  //___________
+  //
+  // CHINESE
+  //
+  //___________
+
+  {
+    id: 'thunderclap-bombs',
+    reason: 'Raw data models the Nest of Bees attack as a flat siegeAttack bonus (+21.33). Replaced with weapon injection from nest-of-bees unit (Rocket Arrow: 6 dmg × 7 burst, siege type).',
+    update: {
+      effects: [
+        {
+          property: 'siegeAttack',
+          select: { class: [['warship']] },
+          effect: 'change',
+          value: 0,
+          type: 'passive'
+        }
+      ]
+    },
+    injectWeapon: { unitId: 'nest-of-bees', weaponIndex: 0 },
+  },
+
+  {
+    id: "reload-drills",
+    reason: "Raw value 0.75 = 1/1.333 (+33.3% AS). Corrected to 1/1.28 (+28% AS) to match in-game description.",
+    after: (tech: Technology) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: v.effects.map(e =>
+          e.property === 'attackSpeed' ? { ...e, value: 1 / 1.28 } : e
+        )
+      }))
+    }),
+    uiTooltip: "The actual attack speed reduction is -28%, not -33% as shown in the tooltip."
   },
 
   //___________
@@ -714,6 +764,13 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
 
 ];
+
+// Maps tech ID → { unitId, weaponIndex } for secondary weapon injection
+export const weaponInjectionMap: Map<string, { unitId: string; weaponIndex: number }> = new Map(
+  technologyPatches
+    .filter(p => p.injectWeapon)
+    .map(p => [p.id, { unitId: p.injectWeapon!.unitId, weaponIndex: p.injectWeapon!.weaponIndex ?? 0 }])
+);
 
 // Maps tech ID → unit IDs that should never see this tech
 export const techUnitExclusions: Map<string, string[]> = new Map(

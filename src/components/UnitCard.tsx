@@ -57,6 +57,8 @@ interface UnitCardProps {
   compareCost?: number;
   comparePopulation?: number;
   compareProductionTime?: number;
+  secondaryWeapons?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
+  showSecondaryWeaponRow?: boolean; // true if at least one side has secondary weapons (for alignment)
 }
 
 // ── Formula parser ────────────────────────────────────────────────────────────
@@ -188,6 +190,8 @@ export const UnitCard = ({
   compareCost,
   comparePopulation,
   compareProductionTime,
+  secondaryWeapons,
+  showSecondaryWeaponRow,
   className
 }: UnitCardProps) => {
   const [showFormula, setShowFormula] = useState(false);
@@ -328,11 +332,25 @@ export const UnitCard = ({
                     {Math.round(primaryWeapon.damage || 0)}{primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 ? ` × ${primaryWeapon.burst.count}` : ''} ({primaryWeapon.type})
                   </span>
                 </div>
+                {showSecondaryWeaponRow && (
+                  secondaryWeapons && secondaryWeapons.length > 0 ? (
+                    secondaryWeapons.map((w: any, i: number) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
+                      <div key={i} className="flex justify-between">
+                        <span className="text-muted-foreground text-xs italic pl-2">+ {w.name || 'weapon'}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {Math.round(w.damage || 0)}{w.burst?.count && w.burst.count > 1 ? ` × ${w.burst.count}` : ''} ({w.type})
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="h-5" />
+                  )
+                )}
                 {(bonusDamage && bonusDamage.length > 0) || maxBonusDamageLines ? (
                   <div className="pl-2 space-y-1">
                     {bonusDamage?.map((modifier: any, idx: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
                       if (modifier.hidden) return <div key={idx} className="h-4" />;
-                      
+
                       // Special display for charge bonus
                       if (modifier.isChargeBonus) {
                         const compareModifier = compareBonusDamage?.[idx];
@@ -348,7 +366,7 @@ export const UnitCard = ({
                           </div>
                         );
                       }
-                      
+
                       const targetClasses = modifier.target?.class?.flat() || [];
                       const targetName = formatClassNames(targetClasses);
                       const compareModifier = compareBonusDamage?.[idx];
@@ -406,8 +424,8 @@ export const UnitCard = ({
               <span className={cn('flex items-center gap-1', getComparisonColor(rangedArmor, compareRangedArmor).color)}>
                 {getComparisonColor(rangedArmor, compareRangedArmor).symbol && <span className="text-xs">{getComparisonColor(rangedArmor, compareRangedArmor).symbol}</span>}
                 <span
-                    title={rangedResistance > 0 ? `${rangedResistance}% damage resistance vs ranged attacks (applied after armor)` : undefined}
-                    className={rangedResistance > 0 ? 'underline decoration-dotted cursor-help' : undefined}>
+                  title={rangedResistance > 0 ? `${rangedResistance}% damage resistance vs ranged attacks (applied after armor)` : undefined}
+                  className={rangedResistance > 0 ? 'underline decoration-dotted cursor-help' : undefined}>
                   {Math.round(rangedArmor)}
                 </span>
               </span>
@@ -465,10 +483,10 @@ export const UnitCard = ({
           const parsedOpp = versusMetrics.opponentFormula ? parseFormula(versusMetrics.opponentFormula) : null;
           // Full kiting breakdown is in whichever side has `type: 'kiting'`
           const kitingData = (parsed.kiting?.type === 'kiting' ? parsed.kiting : null)
-                          ?? (parsedOpp?.kiting?.type === 'kiting' ? parsedOpp.kiting : null);
+            ?? (parsedOpp?.kiting?.type === 'kiting' ? parsedOpp.kiting : null);
           // "never-catches" can appear in either side's formula
           const neverCatches = parsed.kiting?.type === 'never-catches' ? parsed.kiting
-                             : parsedOpp?.kiting?.type === 'never-catches' ? parsedOpp.kiting : null;
+            : parsedOpp?.kiting?.type === 'never-catches' ? parsedOpp.kiting : null;
           const movementData = parsed.movement ?? parsedOpp?.movement ?? null;
           const hasMovement = !!(kitingData || neverCatches || movementData);
           // Perspective: am I the ranged (kiting) side or the melee side?
@@ -481,327 +499,327 @@ export const UnitCard = ({
           const attackerTotalDmg = (versusMetrics.effectiveDamagePerHit || 0) * (versusMetrics.multiplier || 1);
           const cycleStr = primaryWeapon?.speed != null ? round2(primaryWeapon.speed) + 's' : '—';
           return (
-          <div className="space-y-2">
+            <div className="space-y-2">
 
-            {/* ── Perspective-based always-visible summary ── */}
-            {hasMovement && (
-              <div className="text-[10px] leading-snug">
-                {/* Ranged side: show free hits */}
-                {isRangedSide && kitingData && (
-                  <span className="text-blue-400">
-                    🏃 {kitingData.freeHits + kitingData.kitingHits} free hit{(kitingData.freeHits + kitingData.kitingHits) !== 1 ? 's' : ''} before contact
-                  </span>
-                )}
-                {isRangedSide && neverCatches && (
-                  <span className="text-green-400">⛔ Melee never catches you</span>
-                )}
-                {/* Melee side: show contact time */}
-                {!isRangedSide && kitingData && (
-                  dieBeforeContact
-                    ? <span className="text-red-400">⛔ You die before reaching contact</span>
-                    : <span className="text-blue-400">⏱ Contact at t={round2(kitingData.contactTime)}s</span>
-                )}
-                {!isRangedSide && neverCatches && (
-                  <span className="text-red-400">⛔ You cannot catch the ranged unit</span>
-                )}
-                {/* RvR: approach penalty on both sides */}
-                {movementData && !kitingData && !neverCatches && (
-                  <span className="text-blue-400">🏃 +{round2(movementData.approachTime)}s approach penalty</span>
-                )}
-              </div>
-            )}
-
-            {/* ── Show Calculation button ── */}
-            <button
-              onClick={() => setShowFormula(!showFormula)}
-              className="w-full text-xs px-2 py-1 rounded bg-primary/10 hover:bg-primary/20 transition-colors text-primary font-medium"
-            >
-              {showFormula ? '📊 Hide Calculation' : '🔍 Show Calculation'}
-            </button>
-
-            {/* ── Detailed calculation panel ── */}
-            {showFormula && (
-              <div className="text-[10px] leading-relaxed space-y-3 border border-border rounded p-2 bg-muted/30">
-
-                {/* ── Damage ── */}
-                <div className="space-y-1">
-                  <div className="font-semibold text-primary uppercase tracking-wide text-[9px]">
-                    ⚔️ Damage{parsed.chargeWeapon ? ' (after 1st hit)' : ''}
-                  </div>
-                  {parsed.chargeWeapon && (
-                    <div className="pl-1 border-l-2 border-amber-400/60 space-y-0.5 mb-1">
-                      <div className="font-medium text-amber-400">1st hit — {parsed.chargeWeapon.name}</div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Damage</span>
-                        <span>{round2(parsed.chargeWeapon.damage)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Cycle</span>
-                        <span>{round2(parsed.chargeWeapon.speed)}s</span>
-                      </div>
-                    </div>
+              {/* ── Perspective-based always-visible summary ── */}
+              {hasMovement && (
+                <div className="text-[10px] leading-snug">
+                  {/* Ranged side: show free hits */}
+                  {isRangedSide && kitingData && (
+                    <span className="text-blue-400">
+                      🏃 {kitingData.freeHits + kitingData.kitingHits} free hit{(kitingData.freeHits + kitingData.kitingHits) !== 1 ? 's' : ''} before contact
+                    </span>
                   )}
-                  {parsed.base !== null && (
-                    <div className="pl-1 border-l-2 border-primary/40 space-y-0.5">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Base dmg</span>
-                        <span>{round2(parsed.base)}</span>
-                      </div>
-                      {parsed.bonus !== null && parsed.bonus > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Bonus vs target</span>
-                          <span className="text-green-400">+{round2(parsed.bonus)}</span>
-                        </div>
-                      )}
-                      {parsed.armor !== null && parsed.armor > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Armor</span>
-                          <span className="text-red-400">−{round2(parsed.armor)}</span>
-                        </div>
-                      )}
-                      {parsed.resistancePct !== null && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Resistance</span>
-                          <span className="text-red-400">×(1−{round2(parsed.resistancePct)}%)</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between border-t border-border/50 pt-0.5 font-medium">
-                        <span>Effective dmg</span>
-                        <span>{parsed.effective !== null ? round2(parsed.effective) : '—'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Attack cycle</span>
-                        <span>{cycleStr}</span>
-                      </div>
-                      {versusMetrics.dps !== null && (
-                        <div className="flex justify-between font-medium">
-                          <span>DPS</span>
-                          <span>{round2(versusMetrics.dps)}</span>
-                        </div>
-                      )}
-                    </div>
+                  {isRangedSide && neverCatches && (
+                    <span className="text-green-400">⛔ Melee never catches you</span>
+                  )}
+                  {/* Melee side: show contact time */}
+                  {!isRangedSide && kitingData && (
+                    dieBeforeContact
+                      ? <span className="text-red-400">⛔ You die before reaching contact</span>
+                      : <span className="text-blue-400">⏱ Contact at t={round2(kitingData.contactTime)}s</span>
+                  )}
+                  {!isRangedSide && neverCatches && (
+                    <span className="text-red-400">⛔ You cannot catch the ranged unit</span>
+                  )}
+                  {/* RvR: approach penalty on both sides */}
+                  {movementData && !kitingData && !neverCatches && (
+                    <span className="text-blue-400">🏃 +{round2(movementData.approachTime)}s approach penalty</span>
                   )}
                 </div>
+              )}
 
-                {/* ── Movement ── */}
-                {hasMovement && (
+              {/* ── Show Calculation button ── */}
+              <button
+                onClick={() => setShowFormula(!showFormula)}
+                className="w-full text-xs px-2 py-1 rounded bg-primary/10 hover:bg-primary/20 transition-colors text-primary font-medium"
+              >
+                {showFormula ? '📊 Hide Calculation' : '🔍 Show Calculation'}
+              </button>
+
+              {/* ── Detailed calculation panel ── */}
+              {showFormula && (
+                <div className="text-[10px] leading-relaxed space-y-3 border border-border rounded p-2 bg-muted/30">
+
+                  {/* ── Damage ── */}
                   <div className="space-y-1">
-                    <div className="font-semibold text-blue-400 uppercase tracking-wide text-[9px]">🏃 Movement</div>
-
-                    {movementData && !kitingData && !neverCatches && (
-                      <div className="pl-1 border-l-2 border-blue-400/60 space-y-0.5">
+                    <div className="font-semibold text-primary uppercase tracking-wide text-[9px]">
+                      ⚔️ Damage{parsed.chargeWeapon ? ' (after 1st hit)' : ''}
+                    </div>
+                    {parsed.chargeWeapon && (
+                      <div className="pl-1 border-l-2 border-amber-400/60 space-y-0.5 mb-1">
+                        <div className="font-medium text-amber-400">1st hit — {parsed.chargeWeapon.name}</div>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Approach penalty</span>
-                          <span>+{round2(movementData.approachTime)}s</span>
+                          <span className="text-muted-foreground">Damage</span>
+                          <span>{round2(parsed.chargeWeapon.damage)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Cycle</span>
+                          <span>{round2(parsed.chargeWeapon.speed)}s</span>
                         </div>
                       </div>
                     )}
-
-                    {neverCatches && (
-                      <div className="pl-1 border-l-2 border-red-400/60 space-y-0.5">
-                        {neverCatches.meleeSpeed !== null && (
-                          <>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Melee speed</span>
-                              <span>{round2(neverCatches.meleeSpeed)} t/s</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Ranged kite speed</span>
-                              <span>{round2(neverCatches.rangedSpeed)} t/s</span>
-                            </div>
-                          </>
-                        )}
-                        <div className={isRangedSide ? 'text-green-400' : 'text-red-400'}>
-                          {isRangedSide ? '→ You permanently out-range melee' : '→ You never reach ranged unit'}
+                    {parsed.base !== null && (
+                      <div className="pl-1 border-l-2 border-primary/40 space-y-0.5">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Base dmg</span>
+                          <span>{round2(parsed.base)}</span>
                         </div>
+                        {parsed.bonus !== null && parsed.bonus > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Bonus vs target</span>
+                            <span className="text-green-400">+{round2(parsed.bonus)}</span>
+                          </div>
+                        )}
+                        {parsed.armor !== null && parsed.armor > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Armor</span>
+                            <span className="text-red-400">−{round2(parsed.armor)}</span>
+                          </div>
+                        )}
+                        {parsed.resistancePct !== null && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Resistance</span>
+                            <span className="text-red-400">×(1−{round2(parsed.resistancePct)}%)</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between border-t border-border/50 pt-0.5 font-medium">
+                          <span>Effective dmg</span>
+                          <span>{parsed.effective !== null ? round2(parsed.effective) : '—'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Attack cycle</span>
+                          <span>{cycleStr}</span>
+                        </div>
+                        {versusMetrics.dps !== null && (
+                          <div className="flex justify-between font-medium">
+                            <span>DPS</span>
+                            <span>{round2(versusMetrics.dps)}</span>
+                          </div>
+                        )}
                       </div>
                     )}
+                  </div>
 
-                    {kitingData && (
-                      <div className="pl-1 border-l-2 border-blue-400/60 space-y-0.5">
-                        {kitingData.approachTime > 0 && (
+                  {/* ── Movement ── */}
+                  {hasMovement && (
+                    <div className="space-y-1">
+                      <div className="font-semibold text-blue-400 uppercase tracking-wide text-[9px]">🏃 Movement</div>
+
+                      {movementData && !kitingData && !neverCatches && (
+                        <div className="pl-1 border-l-2 border-blue-400/60 space-y-0.5">
                           <div className="flex justify-between">
-                            <span className="text-muted-foreground">Approach phase</span>
-                            <span>{round2(kitingData.approachTime)}s (+{kitingData.freeHits} hits)</span>
+                            <span className="text-muted-foreground">Approach penalty</span>
+                            <span>+{round2(movementData.approachTime)}s</span>
                           </div>
-                        )}
-                        {kitingData.chargeSpeedBoost !== null && (
-                          <div className="flex justify-between text-amber-400">
-                            <span>Melee charge boost</span>
-                            <span>×{round2(kitingData.chargeSpeedBoost)}</span>
+                        </div>
+                      )}
+
+                      {neverCatches && (
+                        <div className="pl-1 border-l-2 border-red-400/60 space-y-0.5">
+                          {neverCatches.meleeSpeed !== null && (
+                            <>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Melee speed</span>
+                                <span>{round2(neverCatches.meleeSpeed)} t/s</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Ranged kite speed</span>
+                                <span>{round2(neverCatches.rangedSpeed)} t/s</span>
+                              </div>
+                            </>
+                          )}
+                          <div className={isRangedSide ? 'text-green-400' : 'text-red-400'}>
+                            {isRangedSide ? '→ You permanently out-range melee' : '→ You never reach ranged unit'}
                           </div>
-                        )}
-                        {kitingData.kitingTime > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Kiting phase</span>
-                            <span>{round2(kitingData.kitingTime)}s (+{kitingData.kitingHits} hits)</span>
+                        </div>
+                      )}
+
+                      {kitingData && (
+                        <div className="pl-1 border-l-2 border-blue-400/60 space-y-0.5">
+                          {kitingData.approachTime > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Approach phase</span>
+                              <span>{round2(kitingData.approachTime)}s (+{kitingData.freeHits} hits)</span>
+                            </div>
+                          )}
+                          {kitingData.chargeSpeedBoost !== null && (
+                            <div className="flex justify-between text-amber-400">
+                              <span>Melee charge boost</span>
+                              <span>×{round2(kitingData.chargeSpeedBoost)}</span>
+                            </div>
+                          )}
+                          {kitingData.kitingTime > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Kiting phase</span>
+                              <span>{round2(kitingData.kitingTime)}s (+{kitingData.kitingHits} hits)</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between border-t border-border/50 pt-0.5">
+                            <span className="text-muted-foreground">Pre-contact hits</span>
+                            <span>{kitingData.freeHits + kitingData.kitingHits}</span>
                           </div>
-                        )}
-                        <div className="flex justify-between border-t border-border/50 pt-0.5">
-                          <span className="text-muted-foreground">Pre-contact hits</span>
-                          <span>{kitingData.freeHits + kitingData.kitingHits}</span>
+                          <div className="flex justify-between font-medium">
+                            <span>Contact at</span>
+                            <span>t={round2(kitingData.contactTime)}s</span>
+                          </div>
+                          {isRangedSide ? (
+                            dieBeforeContact
+                              ? <div className="text-green-400">→ Melee dies before reaching you</div>
+                              : meleeContactTime !== null
+                                ? <div className="flex justify-between"><span className="text-muted-foreground">Melee hits you at</span><span>t={round2(meleeContactTime)}s</span></div>
+                                : null
+                          ) : (
+                            dieBeforeContact
+                              ? <div className="text-red-400">→ You die before reaching melee range</div>
+                              : meleeContactTime !== null
+                                ? <div className="flex justify-between"><span className="text-muted-foreground">You start attacking at</span><span>t={round2(meleeContactTime)}s</span></div>
+                                : null
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── Equal Cost ── */}
+                  {versusMetrics.multiplier && versusMetrics.multiplier > 1 && (
+                    <div className="space-y-1">
+                      <div className="font-semibold text-primary uppercase tracking-wide text-[9px]">⚖️ Equal Cost</div>
+                      <div className="pl-1 border-l-2 border-primary/40 space-y-0.5">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Your units</span>
+                          <span>{versusMetrics.multiplier}× (cost {versusMetrics.totalCost})</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Enemy units</span>
+                          <span>{versusMetrics.opponentMultiplier}×</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Total enemy HP</span>
+                          <span>{displayData.hitpoints}×{versusMetrics.opponentMultiplier} = {defenderTotalHp}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Total dmg/cycle</span>
+                          <span>{round2(versusMetrics.effectiveDamagePerHit)}×{versusMetrics.multiplier} = {round2(attackerTotalDmg)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Outcome ── */}
+                  <div className="space-y-1">
+                    <div className="font-semibold text-primary uppercase tracking-wide text-[9px]">🎯 Outcome</div>
+                    {versusMetrics.hitsToKill !== null ? (
+                      <div className="pl-1 border-l-2 border-primary/40 space-y-0.5">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Hits to kill</span>
+                          <span>⌈{defenderTotalHp}/{round2(attackerTotalDmg || versusMetrics.effectiveDamagePerHit)}⌉ = {versusMetrics.hitsToKill}</span>
                         </div>
                         <div className="flex justify-between font-medium">
-                          <span>Contact at</span>
-                          <span>t={round2(kitingData.contactTime)}s</span>
+                          <span>TTK{hasMovement && <span className="text-blue-400 font-normal"> (incl. mvt)</span>}</span>
+                          <span>{versusMetrics.hitsToKill}×{cycleStr} = {round2(versusMetrics.timeToKill)}s</span>
                         </div>
-                        {isRangedSide ? (
-                          dieBeforeContact
-                            ? <div className="text-green-400">→ Melee dies before reaching you</div>
-                            : meleeContactTime !== null
-                              ? <div className="flex justify-between"><span className="text-muted-foreground">Melee hits you at</span><span>t={round2(meleeContactTime)}s</span></div>
-                              : null
-                        ) : (
-                          dieBeforeContact
-                            ? <div className="text-red-400">→ You die before reaching melee range</div>
-                            : meleeContactTime !== null
-                              ? <div className="flex justify-between"><span className="text-muted-foreground">You start attacking at</span><span>t={round2(meleeContactTime)}s</span></div>
-                              : null
-                        )}
                       </div>
+                    ) : (
+                      <div className="text-muted-foreground italic pl-1">Cannot deal damage</div>
                     )}
                   </div>
-                )}
 
-                {/* ── Equal Cost ── */}
-                {versusMetrics.multiplier && versusMetrics.multiplier > 1 && (
-                  <div className="space-y-1">
-                    <div className="font-semibold text-primary uppercase tracking-wide text-[9px]">⚖️ Equal Cost</div>
-                    <div className="pl-1 border-l-2 border-primary/40 space-y-0.5">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Your units</span>
-                        <span>{versusMetrics.multiplier}× (cost {versusMetrics.totalCost})</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Enemy units</span>
-                        <span>{versusMetrics.opponentMultiplier}×</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Total enemy HP</span>
-                        <span>{displayData.hitpoints}×{versusMetrics.opponentMultiplier} = {defenderTotalHp}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Total dmg/cycle</span>
-                        <span>{round2(versusMetrics.effectiveDamagePerHit)}×{versusMetrics.multiplier} = {round2(attackerTotalDmg)}</span>
-                      </div>
-                    </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">DPS</span>
+                    <span
+                      className={cn('font-medium', getComparisonColor(
+                        versusMetrics.dps ?? 0,
+                        versusMetrics.opponentDps ?? undefined,
+                        true
+                      ).color)}
+                      title={versusMetrics.formula}
+                    >
+                      {versusMetrics.dps ?? '—'}
+                    </span>
                   </div>
-                )}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">DPS/Cost</span>
+                    <span
+                      className={cn('font-medium', getComparisonColor(
+                        versusMetrics.dpsPerCost ?? 0,
+                        versusMetrics.opponentDpsPerCost ?? undefined,
+                        true
+                      ).color)}
+                      title={versusMetrics.formula}
+                    >
+                      {versusMetrics.dpsPerCost ?? '—'}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Hits to Kill</span>
+                    <span
+                      className={cn('font-medium', getComparisonColor(
+                        versusMetrics.hitsToKill ?? 0,
+                        versusMetrics.opponentHitsToKill ?? undefined,
+                        false
+                      ).color)}
+                      title={versusMetrics.formula}
+                    >
+                      {versusMetrics.hitsToKill ?? '—'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">TTK (s)</span>
+                    <span
+                      className={cn('font-medium', getComparisonColor(
+                        versusMetrics.timeToKill ?? 0,
+                        versusMetrics.opponentTimeToKill ?? undefined,
+                        false
+                      ).color)}
+                      title={versusMetrics.formula}
+                    >
+                      {versusMetrics.timeToKill ?? '—'}
+                    </span>
+                  </div>
+                </div>
+                {/* Error message removed - base stats always display */}
+              </div>
 
-                {/* ── Outcome ── */}
-                <div className="space-y-1">
-                  <div className="font-semibold text-primary uppercase tracking-wide text-[9px]">🎯 Outcome</div>
-                  {versusMetrics.hitsToKill !== null ? (
-                    <div className="pl-1 border-l-2 border-primary/40 space-y-0.5">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Hits to kill</span>
-                        <span>⌈{defenderTotalHp}/{round2(attackerTotalDmg || versusMetrics.effectiveDamagePerHit)}⌉ = {versusMetrics.hitsToKill}</span>
-                      </div>
-                      <div className="flex justify-between font-medium">
-                        <span>TTK{hasMovement && <span className="text-blue-400 font-normal"> (incl. mvt)</span>}</span>
-                        <span>{versusMetrics.hitsToKill}×{cycleStr} = {round2(versusMetrics.timeToKill)}s</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-muted-foreground italic pl-1">Cannot deal damage</div>
-                  )}
-                </div>
+              {/* Additional information for the winner in At Equal Cost mode */}
+              {versusMetrics.isWinner && versusMetrics.multiplier && versusMetrics.multiplier > 1 && versusMetrics.winnerHpRemaining !== undefined && (
+                <div className="mt-3 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded text-xs space-y-1">
+                  <div className="font-semibold text-yellow-700 dark:text-yellow-300">🏆 Winner Stats:</div>
+                  {(() => {
+                    const totalHp = versusMetrics.multiplier * displayData.hitpoints;
+                    const totalUnits = versusMetrics.multiplier;
+                    const totalCost = versusMetrics.totalCost || 0;
+                    const hpPercentage = totalHp > 0 ? ((versusMetrics.winnerHpRemaining / totalHp) * 100).toFixed(1) : '0';
+                    const unitsPercentage = totalUnits > 0 ? ((versusMetrics.winnerUnitsRemaining! / totalUnits) * 100).toFixed(1) : '0';
+                    const resourcePercentage = totalCost > 0 ? (((versusMetrics.resourceDifference || 0) / totalCost) * 100).toFixed(1) : '0';
 
-              </div>
-            )}
-            
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">DPS</span>
-                  <span
-                    className={cn('font-medium', getComparisonColor(
-                      versusMetrics.dps ?? 0,
-                      versusMetrics.opponentDps ?? undefined,
-                      true
-                    ).color)}
-                    title={versusMetrics.formula}
-                  >
-                    {versusMetrics.dps ?? '—'}
-                  </span>
+                    return (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">HP Remaining:</span>
+                          <span className="font-medium">{Math.round(versusMetrics.winnerHpRemaining)} ({hpPercentage}%)</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Units Remaining:</span>
+                          <span className="font-medium">{versusMetrics.winnerUnitsRemaining} ({unitsPercentage}%)</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Resource Saved:</span>
+                          <span className="font-medium text-green-600">{Math.round(versusMetrics.resourceDifference || 0)} ({resourcePercentage}%)</span>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">DPS/Cost</span>
-                  <span
-                    className={cn('font-medium', getComparisonColor(
-                      versusMetrics.dpsPerCost ?? 0,
-                      versusMetrics.opponentDpsPerCost ?? undefined,
-                      true
-                    ).color)}
-                    title={versusMetrics.formula}
-                  >
-                    {versusMetrics.dpsPerCost ?? '—'}
-                  </span>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Hits to Kill</span>
-                  <span
-                    className={cn('font-medium', getComparisonColor(
-                      versusMetrics.hitsToKill ?? 0,
-                      versusMetrics.opponentHitsToKill ?? undefined,
-                      false
-                    ).color)}
-                    title={versusMetrics.formula}
-                  >
-                    {versusMetrics.hitsToKill ?? '—'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">TTK (s)</span>
-                  <span
-                    className={cn('font-medium', getComparisonColor(
-                      versusMetrics.timeToKill ?? 0,
-                      versusMetrics.opponentTimeToKill ?? undefined,
-                      false
-                    ).color)}
-                    title={versusMetrics.formula}
-                  >
-                    {versusMetrics.timeToKill ?? '—'}
-                  </span>
-                </div>
-              </div>
-              {/* Error message removed - base stats always display */}
+              )}
             </div>
-            
-            {/* Additional information for the winner in At Equal Cost mode */}
-            {versusMetrics.isWinner && versusMetrics.multiplier && versusMetrics.multiplier > 1 && versusMetrics.winnerHpRemaining !== undefined && (
-              <div className="mt-3 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded text-xs space-y-1">
-                <div className="font-semibold text-yellow-700 dark:text-yellow-300">🏆 Winner Stats:</div>
-                {(() => {
-                  const totalHp = versusMetrics.multiplier * displayData.hitpoints;
-                  const totalUnits = versusMetrics.multiplier;
-                  const totalCost = versusMetrics.totalCost || 0;
-                  const hpPercentage = totalHp > 0 ? ((versusMetrics.winnerHpRemaining / totalHp) * 100).toFixed(1) : '0';
-                  const unitsPercentage = totalUnits > 0 ? ((versusMetrics.winnerUnitsRemaining! / totalUnits) * 100).toFixed(1) : '0';
-                  const resourcePercentage = totalCost > 0 ? (((versusMetrics.resourceDifference || 0) / totalCost) * 100).toFixed(1) : '0';
-                  
-                  return (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">HP Remaining:</span>
-                        <span className="font-medium">{Math.round(versusMetrics.winnerHpRemaining)} ({hpPercentage}%)</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Units Remaining:</span>
-                        <span className="font-medium">{versusMetrics.winnerUnitsRemaining} ({unitsPercentage}%)</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Resource Saved:</span>
-                        <span className="font-medium text-green-600">{Math.round(versusMetrics.resourceDifference || 0)} ({resourcePercentage}%)</span>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
           );
         })()}
       </div>
@@ -813,6 +831,9 @@ export const UnitCard = ({
                 {primaryWeapon ? (
                   <>
                     <div className="flex justify-between"><span className="text-muted-foreground">Atk</span><span>{Math.round(primaryWeapon.damage || 0)}{primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 ? `×${primaryWeapon.burst.count}` : ''}{applicableBonus > 0 && ` + ${Math.round(applicableBonus)}`}</span></div>
+                    {secondaryWeapons && secondaryWeapons.length > 0 && secondaryWeapons.map((w: any, i: number) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
+                      <div key={i} className="flex justify-end"><span>{Math.round(w.damage || 0)}{w.burst?.count && w.burst.count > 1 ? `×${w.burst.count}` : ''}</span></div>
+                    ))}
                     <div className="flex justify-between"><span className="text-muted-foreground">AS</span><span>{primaryWeapon.speed ? primaryWeapon.speed.toFixed(3) + 's' : '—'}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Range</span><span>{primaryWeapon.range.max}</span></div>
                   </>

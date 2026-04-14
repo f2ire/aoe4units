@@ -65,7 +65,6 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   {
     id: 'ability-camel-unease',
     reason: 'Synthetic gameplay rule: aoe4world does not model the Camel Unease debuff. In-game, camel units passively reduce the attack of nearby horse cavalry by 20%. Modelled here as a versusOpponentDamageDebuff effect (×0.8). Marked active:always so it auto-activates on unit select.',
-    uiTooltip: 'Versus mode: Reduces enemy horse cavalry damage by 20%',
     update: {
       active: 'always',
       effects: [
@@ -138,7 +137,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
           property: 'attackSpeed',
           select: { id: ['camel-lancer', 'desert-raider'] },
           effect: 'multiply',
-          value: 1 / 1.2,
+          value: 1 / 1.23,
           type: 'ability'
         }
       ],
@@ -146,7 +145,8 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         ...v,
         active: 'manual'
       }))
-    })
+    }),
+    uiTooltip: "In reality, it's a 22% attack speed bonus."
   },
   {
     id: 'ability-atabeg-supervision',
@@ -223,7 +223,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         ...v,
         effects: [
           { property: 'moveSpeed', select: { id: ['limitanei'] }, effect: 'multiply', value: 0.75, type: 'ability' },
-          { property: 'attackSpeed', select: { id: ['limitanei'] }, effect: 'multiply', value: 0.75, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['limitanei'] }, effect: 'multiply', value: 1.25, type: 'ability' },
           { property: 'rangedResistance', select: { id: ['limitanei'] }, effect: 'change', value: 30, type: 'ability' },
         ]
       }))
@@ -315,6 +315,52 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     reason: "UI-only: Useless, hidden to avoid confusion in the ability selector.",
     after: (ability: Ability) => ({ ...ability, hidden: true }),
   },
+
+  {
+    id: "ability-akritoi-defense",
+    reason: "Must be implemented for all ages.",
+    uiTooltip: "Not yet implemented for all ages",
+  },
+
+  //___________
+  //
+  // CHINESE
+  //
+  //___________
+
+  {
+    id: "ability-the-long-wall",
+    reason: "Change active always to manual.",
+    after: (ability: Ability) => ({
+      ...ability,
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        active: 'manual'
+      }))
+    })
+  },
+
+  {
+    id: "ability-spirit-way",
+    reason: "The effect is missing from the aoe4data file. Since the 20% attack speed bonus does not match the in-game UI, each value has been hard-coded.",
+    after: (ability: Ability) => ({
+      ...ability,
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        effects: [
+          // Fire Lancer (melee): 1.625 → 1.31 observed
+          { property: "attackSpeed", select: { id: ["fire-lancer"] }, effect: "multiply", value: 1.31 / 1.625, type: "ability" },
+          // Zhuge Nu (ranged): 1.75 → 1.58 observed
+          { property: "attackSpeed", select: { id: ["zhuge-nu"] }, effect: "multiply", value: 1.58 / 1.75, type: "ability" },
+          // Grenadier (siege): 1.625 → 1.38 observed
+          { property: "attackSpeed", select: { id: ["grenadier"] }, effect: "multiply", value: 1.38 / 1.625, type: "ability" },
+        ],
+        active: "manual",
+      }))
+    }),
+    uiTooltip: "Only the attackSpeed increase is implemented. Furthermore, the 20% bonus annonced is not correct. \n It's a 24% bonus for Fire lancer. 11% bonus for Zhuge Nu and 18% bonus for Grenadier.",
+  },
+
 
 
   //___________
@@ -513,6 +559,13 @@ function createChargeAttackAbility(): Ability {
       value: 5, // representative (age 3); age 4: +6
       type: 'ability',
     },
+    {
+      property: "bonusDamage",
+      select: { class: [['firelancer']] },
+      effect: "change",
+      value: 4,
+      type: "ability",
+    },
   ];
 
   return {
@@ -550,10 +603,157 @@ function createChargeAttackAbility(): Ability {
   } as Ability;
 }
 
+// Synthetic ability — Ming Dynasty (Chinese).
+// +15% HP to all military units.
+// HP multiply uses additive stacking: HP_base × (1 + Σ(value - 1)).
+function createMingDynastyAbility(): Ability {
+  return {
+    id: 'ability-dynasty-ming',
+    name: 'Ming Dynasty',
+    type: 'ability',
+    civs: ['ch'],
+    displayClasses: [],
+    classes: [],
+    minAge: 4,
+    icon: '/abilities/AoE4_MingDynasty.png',
+    description: 'Ming Dynasty: all military units gain +15% HP.',
+    unique: false,
+    effects: [
+      {
+        property: 'hitpoints',
+        select: { class: [['land_military']] },
+        effect: 'multiply',
+        value: 1.15,
+        type: 'ability',
+      }
+    ],
+    variations: [
+      {
+        id: 'ability-dynasty-ming-4',
+        baseId: 'ability-dynasty-ming',
+        type: 'ability',
+        name: 'Ming Dynasty',
+        pbgid: 998002,
+        attribName: 'ability_dynasty_ming_4',
+        age: 4,
+        civs: ['ch'],
+        description: 'Ming Dynasty: all military units gain +15% HP.',
+        classes: [],
+        displayClasses: [],
+        unique: false,
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        producedBy: [],
+        effects: [], // effects live at ability level (getAbilityVariation concatenates both)
+      }
+    ],
+    shared: {}
+  } as Ability;
+}
+
+// Synthetic ability — Yuan Dynasty (Chinese).
+// +15% attack speed (×0.87 cycle) for all cavalry units.
+// Yuan = Mongol-inspired → cavalry-focused bonus.
+function createYuanDynastyAbility(): Ability {
+  return {
+    id: 'ability-dynasty-yuan',
+    name: 'Yuan Dynasty',
+    type: 'ability',
+    civs: ['ch'],
+    displayClasses: [],
+    classes: [],
+    minAge: 3,
+    icon: '/abilities/AoE4_YuanDynasty.png',
+    description: 'Yuan Dynasty: all non-siege units (land + naval) gain +15% movement speed.',
+    unique: false,
+    effects: [
+      {
+        property: 'moveSpeed',
+        select: { class: [['find_non_siege_land_military'], ['naval_unit']] },
+        effect: 'multiply',
+        value: 1.15,
+        type: 'ability',
+      }
+    ],
+    variations: [
+      {
+        id: 'ability-dynasty-yuan-3',
+        baseId: 'ability-dynasty-yuan',
+        type: 'ability',
+        name: 'Yuan Dynasty',
+        pbgid: 998003,
+        attribName: 'ability_dynasty_yuan_3',
+        age: 3,
+        civs: ['ch'],
+        description: 'Yuan Dynasty: all non-siege units (land + naval) gain +15% movement speed.',
+        classes: [],
+        displayClasses: [],
+        unique: false,
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        producedBy: [],
+        effects: [], // effects live at ability level (getAbilityVariation concatenates both)
+      }
+    ],
+    shared: {}
+  } as Ability;
+}
+
+// Synthetic ability — Astronomical Clocktower (Chinese).
+// Chinese siege units produced in the Clocktower landmark gain +50% HP.
+// Replaces the separate clocktower-* unit variants.
+function createClocktowerAbility(): Ability {
+  return {
+    id: 'ability-astronomical-clocktower',
+    name: 'Astronomical Clocktower',
+    type: 'ability',
+    civs: ['ch'],
+    displayClasses: [],
+    classes: [],
+    minAge: 3,
+    icon: 'https://data.aoe4world.com/images/buildings/astronomical-clocktower-2.png',
+    description: 'Astronomical Clocktower: siege units gain +50% HP.',
+    unique: false,
+    effects: [
+      {
+        property: 'hitpoints',
+        select: { class: [['siege']] },
+        effect: 'multiply',
+        value: 1.5,
+        type: 'ability',
+      }
+    ],
+    variations: [
+      {
+        id: 'ability-astronomical-clocktower-3',
+        baseId: 'ability-astronomical-clocktower',
+        type: 'ability',
+        name: 'Astronomical Clocktower',
+        pbgid: 998004,
+        attribName: 'ability_astronomical_clocktower_3',
+        age: 3,
+        civs: ['ch'],
+        description: 'Astronomical Clocktower: siege units gain +50% HP.',
+        classes: [],
+        displayClasses: [],
+        unique: false,
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        producedBy: [],
+        effects: [], // effects live at ability level
+      }
+    ],
+    shared: {}
+  } as Ability;
+}
+
 export function applyAbilityPatches(abilities: Ability[]): Ability[] {
-  // Add the created charge ability
+  // Add the created synthetic abilities
   const chargeAttackAbility = createChargeAttackAbility();
-  const abilitiesWithCharge = [...abilities, chargeAttackAbility];
+  const abilitiesWithCharge = [
+    ...abilities,
+    chargeAttackAbility,
+    createYuanDynastyAbility(),
+    createMingDynastyAbility(),
+    createClocktowerAbility(),
+  ];
 
   return abilitiesWithCharge.map(ability => {
     const patch = abilityPatches.find(p => p.id === ability.id);

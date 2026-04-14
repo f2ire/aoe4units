@@ -61,12 +61,11 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
   if (activeAbilities.has('ability-trample') && baseId === 'cataphract') return 12;
 
   if (!activeAbilities.has('charge-attack')) return 0;
-  
+
   const isKnight = unitClasses.some(c => c.toLowerCase() === 'knight');
   const isGhulam = baseId === 'ghulam' || unitClasses.some(c => c.toLowerCase() === 'merc_ghulam');
-  
-  if (!isKnight && !isGhulam) return 0;
-  
+  const isFirelancer = baseId === 'fire-lancer';
+
   // Charge bonus based on age
   if (isKnight) {
     // TODO: To change more precisely — camel-lancer charge damage may differ from standard knight
@@ -77,7 +76,7 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
       default: return 0;
     }
   }
-  
+
   // Bonus for Ghulam (no Early variant)
   if (isGhulam) {
     switch (age) {
@@ -86,7 +85,11 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
       default: return 0;
     }
   }
-  
+
+  if (isFirelancer) {
+    return 4;
+  }
+
   return 0;
 };
 
@@ -98,8 +101,8 @@ const Sandbox = () => {
   const [customDistance, setCustomDistance] = useState<number>(5);
   const startDistance = startDistancePreset === "melee" ? 0
     : startDistancePreset === "medium" ? 5
-    : startDistancePreset === "long" ? 9
-    : Math.max(0, Math.min(30, customDistance));
+      : startDistancePreset === "long" ? 9
+        : Math.max(0, Math.min(30, customDistance));
 
   const ally = useUnitSlot();
   const enemy = useUnitSlot();
@@ -121,6 +124,7 @@ const Sandbox = () => {
     toggleAbility: toggleAbilityAlly,
     lockedAbilities: lockedAbilitiesAlly,
     lockedTechnologies: lockedTechnologiesAlly,
+    secondaryWeapons: secondaryWeaponsAlly,
   } = ally;
 
   const {
@@ -140,14 +144,15 @@ const Sandbox = () => {
     toggleAbility: toggleAbilityEnemy,
     lockedAbilities: lockedAbilitiesEnemy,
     lockedTechnologies: lockedTechnologiesEnemy,
+    secondaryWeapons: secondaryWeaponsEnemy,
   } = enemy;
 
   // Build variations with applied technologies
   const modifiedVariationAlly = variationAlly ? (() => {
-    const debuffMultiplier = unit2 && activeAbilitiesEnemy.size > 0 
+    const debuffMultiplier = unit2 && activeAbilitiesEnemy.size > 0
       ? getVersusDebuffMultiplier(variationAlly.classes || [], Array.from(activeAbilitiesEnemy))
       : 1.0;
-    
+
     return {
       ...variationAlly,
       hitpoints: modifiedAllyStats.hitpoints,
@@ -184,14 +189,15 @@ const Sandbox = () => {
         speed: modifiedAllyStats.moveSpeed
       } : undefined,
       healingRate: modifiedAllyStats.healingRate ?? 0,
+      secondaryWeapons: secondaryWeaponsAlly,
     };
   })() : undefined;
 
   const modifiedVariationEnemy = variationEnemy ? (() => {
-    const debuffMultiplier = unit1 && activeAbilitiesAlly.size > 0 
+    const debuffMultiplier = unit1 && activeAbilitiesAlly.size > 0
       ? getVersusDebuffMultiplier(variationEnemy.classes || [], Array.from(activeAbilitiesAlly))
       : 1.0;
-    
+
     return {
       ...variationEnemy,
       hitpoints: modifiedEnemyStats.hitpoints,
@@ -228,19 +234,20 @@ const Sandbox = () => {
         speed: modifiedEnemyStats.moveSpeed
       } : undefined,
       healingRate: modifiedEnemyStats.healingRate ?? 0,
+      secondaryWeapons: secondaryWeaponsEnemy,
     };
   })() : undefined;
-  
+
   // Compute stats for comparison
   const allyData = modifiedVariationAlly || unit1;
   const enemyData = modifiedVariationEnemy || unit2;
-  
+
   const modifiedUnit1 = unit1 && !variationAlly ? (() => {
     // Compute the versus debuff from enemy abilities
-    const debuffMultiplier = unit2 && activeAbilitiesEnemy.size > 0 
+    const debuffMultiplier = unit2 && activeAbilitiesEnemy.size > 0
       ? getVersusDebuffMultiplier(unit1.classes || [], Array.from(activeAbilitiesEnemy))
       : 1.0;
-    
+
     return {
       ...unit1,
       hitpoints: modifiedAllyStats.hitpoints,
@@ -271,13 +278,13 @@ const Sandbox = () => {
       healingRate: modifiedAllyStats.healingRate ?? 0,
     };
   })() : undefined;
-  
+
   const modifiedUnit2 = unit2 && !variationEnemy ? (() => {
     // Compute the versus debuff from ally abilities
-    const debuffMultiplier = unit1 && activeAbilitiesAlly.size > 0 
+    const debuffMultiplier = unit1 && activeAbilitiesAlly.size > 0
       ? getVersusDebuffMultiplier(unit2.classes || [], Array.from(activeAbilitiesAlly))
       : 1.0;
-    
+
     return {
       ...unit2,
       hitpoints: modifiedEnemyStats.hitpoints,
@@ -308,7 +315,7 @@ const Sandbox = () => {
       healingRate: modifiedEnemyStats.healingRate ?? 0,
     };
   })() : undefined;
-  
+
   // Final stats with costs
   const allyStats = allyData ? {
     hp: modifiedAllyStats.hitpoints,
@@ -336,7 +343,7 @@ const Sandbox = () => {
     population: 'costs' in (variationAlly || unit1 || {}) ? (variationAlly || unit1 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
     productionTime: 'costs' in (variationAlly || unit1 || {}) ? (variationAlly || unit1 as any)?.costs?.time : undefined // eslint-disable-line @typescript-eslint/no-explicit-any
   } : null;
-  
+
   const enemyStats = enemyData ? {
     hp: modifiedEnemyStats.hitpoints,
     attack: (() => {
@@ -369,40 +376,40 @@ const Sandbox = () => {
   // 2. Then the unique bonuses for each side
   const allyBonuses = allyStats?.bonusDamage || [];
   const enemyBonuses = enemyStats?.bonusDamage || [];
-  
+
   const matchedTargets = new Set<string>();
   const alignedAllyBonuses: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
   const alignedEnemyBonuses: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
-  
+
   // Phase 0: Add the charge bonus on the first line ONLY if at least one unit has it
   const allyHasChargeBonus = allyStats?.chargeBonus && allyStats.chargeBonus > 0;
   const enemyHasChargeBonus = enemyStats?.chargeBonus && enemyStats.chargeBonus > 0;
-  
+
   let allyChargeLineIndex = -1;
   let enemyChargeLineIndex = -1;
-  
+
   if (allyHasChargeBonus || enemyHasChargeBonus) {
     if (allyHasChargeBonus) {
-      alignedAllyBonuses.push({ 
-        isChargeBonus: true, 
-        value: allyStats?.chargeBonus 
+      alignedAllyBonuses.push({
+        isChargeBonus: true,
+        value: allyStats?.chargeBonus
       });
       allyChargeLineIndex = 0;
     } else {
       alignedAllyBonuses.push({ hidden: true });
     }
-    
+
     if (enemyHasChargeBonus) {
-      alignedEnemyBonuses.push({ 
-        isChargeBonus: true, 
-        value: enemyStats?.chargeBonus 
+      alignedEnemyBonuses.push({
+        isChargeBonus: true,
+        value: enemyStats?.chargeBonus
       });
       enemyChargeLineIndex = 0;
     } else {
       alignedEnemyBonuses.push({ hidden: true });
     }
   }
-  
+
   // Phase 1: Add the shared bonuses (aligned)
   allyBonuses.forEach((allyBonus: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     const allyTarget = allyBonus.target?.class?.flat().join(' ') || '';
@@ -410,58 +417,58 @@ const Sandbox = () => {
       const enemyTarget = b.target?.class?.flat().join(' ') || '';
       return enemyTarget === allyTarget;
     });
-    
+
     if (enemyBonus) {
       matchedTargets.add(allyTarget);
       alignedAllyBonuses.push(allyBonus);
       alignedEnemyBonuses.push(enemyBonus);
     }
   });
-  
+
   // Phase 2: Add the unmatched bonuses
   const unmatchedAlly = allyBonuses.filter((b: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     const target = b.target?.class?.flat().join(' ') || '';
     return !matchedTargets.has(target);
   });
-  
+
   const unmatchedEnemy = enemyBonuses.filter((b: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     const target = b.target?.class?.flat().join(' ') || '';
     return !matchedTargets.has(target);
   });
-  
+
   // Phase 3: Fill the empty rows created by the charge bonus with the first unmatched bonuses
   let allyUnmatchedIndex = 0;
   let enemyUnmatchedIndex = 0;
-  
+
   if (allyChargeLineIndex === -1 && alignedAllyBonuses.length > 0 && alignedAllyBonuses[0]?.hidden && unmatchedAlly.length > 0) {
     alignedAllyBonuses[0] = unmatchedAlly[0];
     allyUnmatchedIndex = 1;
   }
-  
+
   if (enemyChargeLineIndex === -1 && alignedEnemyBonuses.length > 0 && alignedEnemyBonuses[0]?.hidden && unmatchedEnemy.length > 0) {
     alignedEnemyBonuses[0] = unmatchedEnemy[0];
     enemyUnmatchedIndex = 1;
   }
-  
+
   // Phase 4: Add the remaining unmatched bonuses with empty rows to preserve alignment
   const remainingUnmatchedAlly = unmatchedAlly.slice(allyUnmatchedIndex);
   const remainingUnmatchedEnemy = unmatchedEnemy.slice(enemyUnmatchedIndex);
   const maxUnmatched = Math.max(remainingUnmatchedAlly.length, remainingUnmatchedEnemy.length);
-  
+
   for (let i = 0; i < maxUnmatched; i++) {
     if (i < remainingUnmatchedAlly.length) {
       alignedAllyBonuses.push(remainingUnmatchedAlly[i]);
     } else {
       alignedAllyBonuses.push({ hidden: true });
     }
-    
+
     if (i < remainingUnmatchedEnemy.length) {
       alignedEnemyBonuses.push(remainingUnmatchedEnemy[i]);
     } else {
       alignedEnemyBonuses.push({ hidden: true });
     }
   }
-  
+
   const maxBonusDamageLines = alignedAllyBonuses.length;
 
   // If no units are loaded, display a message
@@ -495,9 +502,8 @@ const Sandbox = () => {
               <button
                 type="button"
                 onClick={() => setIsVersus(false)}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
-                  !isVersus ? 'bg-primary text-background' : 'bg-card text-muted-foreground hover:text-foreground'
-                }`}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${!isVersus ? 'bg-primary text-background' : 'bg-card text-muted-foreground hover:text-foreground'
+                  }`}
               >
                 Comparative
               </button>
@@ -505,9 +511,8 @@ const Sandbox = () => {
               <button
                 type="button"
                 onClick={() => setIsVersus(true)}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${
-                  isVersus ? 'bg-primary text-background' : 'bg-card text-muted-foreground hover:text-foreground'
-                }`}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${isVersus ? 'bg-primary text-background' : 'bg-card text-muted-foreground hover:text-foreground'
+                  }`}
               >
                 Versus
               </button>
@@ -593,10 +598,10 @@ const Sandbox = () => {
                     </div>
                   ) : (
                     <div className="flex items-center gap-3">
-                      <img 
-                        src={CIVILIZATIONS.find(c => c.abbr === selectedCivAlly)?.flagPath} 
-                        alt="" 
-                        className="w-8 h-8 object-contain" 
+                      <img
+                        src={CIVILIZATIONS.find(c => c.abbr === selectedCivAlly)?.flagPath}
+                        alt=""
+                        className="w-8 h-8 object-contain"
                       />
                       <span className="font-medium">
                         {CIVILIZATIONS.find(c => c.abbr === selectedCivAlly)?.name}
@@ -643,12 +648,12 @@ const Sandbox = () => {
                 {categoryOrder.map(categoryKey => {
                   const units = categorizedUnitsAlly[categoryKey];
                   if (!units || units.length === 0) return null;
-                  
+
                   const isOpen = openCategoriesAlly[categoryKey];
-                  
+
                   return (
                     <SelectGroup key={categoryKey}>
-                      <div 
+                      <div
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -658,10 +663,10 @@ const Sandbox = () => {
                       >
                         <SelectLabel className="text-primary group-hover:text-background font-semibold flex items-center gap-2 cursor-pointer">
                           <span className="text-xs">{isOpen ? '▼' : '▶'}</span>
-                          <img 
-                            src={categoryIcons[categoryKey]} 
-                            alt="" 
-                            className="w-5 h-5 object-contain inline-block" 
+                          <img
+                            src={categoryIcons[categoryKey]}
+                            alt=""
+                            className="w-5 h-5 object-contain inline-block"
                           />
                           <span>{categoryNames[categoryKey]} ({units.length})</span>
                         </SelectLabel>
@@ -719,10 +724,10 @@ const Sandbox = () => {
                     </div>
                   ) : (
                     <div className="flex items-center gap-3">
-                      <img 
-                        src={CIVILIZATIONS.find(c => c.abbr === selectedCivEnemy)?.flagPath} 
-                        alt="" 
-                        className="w-8 h-8 object-contain" 
+                      <img
+                        src={CIVILIZATIONS.find(c => c.abbr === selectedCivEnemy)?.flagPath}
+                        alt=""
+                        className="w-8 h-8 object-contain"
                       />
                       <span className="font-medium">
                         {CIVILIZATIONS.find(c => c.abbr === selectedCivEnemy)?.name}
@@ -769,12 +774,12 @@ const Sandbox = () => {
                 {categoryOrder.map(categoryKey => {
                   const units = categorizedUnitsEnemy[categoryKey];
                   if (!units || units.length === 0) return null;
-                  
+
                   const isOpen = openCategoriesEnemy[categoryKey];
-                  
+
                   return (
                     <SelectGroup key={categoryKey}>
-                      <div 
+                      <div
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -784,10 +789,10 @@ const Sandbox = () => {
                       >
                         <SelectLabel className="text-primary group-hover:text-background font-semibold flex items-center gap-2 cursor-pointer">
                           <span className="text-xs">{isOpen ? '▼' : '▶'}</span>
-                          <img 
-                            src={categoryIcons[categoryKey]} 
-                            alt="" 
-                            className="w-5 h-5 object-contain inline-block" 
+                          <img
+                            src={categoryIcons[categoryKey]}
+                            alt=""
+                            className="w-5 h-5 object-contain inline-block"
                           />
                           <span>{categoryNames[categoryKey]} ({units.length})</span>
                         </SelectLabel>
@@ -835,12 +840,12 @@ const Sandbox = () => {
         {!isVersus && (
           <div className="grid grid-cols-2 gap-6 mt-8">
             {/* Ally Unit */}
-              <motion.div
-                initial={{ opacity: 0, x: -50 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3 }}
-                className="flex justify-center w-full"
-              >
+            <motion.div
+              initial={{ opacity: 0, x: -50 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3 }}
+              className="flex justify-center w-full"
+            >
               {unit1 && (
                 <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 w-full">
                   <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0">
@@ -889,6 +894,8 @@ const Sandbox = () => {
                       compareCost={enemyStats?.cost}
                       comparePopulation={enemyStats?.population}
                       compareProductionTime={enemyStats?.productionTime}
+                      secondaryWeapons={secondaryWeaponsAlly}
+                      showSecondaryWeaponRow={secondaryWeaponsAlly.length > 0 || secondaryWeaponsEnemy.length > 0}
                     />
                   </div>
                 </div>
@@ -925,6 +932,8 @@ const Sandbox = () => {
                       compareCost={allyStats?.cost}
                       comparePopulation={allyStats?.population}
                       compareProductionTime={allyStats?.productionTime}
+                      secondaryWeapons={secondaryWeaponsEnemy}
+                      showSecondaryWeaponRow={secondaryWeaponsAlly.length > 0 || secondaryWeaponsEnemy.length > 0}
                     />
                   </div>
                   <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
@@ -960,52 +969,52 @@ const Sandbox = () => {
           <div className="grid grid-cols-2 gap-6 mt-8">
             {(() => {
               if (!unit1 || !unit2) return null;
-              
+
               let versusData;
               let multipliers = undefined;
-              
+
               // Convert Sets to arrays to pass to combat functions
               const abilitiesArrayAlly = Array.from(activeAbilitiesAlly);
               const abilitiesArrayEnemy = Array.from(activeAbilitiesEnemy);
-              
+
               // Compute charge bonuses
               const chargeAlly = getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly);
               const chargeEnemy = getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy);
-              
-                if (atEqualCost) {
-                  const result = computeVersusAtEqualCost(
-                    modifiedVariationAlly || modifiedUnit1!,
-                    modifiedVariationEnemy || modifiedUnit2!,
-                    abilitiesArrayAlly,
-                    abilitiesArrayEnemy,
-                    chargeAlly,
-                    chargeEnemy,
-                    allowKiting,
-                    startDistance,
-                  );
-                  versusData = result;
-                  multipliers = result.multipliers;
-                } else {
-                  versusData = computeVersus(
-                    modifiedVariationAlly || modifiedUnit1!,
-                    modifiedVariationEnemy || modifiedUnit2!,
-                    abilitiesArrayAlly,
-                    abilitiesArrayEnemy,
-                    chargeAlly,
-                    chargeEnemy,
-                    allowKiting,
-                    startDistance,
-                  );
-                }              // Win/loss logic based on weapon ownership
+
+              if (atEqualCost) {
+                const result = computeVersusAtEqualCost(
+                  modifiedVariationAlly || modifiedUnit1!,
+                  modifiedVariationEnemy || modifiedUnit2!,
+                  abilitiesArrayAlly,
+                  abilitiesArrayEnemy,
+                  chargeAlly,
+                  chargeEnemy,
+                  allowKiting,
+                  startDistance,
+                );
+                versusData = result;
+                multipliers = result.multipliers;
+              } else {
+                versusData = computeVersus(
+                  modifiedVariationAlly || modifiedUnit1!,
+                  modifiedVariationEnemy || modifiedUnit2!,
+                  abilitiesArrayAlly,
+                  abilitiesArrayEnemy,
+                  chargeAlly,
+                  chargeEnemy,
+                  allowKiting,
+                  startDistance,
+                );
+              }              // Win/loss logic based on weapon ownership
               // A unit without a weapon always loses against a unit with a weapon
               // A draw only occurs when neither unit has a weapon
               const allyHasWeapon = !!getPrimaryWeapon(modifiedVariationAlly || modifiedUnit1);
               const enemyHasWeapon = !!getPrimaryWeapon(modifiedVariationEnemy || modifiedUnit2);
-              
+
               let isDraw = versusData.winner === 'draw';
               let leftIsWinner = false;
               let rightIsWinner = false;
-              
+
               if (allyHasWeapon && !enemyHasWeapon) {
                 // Ally has a weapon, Enemy does not -> Ally wins
                 leftIsWinner = true;
@@ -1116,6 +1125,7 @@ const Sandbox = () => {
                           side="left"
                           mode="versus"
                           versusMetrics={leftMetrics}
+                          secondaryWeapons={secondaryWeaponsAlly}
                         />
                       </div>
                     </div>
@@ -1135,6 +1145,7 @@ const Sandbox = () => {
                           side="right"
                           mode="versus"
                           versusMetrics={rightMetrics}
+                          secondaryWeapons={secondaryWeaponsEnemy}
                         />
                       </div>
                       <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">

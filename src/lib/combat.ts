@@ -22,6 +22,7 @@ export interface CombatEntity {
   healingRate?: number; // HP healed per hit the unit lands (e.g. Keshik: 3 HP/hit)
   continuousMovement?: boolean; // unit can move throughout entire attack cycle (e.g. Mangudai)
   selfDestructs?: boolean; // unit self-destructs on first hit — if hitsToKill > 1, it can never kill
+  secondaryWeapons?: UnifiedWeapon[]; // additional weapons fired simultaneously (e.g. thunderclap-bombs)
 }
 
 export interface VersusMetrics {
@@ -61,6 +62,7 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     healingRate: (source as any).healingRate ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     continuousMovement: (source as any).continuousMovement ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
     selfDestructs: (source as any).selfDestructs ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
+    secondaryWeapons: (source as any).secondaryWeapons ?? [], // eslint-disable-line @typescript-eslint/no-explicit-any
   };
 }
 
@@ -81,7 +83,7 @@ function shouldIgnoreArmor(attacker: CombatEntity, weapon?: UnifiedWeapon): bool
   if (!weapon) return false;
   if (weapon.type === "siege") return true;
   // Common siege classes
-  const siegeClasses = ["siege", "siege_range", "siege_tower", "ram", "catapult", "trebuchet_counterweight"]; 
+  const siegeClasses = ["siege", "siege_range", "siege_tower", "ram", "catapult", "trebuchet_counterweight"];
   if (attacker.classes.some(c => siegeClasses.includes(c.toLowerCase()))) return true;
   return false;
 }
@@ -89,26 +91,26 @@ function shouldIgnoreArmor(attacker: CombatEntity, weapon?: UnifiedWeapon): bool
 // Computes the versus debuff multiplier applied by the defender's abilities on the attacker
 export function getVersusDebuffMultiplier(attackerClasses: string[], defenderAbilities: string[]): number {
   if (!defenderAbilities || defenderAbilities.length === 0) return 1.0;
-  
+
   let multiplier = 1.0;
   const attackerClassesLower = attackerClasses.map(c => c.toLowerCase());
-  
+
   // For each active ability of the defender
   for (const abilityId of defenderAbilities) {
     const ability = allAbilities.find(a => a.id === abilityId);
     if (!ability || !ability.effects) continue;
-    
+
     // Look for effects of type versusOpponentDamageDebuff
     for (const effect of ability.effects) {
       if (effect.property !== 'versusOpponentDamageDebuff') continue;
       if (effect.effect !== 'multiply') continue;
-      
+
       // Check whether the attacker matches the targeted classes
       if (effect.select?.class) {
         const groups: string[][] = Array.isArray(effect.select.class) && effect.select.class.some(v => Array.isArray(v))
           ? (effect.select.class as unknown as string[][])
           : [effect.select.class as unknown as string[]];
-        
+
         const matches = groups.some(group => {
           if (!Array.isArray(group)) return false;
           return group.every(req => {
@@ -116,19 +118,19 @@ export function getVersusDebuffMultiplier(attackerClasses: string[], defenderAbi
             return attackerClassesLower.includes(r);
           });
         });
-        
+
         if (matches) {
           multiplier *= effect.value;
         }
       }
     }
   }
-  
+
   return multiplier;
 }
 
 // Computes the effective damage per hit from attacker to defender
-function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, chargeBonus: number = 0, isFirstAttack: boolean = false): { value: number; base: number; bonus: number; armorApplied: number; weapon?: UnifiedWeapon; debuffMultiplier?: number; cannotAttack?: boolean; resistanceApplied?: number } {
+function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, chargeBonus: number = 0, isFirstAttack: boolean = false, weaponOverride?: UnifiedWeapon): { value: number; base: number; bonus: number; armorApplied: number; weapon?: UnifiedWeapon; debuffMultiplier?: number; cannotAttack?: boolean; resistanceApplied?: number; vulnerabilityApplied?: number } {
   // Ram (and similar units): can only attack buildings
   const RAM_CLASSES = ["ram", "workshop_ram"];
   if (attacker.classes.some(c => RAM_CLASSES.includes(c.toLowerCase()))) {
@@ -137,15 +139,15 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
 
   // On the first attack, use the charge weapon if the unit has one AND charge ability is active
   const hasChargeAbility = attacker.activeAbilities?.includes('charge-attack') ?? false;
-  const chargeWeapon = (isFirstAttack && hasChargeAbility) ? getChargeWeapon(attacker) : undefined;
-  const weapon = chargeWeapon ?? attacker.weapons[0];
+  const chargeWeapon = (!weaponOverride && isFirstAttack && hasChargeAbility) ? getChargeWeapon(attacker) : undefined;
+  const weapon = weaponOverride ?? chargeWeapon ?? attacker.weapons[0];
   if (!weapon) return { value: 1, base: 0, bonus: 0, armorApplied: 0, weapon }; // No weapon -> minimal
 
   const baseDamage = weapon.damage || 0;
-  
+
   // Number of projectiles (burst)
   const burstCount = weapon.burst?.count || 1;
-  
+
   // Add charge bonus ONLY on the first attack, and only when NOT using the charge weapon directly
   // (when chargeWeapon is used, its damage already IS the charge — no bonus on top)
   const chargeBonus_applied = (isFirstAttack && !chargeWeapon) ? chargeBonus : 0;
@@ -181,7 +183,7 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
     for (const mod of weapon.modifiers) {
       // Apply normal modifiers and siegeAttack (property is just a label, not a reason to ignore)
       // if (mod.property === "siegeAttack") continue; // REMOVED: siegeAttack must be applied like the others
-      
+
       const spec = mod.target?.class;
       if (!spec) continue;
 
@@ -350,15 +352,15 @@ function applyKitingToMetrics(
 
   // ── Ranged vs Melee (or Melee vs Ranged) ──────────────────────────────────
   const isAranged = A_isRanged;
-  const ranged   = isAranged ? A : B;
-  const melee    = isAranged ? B : A;
-  const mRanged  = isAranged ? metricsA : metricsB;
-  const mMelee   = isAranged ? metricsB : metricsA;
+  const ranged = isAranged ? A : B;
+  const melee = isAranged ? B : A;
+  const mRanged = isAranged ? metricsA : metricsB;
+  const mMelee = isAranged ? metricsB : metricsA;
 
-  const rangeMax    = getMaxRange(ranged);
+  const rangeMax = getMaxRange(ranged);
   const retreatTime = getRetreatTime(ranged); // winddown + reload: phases where the unit can move
   const speedRanged = ranged.moveSpeed;
-  const speedMelee  = melee.moveSpeed;
+  const speedMelee = melee.moveSpeed;
   const attackCycle = ranged.weapons[0]?.speed ?? 0;
 
   // All melee units with charge ability active get a 20% speed boost until their first attack
@@ -421,13 +423,13 @@ function applyKitingToMetrics(
   }
 
   // ── Melee can catch ranged ────────────────────────────────────────────────
-  const t_approach    = Math.max(0, d0 - rangeMax) / effectiveMeleeSpeed;
-  const freeHits      = Math.floor(t_approach / attackCycle);
-  const d_kite_start  = Math.min(d0, rangeMax); // distance at start of kiting
-  const absDelta      = Math.abs(delta);
-  const n_kite        = absDelta > 0 ? Math.ceil(d_kite_start / absDelta) : 0;
-  const t_kite        = n_kite * attackCycle;
-  const contactTime   = t_approach + t_kite;
+  const t_approach = Math.max(0, d0 - rangeMax) / effectiveMeleeSpeed;
+  const freeHits = Math.floor(t_approach / attackCycle);
+  const d_kite_start = Math.min(d0, rangeMax); // distance at start of kiting
+  const absDelta = Math.abs(delta);
+  const n_kite = absDelta > 0 ? Math.ceil(d_kite_start / absDelta) : 0;
+  const t_kite = n_kite * attackCycle;
+  const contactTime = t_approach + t_kite;
   const preContactHits = freeHits + n_kite;
 
   // Ranged TTK: determine which phase melee dies in
@@ -455,8 +457,8 @@ function applyKitingToMetrics(
   const newTTKmelee: number | null = meleeDiesBeforeContact
     ? null
     : (mMelee.hitsToKill !== null && meleAttackCycle > 0
-        ? round(contactTime + meleeFirstHitSpeed + (mMelee.hitsToKill - 1) * meleAttackCycle, 1)
-        : null);
+      ? round(contactTime + meleeFirstHitSpeed + (mMelee.hitsToKill - 1) * meleAttackCycle, 1)
+      : null);
 
   const chargeSpeedNote = hasMeleeCharge ? ` [charge ×${CHARGE_SPEED_MULTIPLIER} speed]` : '';
   const kitingNote = `approach ${round(t_approach, 1)}s (+${freeHits} free hits)${chargeSpeedNote} · kiting ${round(t_kite, 1)}s (+${n_kite} hits) · contact t=${round(contactTime, 1)}s`;
@@ -495,7 +497,7 @@ function computeMetrics(
   const bugAttackSpeed = attackSpeed <= 0;
   let dps: number | null = null;
   let hitsToKill: number | null = null;
-  let timeToKill: number | null = null; 
+  let timeToKill: number | null = null;
   let dpsPerCost: number | null = null;
 
   if (!bugAttackSpeed) {
@@ -536,6 +538,20 @@ function computeMetrics(
         const totalDefHP = defender.hitpoints * defenderMultiplier;
         timeToKill = round(totalDefHP / netDPS, 1);
         hitsToKill = Math.ceil(timeToKill / attackSpeed);
+      }
+    }
+
+    // Secondary weapons: each fires independently, DPS summed (Option A)
+    if (attacker.secondaryWeapons && attacker.secondaryWeapons.length > 0) {
+      for (const secWeapon of attacker.secondaryWeapons) {
+        if (!secWeapon.speed || secWeapon.speed <= 0) continue;
+        const secData = computeEffectiveDamage(attacker, defender, 0, false, secWeapon);
+        const secDPS = round(secData.value / secWeapon.speed, 2);
+        dps = round((dps ?? 0) + secDPS, 2);
+      }
+      // Recalculate TTK from combined DPS
+      if (dps !== null && dps > 0) {
+        timeToKill = round((defender.hitpoints * defenderMultiplier) / dps, 1);
       }
     }
 
@@ -596,24 +612,24 @@ export function calculateEqualCostMultipliers(costA: number, costB: number): { m
   if (costA <= 0 || costB <= 0) {
     return { multA: 1, multB: 1, totalCostA: costA, totalCostB: costB };
   }
-  
+
   // Find the multiplier that equalizes costs (with 10% tolerance)
   // We look for integers multA and multB such that: |multA * costA - multB * costB| <= 0.10 * max(multA * costA, multB * costB)
   // Strategy: search for the best pair (multA, multB) within a reasonable range
   let bestMultA = 1;
   let bestMultB = 1;
   let bestDiff = Infinity;
-  
+
   // Limit the search to reasonable multipliers (1 to 50 for instance)
   const maxMult = 50;
-  
+
   for (let mA = 1; mA <= maxMult; mA++) {
     const targetCost = mA * costA;
     // Find the best mB
     const idealMB = targetCost / costB;
     const mB1 = Math.floor(idealMB);
     const mB2 = Math.ceil(idealMB);
-    
+
     for (const mB of [mB1, mB2]) {
       if (mB < 1) continue;
       const totalA = mA * costA;
@@ -621,7 +637,7 @@ export function calculateEqualCostMultipliers(costA: number, costB: number): { m
       const maxTotal = Math.max(totalA, totalB);
       const diff = Math.abs(totalA - totalB);
       const tolerance = maxTotal * 0.10;
-      
+
       // Check whether it is within tolerance and better than the previous best
       if (diff <= tolerance && diff < bestDiff) {
         bestDiff = diff;
@@ -630,7 +646,7 @@ export function calculateEqualCostMultipliers(costA: number, costB: number): { m
       }
     }
   }
-  
+
   return {
     multA: bestMultA,
     multB: bestMultB,
@@ -723,7 +739,7 @@ export function computeVersusAtEqualCost(
   let unitsRemainingB: number = 0;
   let hpRemainingA: number = 0;
   let hpRemainingB: number = 0;
-  
+
   // Special case: one side cannot attack units (e.g. ram)
   if (metricsA.cannotAttackUnits || metricsB.cannotAttackUnits) {
     let winner: "draw" | "attacker" | "defender" = "draw";
@@ -754,7 +770,7 @@ export function computeVersusAtEqualCost(
     const damageTakenByA = effectiveDamagePerCycleBA * metricsA.hitsToKill!;
     hpRemainingA = Math.max(0, totalAttackerHP_A - damageTakenByA);
     unitsRemainingA = Math.floor(hpRemainingA / A.hitpoints);
-    
+
     // Compute damage taken by B during its TTK against A
     const attackDataAB = computeEffectiveDamage(A, B); // A attacks B
     const effectiveDamagePerCycleAB = attackDataAB.value * multipliers.multA;

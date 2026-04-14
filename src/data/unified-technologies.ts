@@ -176,7 +176,11 @@ export function technologyAffectsUnit(
       for (const cls of unitClasses) {
         const lower = cls.toLowerCase();
         expandedTokens.add(lower);
-        for (const part of lower.split('_')) expandedTokens.add(part);
+        const parts = lower.split('_');
+        for (let i = 0; i < parts.length; i++) {
+          if (parts[i] === 'non') { i++; continue; } // skip token after "non"
+          expandedTokens.add(parts[i]);
+        }
       }
       matchesByClass = effect.select.class.some(classGroup =>
         classGroup.every(className => expandedTokens.has(className.toLowerCase()))
@@ -222,7 +226,11 @@ export function getTechnologiesForUnit(
           for (const cls of unitClasses) {
             const lower = cls.toLowerCase();
             expandedTokens.add(lower);
-            for (const part of lower.split('_')) expandedTokens.add(part);
+            const parts = lower.split('_');
+        for (let i = 0; i < parts.length; i++) {
+          if (parts[i] === 'non') { i++; continue; } // skip token after "non"
+          expandedTokens.add(parts[i]);
+        }
           }
           matchesByClass = effect.select.class.some(classGroup =>
             classGroup.every(className => expandedTokens.has(className.toLowerCase()))

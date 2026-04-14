@@ -4,7 +4,8 @@ import type { UnifiedVariation } from "@/data/unified-units";
 import { getTechnologiesForUnit, getActiveTechnologyVariationsWithTiers, applyTechnologyEffects, getAllTiersFromSameLine, allTechnologies, type UnitStats } from "@/data/unified-technologies";
 import { getAbilitiesForUnit, getActiveAbilityVariations } from "@/data/unified-abilities";
 import { techAbilityInteractions } from "@/data/patches/abilities";
-import { foreignEngineeringUnitRestrictions, techUnitExclusions } from "@/data/patches/technologies";
+import { foreignEngineeringUnitRestrictions, techUnitExclusions, weaponInjectionMap } from "@/data/patches/technologies";
+import type { UnifiedWeapon } from "@/data/unified-units";
 import { foreignEngineeringAbilityUnitRestrictions } from "@/data/patches/abilities";
 import type { Ability, AbilityVariation } from "@/data/unified-abilities";
 
@@ -185,9 +186,17 @@ export function useUnitSlot() {
     }
   }, [unit, selectedCiv, selectedAge]);
 
+  const EXCLUDED_UNIT_IDS = new Set([
+    'clocktower-battering-ram',
+    'clocktower-bombard',
+    'clocktower-counterweight-trebuchet',
+    'clocktower-nest-of-bees',
+    'clocktower-springald',
+  ]);
+
   const filteredUnits = useMemo(() => {
-    if (selectedCiv === "all") return aoe4Units;
-    return aoe4Units.filter(u => u.civs.includes(selectedCiv));
+    const base = selectedCiv === "all" ? aoe4Units : aoe4Units.filter(u => u.civs.includes(selectedCiv));
+    return base.filter(u => !EXCLUDED_UNIT_IDS.has(u.id));
   }, [selectedCiv]);
 
   const categorizedUnits = useMemo(() => {
@@ -402,8 +411,17 @@ export function useUnitSlot() {
 
     const techVariations = getActiveTechnologyVariationsWithTiers(activeTechnologies, selectedCiv, selectedAge);
     const abilityVariations = getActiveAbilityVariations(activeAbilities, selectedCiv, selectedAge);
+
+    // Base-modifying abilities (e.g. Clocktower) produce units with a higher HP base —
+    // they are applied in a separate pass AFTER other abilities/techs so their ×HP acts
+    // as a final multiplier rather than stacking additively with Ming Dynasty etc.
+    const BASE_MODIFYING_ABILITY_IDS = new Set(['ability-astronomical-clocktower']);
+    const baseAbilityVariations = abilityVariations.filter(v => BASE_MODIFYING_ABILITY_IDS.has(v.baseId));
+    const regularAbilityVariations = abilityVariations.filter(v => !BASE_MODIFYING_ABILITY_IDS.has(v.baseId));
+
     const withTechs = applyTechnologyEffects(baseStats, effectiveClasses, techVariations, unit?.id);
-    let result = applyTechnologyEffects(withTechs, effectiveClasses, abilityVariations, unit?.id);
+    const withAbilities = applyTechnologyEffects(withTechs, effectiveClasses, regularAbilityVariations, unit?.id);
+    let result = applyTechnologyEffects(withAbilities, effectiveClasses, baseAbilityVariations, unit?.id);
 
     for (const interaction of techAbilityInteractions) {
       if (
@@ -425,6 +443,20 @@ export function useUnitSlot() {
     if (result.moveSpeed > 2) result = { ...result, moveSpeed: 2 };
     return result;
   }, [unit, variation, effectiveClasses, activeTechnologies, activeAbilities, selectedCiv, selectedAge]);
+
+  const secondaryWeapons = useMemo((): UnifiedWeapon[] => {
+    const weapons: UnifiedWeapon[] = [];
+    for (const techId of activeTechnologies) {
+      const injection = weaponInjectionMap.get(techId);
+      if (!injection) continue;
+      const sourceUnit = aoe4Units.find(u => u.id === injection.unitId);
+      if (!sourceUnit) continue;
+      const sourceVariation = sourceUnit.variations[sourceUnit.variations.length - 1];
+      const weapon = sourceVariation?.weapons?.[injection.weaponIndex];
+      if (weapon) weapons.push(weapon);
+    }
+    return weapons;
+  }, [activeTechnologies]);
 
   const lockedTechnologies = useMemo(() => {
     const locked = new Set<string>();
@@ -450,5 +482,6 @@ export function useUnitSlot() {
     toggleAbility,
     lockedAbilities,
     lockedTechnologies,
+    secondaryWeapons,
   };
 }
