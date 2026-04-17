@@ -255,7 +255,7 @@ export function useUnitSlot() {
       return true;
     });
 
-    // Blade mode: strip techs whose only relevant effect is rangedAttack (e.g. Steeled Arrow, Incendiary Arrows)
+    // Blade mode: strip techs whose only relevant effect is rangedAttack or maxRange (e.g. Steeled Arrow, Incendiary Arrows, Silk Bowstrings)
     if (unit.id === 'desert-raider' && activeAbilities.has('ability-desert-raider-blade')) {
       return filtered.filter(t => {
         const allEffects = [
@@ -264,7 +264,8 @@ export function useUnitSlot() {
         ];
         const relevant = allEffects.filter((e: any) => e.property && e.property !== 'unknown'); // eslint-disable-line @typescript-eslint/no-explicit-any
         if (relevant.length === 0) return true;
-        return !relevant.every((e: any) => e.property === 'rangedAttack'); // eslint-disable-line @typescript-eslint/no-explicit-any
+        const RANGED_ONLY_PROPS = new Set(['rangedAttack', 'maxRange']);
+        return !relevant.every((e: any) => RANGED_ONLY_PROPS.has(e.property)); // eslint-disable-line @typescript-eslint/no-explicit-any
       });
     }
     return filtered;
@@ -396,7 +397,9 @@ export function useUnitSlot() {
     const baseStats: UnitStats = {
       hitpoints: data.hitpoints,
       meleeAttack: weapon?.type === 'melee' ? (weapon.damage || 0) : 0,
-      rangedAttack: (weapon?.type === 'ranged' || weapon?.type === 'siege') ? (weapon.damage || 0) : 0,
+      rangedAttack: (weapon?.type === 'ranged' || weapon?.type === 'siege')
+        ? (weapon.damage || 0)
+        : ((data as any).secondaryWeapons?.[0]?.damage || 0), // eslint-disable-line @typescript-eslint/no-explicit-any
       meleeArmor: getArmorValue(data, "melee"),
       rangedArmor: getArmorValue(data, "ranged"),
       moveSpeed: 'movement' in data ? (data as { movement?: { speed: number } }).movement?.speed || 0 : 0,
@@ -446,6 +449,11 @@ export function useUnitSlot() {
 
   const secondaryWeapons = useMemo((): UnifiedWeapon[] => {
     const weapons: UnifiedWeapon[] = [];
+    // Base secondary weapons from unit variation (always-active, e.g. tower-elephant archers)
+    if (variation?.secondaryWeapons) {
+      weapons.push(...(variation.secondaryWeapons as UnifiedWeapon[]));
+    }
+    // Tech-injected secondary weapons (e.g. thunderclap-bombs → nest-of-bees)
     for (const techId of activeTechnologies) {
       const injection = weaponInjectionMap.get(techId);
       if (!injection) continue;
@@ -456,7 +464,7 @@ export function useUnitSlot() {
       if (weapon) weapons.push(weapon);
     }
     return weapons;
-  }, [activeTechnologies]);
+  }, [activeTechnologies, variation]);
 
   const lockedTechnologies = useMemo(() => {
     const locked = new Set<string>();

@@ -49,6 +49,7 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
   //_________
 
   // Demolition ships self-destruct on contact — they can only kill if hitsToKill === 1
+
   ...((['explosive-dhow', 'demolition-ship', 'explosive-junk', 'lodya-demolition-ship'] as const).map(id => ({
     id,
     reason: 'Self-destructs on first hit: can only kill if target dies in 1 hit.',
@@ -73,6 +74,7 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       };
     },
   },
+
   //_________
   //
   // AYYUBIDS
@@ -151,6 +153,75 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
           makeVariation(3, 108, 10, 10, 70),
           makeVariation(4, 130, 12, 12, 53),
         ],
+      };
+    },
+  },
+
+  //___________
+  //
+  // DELHI SULTANATE
+  //
+  //___________
+
+  {
+    id: 'sultans-elite-tower-elephant',
+    reason: 'The two Handcannoneers atop the tower fire simultaneously. Handcannon already has burst:2 in raw data — moved to secondaryWeapons.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      return {
+        ...u,
+        variations: (u.variations as Record<string, unknown>[]).map(v => {
+          const vr = v as Record<string, unknown>;
+          const weapons = vr.weapons as Record<string, unknown>[] | undefined;
+          const handcannonWeapon = weapons?.find((w: any) => w.name === 'Handcannon'); // eslint-disable-line @typescript-eslint/no-explicit-any
+          if (!handcannonWeapon) return vr;
+          return {
+            ...vr,
+            secondaryWeapons: [handcannonWeapon],
+          };
+        }),
+      };
+    },
+  },
+
+  {
+    id: 'tower-elephant',
+    reason: 'The two archers atop the tower fire simultaneously. Represented as one ranged secondary weapon (Bow) with burst:2.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      return {
+        ...u,
+        variations: (u.variations as Record<string, unknown>[]).map(v => {
+          const vr = v as Record<string, unknown>;
+          const weapons = vr.weapons as Record<string, unknown>[] | undefined;
+          const bowWeapon = weapons?.find((w: any) => w.name === 'Bow'); // eslint-disable-line @typescript-eslint/no-explicit-any
+          if (!bowWeapon) return vr;
+          return {
+            ...vr,
+            secondaryWeapons: [{ ...bowWeapon, burst: { count: 2 } }],
+          };
+        }),
+      };
+    },
+  },
+
+  {
+    id: 'war-elephant',
+    reason: 'The mounted Spearman fires simultaneously with the elephant. Represented as a melee secondary weapon (Spear) preserving its vs cavalry/elephant modifiers.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      return {
+        ...u,
+        variations: (u.variations as Record<string, unknown>[]).map(v => {
+          const vr = v as Record<string, unknown>;
+          const weapons = vr.weapons as Record<string, unknown>[] | undefined;
+          const spearWeapon = weapons?.find((w: any) => w.name === 'Spear'); // eslint-disable-line @typescript-eslint/no-explicit-any
+          if (!spearWeapon) return vr;
+          return {
+            ...vr,
+            secondaryWeapons: [spearWeapon],
+          };
+        }),
       };
     },
   },

@@ -147,6 +147,13 @@ const Sandbox = () => {
     secondaryWeapons: secondaryWeaponsEnemy,
   } = enemy;
 
+  // Filter bonusDamage entries by weapon type — prevents ranged bonuses (e.g. Howdahs) from
+  // applying to melee weapons (e.g. Tusks) and vice-versa.
+  const filterBonusForWeapon = (bonusDamage: any[], weaponType: string) => // eslint-disable-line @typescript-eslint/no-explicit-any
+    weaponType === 'melee'
+      ? bonusDamage.filter((b: any) => b.property !== 'rangedAttack') // eslint-disable-line @typescript-eslint/no-explicit-any
+      : bonusDamage.filter((b: any) => b.property !== 'meleeAttack'); // eslint-disable-line @typescript-eslint/no-explicit-any
+
   // Build variations with applied technologies
   const modifiedVariationAlly = variationAlly ? (() => {
     const debuffMultiplier = unit2 && activeAbilitiesEnemy.size > 0
@@ -164,7 +171,7 @@ const Sandbox = () => {
           ...weapon.range,
           max: modifiedAllyStats.maxRange || weapon.range.max
         } : undefined,
-        modifiers: modifiedAllyStats.bonusDamage,
+        modifiers: filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], weapon.type),
         burst: modifiedAllyStats.burst ? { count: modifiedAllyStats.burst } : weapon.burst
       })),
       armor: [
@@ -189,7 +196,19 @@ const Sandbox = () => {
         speed: modifiedAllyStats.moveSpeed
       } : undefined,
       healingRate: modifiedAllyStats.healingRate ?? 0,
-      secondaryWeapons: secondaryWeaponsAlly,
+      secondaryWeapons: (() => {
+        const primaryBaseDamage = getPrimaryWeapon(variationAlly)?.damage || 0;
+        const meleeAttackDelta = modifiedAllyStats.meleeAttack - primaryBaseDamage;
+        return secondaryWeaponsAlly.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+          ...w,
+          damage: w.type === 'ranged' || w.type === 'siege'
+            ? modifiedAllyStats.rangedAttack * debuffMultiplier
+            : (w.damage + meleeAttackDelta) * debuffMultiplier,
+          modifiers: (w.type === 'ranged' || w.type === 'siege')
+            ? filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], w.type)
+            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], 'melee')],
+        }));
+      })(),
     };
   })() : undefined;
 
@@ -209,7 +228,7 @@ const Sandbox = () => {
           ...weapon.range,
           max: modifiedEnemyStats.maxRange || weapon.range.max
         } : undefined,
-        modifiers: modifiedEnemyStats.bonusDamage,
+        modifiers: filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], weapon.type),
         burst: modifiedEnemyStats.burst ? { count: modifiedEnemyStats.burst } : weapon.burst
       })),
       armor: [
@@ -234,7 +253,19 @@ const Sandbox = () => {
         speed: modifiedEnemyStats.moveSpeed
       } : undefined,
       healingRate: modifiedEnemyStats.healingRate ?? 0,
-      secondaryWeapons: secondaryWeaponsEnemy,
+      secondaryWeapons: (() => {
+        const primaryBaseDamage = getPrimaryWeapon(variationEnemy)?.damage || 0;
+        const meleeAttackDelta = modifiedEnemyStats.meleeAttack - primaryBaseDamage;
+        return secondaryWeaponsEnemy.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+          ...w,
+          damage: w.type === 'ranged' || w.type === 'siege'
+            ? modifiedEnemyStats.rangedAttack * debuffMultiplier
+            : (w.damage + meleeAttackDelta) * debuffMultiplier,
+          modifiers: (w.type === 'ranged' || w.type === 'siege')
+            ? filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], w.type)
+            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], 'melee')],
+        }));
+      })(),
     };
   })() : undefined;
 
@@ -259,7 +290,7 @@ const Sandbox = () => {
           ...weapon.range,
           max: modifiedAllyStats.maxRange || weapon.range.max
         } : undefined,
-        modifiers: modifiedAllyStats.bonusDamage,
+        modifiers: filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], weapon.type),
         burst: modifiedAllyStats.burst ? { count: modifiedAllyStats.burst } : weapon.burst
       })),
       armor: [
@@ -276,6 +307,19 @@ const Sandbox = () => {
         speed: modifiedAllyStats.moveSpeed
       } : undefined,
       healingRate: modifiedAllyStats.healingRate ?? 0,
+      secondaryWeapons: (() => {
+        const primaryBaseDamage = getPrimaryWeapon(unit1)?.damage || 0;
+        const meleeAttackDelta = modifiedAllyStats.meleeAttack - primaryBaseDamage;
+        return secondaryWeaponsAlly.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+          ...w,
+          damage: w.type === 'ranged' || w.type === 'siege'
+            ? modifiedAllyStats.rangedAttack * debuffMultiplier
+            : (w.damage + meleeAttackDelta) * debuffMultiplier,
+          modifiers: (w.type === 'ranged' || w.type === 'siege')
+            ? filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], w.type)
+            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], 'melee')],
+        }));
+      })(),
     };
   })() : undefined;
 
@@ -296,7 +340,7 @@ const Sandbox = () => {
           ...weapon.range,
           max: modifiedEnemyStats.maxRange || weapon.range.max
         } : undefined,
-        modifiers: modifiedEnemyStats.bonusDamage,
+        modifiers: filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], weapon.type),
         burst: modifiedEnemyStats.burst ? { count: modifiedEnemyStats.burst } : weapon.burst
       })),
       armor: [
@@ -313,6 +357,19 @@ const Sandbox = () => {
         speed: modifiedEnemyStats.moveSpeed
       } : undefined,
       healingRate: modifiedEnemyStats.healingRate ?? 0,
+      secondaryWeapons: (() => {
+        const primaryBaseDamage = getPrimaryWeapon(unit2)?.damage || 0;
+        const meleeAttackDelta = modifiedEnemyStats.meleeAttack - primaryBaseDamage;
+        return secondaryWeaponsEnemy.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+          ...w,
+          damage: w.type === 'ranged' || w.type === 'siege'
+            ? modifiedEnemyStats.rangedAttack * debuffMultiplier
+            : (w.damage + meleeAttackDelta) * debuffMultiplier,
+          modifiers: (w.type === 'ranged' || w.type === 'siege')
+            ? filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], w.type)
+            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], 'melee')],
+        }));
+      })(),
     };
   })() : undefined;
 
@@ -894,7 +951,7 @@ const Sandbox = () => {
                       compareCost={enemyStats?.cost}
                       comparePopulation={enemyStats?.population}
                       compareProductionTime={enemyStats?.productionTime}
-                      secondaryWeapons={secondaryWeaponsAlly}
+                      secondaryWeapons={modifiedVariationAlly?.secondaryWeapons ?? secondaryWeaponsAlly}
                       showSecondaryWeaponRow={secondaryWeaponsAlly.length > 0 || secondaryWeaponsEnemy.length > 0}
                     />
                   </div>
@@ -932,7 +989,7 @@ const Sandbox = () => {
                       compareCost={allyStats?.cost}
                       comparePopulation={allyStats?.population}
                       compareProductionTime={allyStats?.productionTime}
-                      secondaryWeapons={secondaryWeaponsEnemy}
+                      secondaryWeapons={modifiedVariationEnemy?.secondaryWeapons ?? secondaryWeaponsEnemy}
                       showSecondaryWeaponRow={secondaryWeaponsAlly.length > 0 || secondaryWeaponsEnemy.length > 0}
                     />
                   </div>
@@ -1125,7 +1182,7 @@ const Sandbox = () => {
                           side="left"
                           mode="versus"
                           versusMetrics={leftMetrics}
-                          secondaryWeapons={secondaryWeaponsAlly}
+                          secondaryWeapons={modifiedVariationAlly?.secondaryWeapons ?? secondaryWeaponsAlly}
                         />
                       </div>
                     </div>
@@ -1145,7 +1202,7 @@ const Sandbox = () => {
                           side="right"
                           mode="versus"
                           versusMetrics={rightMetrics}
-                          secondaryWeapons={secondaryWeaponsEnemy}
+                          secondaryWeapons={modifiedVariationEnemy?.secondaryWeapons ?? secondaryWeaponsEnemy}
                         />
                       </div>
                       <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">

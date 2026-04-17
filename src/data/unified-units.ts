@@ -95,6 +95,7 @@ interface UnifiedVariation {
   movement?: {
     speed: number;
   };
+  secondaryWeapons?: UnifiedWeapon[];
 }
 
 interface UnifiedUnit {

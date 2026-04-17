@@ -361,7 +361,44 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     uiTooltip: "Only the attackSpeed increase is implemented. Furthermore, the 20% bonus annonced is not correct. \n It's a 24% bonus for Fire lancer. 11% bonus for Zhuge Nu and 18% bonus for Grenadier.",
   },
 
+  //___________
+  //
+  // DELHI SULTANATE
+  //
+  //___________
 
+  {
+    id: "ability-tower-of-victory-aura",
+    reason: "Per-unit corrections hard-fixed from in-game measurements (no uniform model found). Average effective buff: −18.4% cycle (+18.4% AS).",
+    after: (ability: Ability) => {
+      const corrections = [
+        { id: 'spearman', value: 1.620 * 1.2 / 1.875 },
+        { id: 'man-at-arms', value: 1.120 * 1.2 / 1.375 },
+        { id: 'archer', value: 1.370 * 1.2 / 1.625 },
+        { id: 'crossbowman', value: 1.830 * 1.2 / 2.125 },
+        { id: 'handcannoneer', value: 1.790 * 1.2 / 2.125 },
+      ];
+      return {
+        ...ability,
+        description: "Enables Tower of Victory, Mosques, and Madrasas to increase the attack speed of infantry by +20% when produced within their influence.",
+        variations: ability.variations.map((v: AbilityVariation) => ({
+          ...v,
+          effects: [
+            ...v.effects,
+            ...corrections.map(c => ({
+              property: 'attackSpeed',
+              select: { id: [c.id] },
+              effect: 'multiply',
+              value: c.value,
+              type: 'ability'
+            }))
+          ],
+          active: "manual",
+        }))
+      };
+    },
+    uiTooltip: "The 20% attack speed buff varies per unit (+15.7% Spearman to +22.8% Man-at-Arms). Values hard-fixed from in-game measurements.",
+  },
 
   //___________
   //

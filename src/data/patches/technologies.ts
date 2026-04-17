@@ -2,6 +2,19 @@ import type { TechnologyPatch } from './types';
 import { deepMerge } from './types';
 import type { Technology, TechnologyVariation } from '../unified-technologies';
 
+// Replaces "religious" with "monk" in all effect select classes.
+// All monk units (imam, scholar, prelate, shaman, etc.) have class "monk", not "religious".
+const replaceReligiousWithMonk = (tech: Technology): Technology => ({
+  ...tech,
+  effects: (tech.effects || []).map(e => ({
+    ...e,
+    select: e.select?.class ? {
+      ...e.select,
+      class: (e.select.class as string[][]).map(group => group.map(c => c === 'religious' ? 'monk' : c))
+    } : e.select
+  }))
+});
+
 export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>[] = [
 
   //___________
@@ -9,6 +22,13 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   // BASE GAME
   //
   //___________
+
+  // Armor techs: raw data targets "religious" class but all monk units use "monk" — corrected.
+  ...((['angled-surfaces', 'fitted-leatherwork', 'insulated-helm', 'iron-undermesh', 'master-smiths', 'wedge-rivets'] as const).map(id => ({
+    id,
+    reason: 'Raw data targets "religious" class but all monk units (imam, scholar, prelate, shaman, etc.) have class "monk". Corrected so these armor techs apply to monks.',
+    after: replaceReligiousWithMonk,
+  }))),
 
   {
     id: 'adjustable-crossbars',
@@ -142,7 +162,65 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     reason: 'Villager has class golden_age_tier_3_building_abb which expands to "building" token, falsely matching this tech.',
     excludedUnits: ['villager'],
   },
-
+  {
+    id: "silk-bowstrings",
+    reason: "Not implemented in data file.",
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [
+          ...(v.effects || []),
+          {
+            property: 'maxRange',
+            select: {
+              "id": [
+                "longbowman",
+                "wynguard-ranger",
+                "zhuge-nu",
+                "archer",
+                "arbaletrier",
+                "crossbowman",
+                "longbowman",
+                "zhuge-nu",
+                "archer",
+                "arbaletrier",
+                "crossbowman",
+                "wynguard-ranger",
+                "javelin-thrower",
+                "gilded-crossbowman",
+                "gilded-archer",
+                "yumi-ashigaru",
+                "zhuge-nu",
+                "bedouin-skirmisher",
+                "yumi-bannerman",
+              ]
+            },
+            effect: 'change',
+            value: 1.5,
+            type: 'passive'
+          },
+          {
+            property: 'maxRange',
+            select: {
+              "id": [
+                "mangudai",
+                "khaganate-elite-mangudai",
+                "khaganate-horse-archer",
+                "horse-archer",
+                "camel-archer",
+                "khan",
+                "desert-raider",
+              ]
+            },
+            effect: 'change',
+            value: -0.75,
+            type: 'passive'
+          },
+        ]
+      }))
+    }),
+  },
   //_________________
   //
   // ABBASID DYNASTY
@@ -424,8 +502,42 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
   {
     id: 'incendiary-arrows',
-    reason: 'Byzantine javelin-thrower does not have access to Incendiary Arrows in-game.',
+    reason: 'Byzantine javelin-thrower excluded (not in-game). Raw data has typo tower-elepahnt → fixed to tower-elephant in select.id.',
     excludedUnits: ['javelin-thrower'],
+    after: (tech: Technology) => ({
+      ...tech,
+      effects: (tech.effects || []).map(effect => ({
+        ...effect,
+        select: effect.select?.id ? {
+          ...effect.select,
+          id: effect.select.id.map(id => id === 'tower-elepahnt' ? 'tower-elephant' : id)
+        } : effect.select
+      }))
+    }),
+  },
+
+  // sultans-elite-tower-elephant has gunpowder class but also ranged+cavalry — these
+  // archer/ranged techs match it via [["ranged","cavalry"]] class group, which is incorrect.
+  // Chemistry (gunpowder class) is left untouched — it correctly applies to gunpowder units.
+  {
+    id: 'steeled-arrow',
+    reason: 'sultans-elite-tower-elephant has ranged+cavalry classes but fires gunpowder (Handcannon), not arrows.',
+    excludedUnits: ['sultans-elite-tower-elephant'],
+  },
+  {
+    id: 'balanced-projectiles',
+    reason: 'sultans-elite-tower-elephant has ranged+cavalry classes but fires gunpowder (Handcannon), not arrows.',
+    excludedUnits: ['sultans-elite-tower-elephant'],
+  },
+  {
+    id: 'platecutter-point',
+    reason: 'sultans-elite-tower-elephant has ranged+cavalry classes but fires gunpowder (Handcannon), not arrows.',
+    excludedUnits: ['sultans-elite-tower-elephant'],
+  },
+  {
+    id: 'inspired-warriors',
+    reason: 'sultans-elite-tower-elephant has ranged+cavalry classes but fires gunpowder (Handcannon), not arrows.',
+    excludedUnits: ['sultans-elite-tower-elephant'],
   },
 
   //___________
@@ -497,6 +609,95 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
       variations: tech.variations.map(v => ({
         ...v,
         civs: [...(v.civs || []), "by"]
+      }))
+    }),
+  },
+
+  {
+    id: "zeal",
+    reason: "Base effect corrected to ×1/1.5. Per-unit corrections hard-fixed from in-game measurements (no uniform model found). Average effective buff: −28.3% cycle (+39.4% AS).",
+    excludedUnits: ['scholar'],
+    after: (tech: Technology) => {
+      const corrections = [
+        { id: 'man-at-arms', value: 1.5 / 1.375 },
+        { id: 'archer', value: 1.875 / 1.625 },
+        { id: 'crossbowman', value: 2.295 / 2.125 },
+        { id: 'handcannoneer', value: 2.37 / 2.125 },
+        { id: 'tower-elephant', value: 3.0 / 2.875 },
+        { id: 'sultans-elite-tower-elephant', value: 3.0 / 2.875 },
+        { id: 'lancer', value: 1.08 },
+        { id: 'war-elephant', value: 3.0 / 2.875 },
+        { id: 'ghazi-raider', value: 0.96 },
+      ];
+      return {
+        ...tech,
+        variations: tech.variations.map(v => ({
+          ...v,
+          effects: [
+            ...v.effects.map((e: any) => // eslint-disable-line @typescript-eslint/no-explicit-any
+              e.property === 'attackSpeed' ? { ...e, value: 1 / 1.5 } : e
+            ),
+            ...corrections.map(c => ({
+              property: 'attackSpeed',
+              select: { id: [c.id] },
+              effect: 'multiply',
+              value: c.value,
+              type: 'passive'
+            }))
+          ]
+        }))
+      };
+    },
+    uiTooltip: "The 50% attack speed buff value is incorrect compared to the in-game UI average. The mean is around 39%, but it varies from 30% (Archer) to 56% (Ghazi).",
+  },
+
+  {
+    id: "forced-march",
+    reason: "Useless tech for UI.",
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({ ...v, effects: [] }))
+    })
+  },
+
+  {
+    id: "paiks",
+    reason: "Not implemented in data file.",
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [
+          ...(v.effects || []),
+          {
+            property: 'maxRange',
+            select: { id: ['archer', 'crossbowman'] },
+            effect: 'change',
+            value: 0.5,
+            type: 'passive'
+          }
+        ]
+      }))
+    }),
+  },
+
+  {
+    id: "mahouts",
+    reason: "Not implemented in data file.",
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [
+          ...(v.effects || []),
+          {
+            property: 'moveSpeed',
+            select: { class: [['elephant']] },
+            effect: 'multiply',
+            value: 1.1,
+            type: 'passive'
+          }
+        ]
       }))
     }),
   },

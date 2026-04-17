@@ -224,12 +224,12 @@ export const UnitCard = ({
     <span className="ml-2 inline-flex items-center text-xs font-semibold text-yellow-500" title="Winner" aria-label="Winner">👑</span>
   ) : null;
 
-  // Calculate applicable bonus against the opponent (versus mode only)
-  let applicableBonus = 0;
-  if (mode === 'versus' && versusMetrics?.opponentClasses && primaryWeapon?.modifiers?.length) {
+  // Build opponent class set for versus mode bonus matching
+  const expandedOpp = new Set<string>();
+  if (mode === 'versus' && versusMetrics?.opponentClasses) {
     const opp = versusMetrics.opponentClasses.map(c => c.toLowerCase());
-    const expandedOpp = new Set<string>(opp);
     for (const cls of opp) {
+      expandedOpp.add(cls);
       if (cls.includes('_')) {
         const parts = cls.split('_');
         const negatedTokens = new Set<string>();
@@ -243,21 +243,25 @@ export const UnitCard = ({
         }
       }
     }
+  }
 
-    for (const mod of primaryWeapon.modifiers as any[]) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  // Compute the applicable bonus from a modifier list against expandedOpp
+  const computeApplicableBonus = (modifiers: any[]): number => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (expandedOpp.size === 0) return 0;
+    let bonus = 0;
+    for (const mod of modifiers) {
       const spec = mod.target?.class;
       if (!spec) continue;
-
       const groups: string[][] = Array.isArray(spec) && spec.some(v => Array.isArray(v)) ? (spec as unknown as string[][]) : [spec as unknown as string[]];
-      const applies = groups.some(group =>
-        Array.isArray(group) && group.every(req => expandedOpp.has(req.toLowerCase()))
-      );
-
-      if (applies) {
-        applicableBonus += (mod.value ?? mod.amount ?? 0) as number;
+      if (groups.some(group => Array.isArray(group) && group.every(req => expandedOpp.has(req.toLowerCase())))) {
+        bonus += (mod.value ?? mod.amount ?? 0) as number;
       }
     }
-  }
+    return bonus;
+  };
+
+  // Calculate applicable bonus against the opponent for the primary weapon
+  const applicableBonus = primaryWeapon?.modifiers?.length ? computeApplicableBonus(primaryWeapon.modifiers as any[]) : 0; // eslint-disable-line @typescript-eslint/no-explicit-any
 
   return (
     <Card
@@ -335,11 +339,34 @@ export const UnitCard = ({
                 {showSecondaryWeaponRow && (
                   secondaryWeapons && secondaryWeapons.length > 0 ? (
                     secondaryWeapons.map((w: any, i: number) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
-                      <div key={i} className="flex justify-between">
-                        <span className="text-muted-foreground text-xs italic pl-2">+ {w.name || 'weapon'}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {Math.round(w.damage || 0)}{w.burst?.count && w.burst.count > 1 ? ` × ${w.burst.count}` : ''} ({w.type})
-                        </span>
+                      <div key={i}>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground text-xs italic pl-2">+ {w.name || 'weapon'}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {(() => {
+                              const mods = w.modifiers || [];
+                              // Only sum bonus inline if there is a single modifier.
+                              const totalBonus = mods.length === 1 ? (mods[0].value || 0) : 0;
+                              const hasBurst = w.burst?.count && w.burst.count > 1;
+                              const hasBonus = totalBonus > 0;
+                              const base = Math.round(w.damage || 0);
+                              if (hasBurst && hasBonus) return `(${base} + ${Math.round(totalBonus)}) × ${w.burst.count}`;
+                              if (hasBurst) return `${base} × ${w.burst.count}`;
+                              if (hasBonus) return `${base} + ${Math.round(totalBonus)}`;
+                              return `${base}`;
+                            })()} ({w.type})
+                          </span>
+                        </div>
+                        {(w.modifiers || []).length > 1 && (w.modifiers || []).map((mod: any, mi: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+                          const targetClasses = mod.target?.class?.flat() || [];
+                          const targetName = formatClassNames(targetClasses);
+                          return (
+                            <div key={mi} className="flex justify-between text-xs pl-4">
+                              <span className="text-muted-foreground">+{Math.round(mod.value || 0)} vs</span>
+                              <span className="text-muted-foreground capitalize">{targetName}</span>
+                            </div>
+                          );
+                        })}
                       </div>
                     ))
                   ) : (
@@ -601,6 +628,62 @@ export const UnitCard = ({
                     )}
                   </div>
 
+                  {/* ── Secondary Weapons ── */}
+                  {secondaryWeapons && secondaryWeapons.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="font-semibold text-primary uppercase tracking-wide text-[9px]">
+                        ⚔️ Secondary Weapon{secondaryWeapons.length > 1 ? 's' : ''}
+                      </div>
+                      {secondaryWeapons.map((w: any, i: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+                        const applicableSecBonus = computeApplicableBonus(w.modifiers || []);
+                        const burstCount = w.burst?.count && w.burst.count > 1 ? w.burst.count : 1;
+                        const armorVal = w.type === 'melee'
+                          ? (compareMeleeArmor || 0)
+                          : w.type === 'siege'
+                            ? 0
+                            : (compareRangedArmor || 0);
+                        const effectiveDmg = Math.max(0, (w.damage || 0) * burstCount + applicableSecBonus - armorVal);
+                        const cycle = w.speed;
+                        const dpsContrib = cycle > 0 ? effectiveDmg / cycle : 0;
+                        return (
+                          <div key={i} className="pl-1 border-l-2 border-primary/20 space-y-0.5">
+                            <div className="font-medium text-primary/80">
+                              + {w.name}{burstCount > 1 ? ` ×${burstCount}` : ''} ({w.type})
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Base dmg</span>
+                              <span>{round2(w.damage || 0)}{burstCount > 1 ? ` × ${burstCount}` : ''}</span>
+                            </div>
+                            {applicableSecBonus > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Bonus vs target</span>
+                                <span className="text-green-400">+{round2(applicableSecBonus)}</span>
+                              </div>
+                            )}
+                            {armorVal > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Armor</span>
+                                <span className="text-red-400">−{round2(armorVal)}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between border-t border-border/50 pt-0.5">
+                              <span className="text-muted-foreground">≈ Effective dmg</span>
+                              <span>{round2(effectiveDmg)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Attack cycle</span>
+                              <span>{round2(cycle)}s</span>
+                            </div>
+                            <div className="flex justify-between font-medium">
+                              <span>≈ DPS</span>
+                              <span>{round2(dpsContrib)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {/* ── Movement ── */}
                   {hasMovement && (
                     <div className="space-y-1">
@@ -832,7 +915,16 @@ export const UnitCard = ({
                   <>
                     <div className="flex justify-between"><span className="text-muted-foreground">Atk</span><span>{Math.round(primaryWeapon.damage || 0)}{primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 ? `×${primaryWeapon.burst.count}` : ''}{applicableBonus > 0 && ` + ${Math.round(applicableBonus)}`}</span></div>
                     {secondaryWeapons && secondaryWeapons.length > 0 && secondaryWeapons.map((w: any, i: number) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
-                      <div key={i} className="flex justify-end"><span>{Math.round(w.damage || 0)}{w.burst?.count && w.burst.count > 1 ? `×${w.burst.count}` : ''}</span></div>
+                      <div key={i} className="flex justify-end"><span>{(() => {
+                        const applicableSecondaryBonus = computeApplicableBonus(w.modifiers || []);
+                        const hasBurst = w.burst?.count && w.burst.count > 1;
+                        const hasBonus = applicableSecondaryBonus > 0;
+                        const base = Math.round(w.damage || 0);
+                        if (hasBurst && hasBonus) return `(${base} + ${Math.round(applicableSecondaryBonus)}) ×${w.burst.count}`;
+                        if (hasBurst) return `${base} ×${w.burst.count}`;
+                        if (hasBonus) return `${base} + ${Math.round(applicableSecondaryBonus)}`;
+                        return `${base}`;
+                      })()}</span></div>
                     ))}
                     <div className="flex justify-between"><span className="text-muted-foreground">AS</span><span>{primaryWeapon.speed ? primaryWeapon.speed.toFixed(3) + 's' : '—'}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Range</span><span>{primaryWeapon.range.max}</span></div>

@@ -757,7 +757,7 @@ export function getActiveTechnologyVariationsWithTiers(
 // Categorise technologies by main effect type
 export function categorizeTechnology(tech: Technology): string {
   // Use effects at the technology level (all-optimized_tec.json) or at the variation level
-  const effects = tech.effects || tech.variations[0]?.effects || [];
+  const effects = (tech.effects && tech.effects.length > 0 ? tech.effects : tech.variations[0]?.effects) || [];
 
   // Check whether the tech belongs to a tiered sequence (X/Y in displayClasses)
   const tierInfo = getTechnologyTier(tech);
