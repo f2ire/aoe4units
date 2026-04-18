@@ -763,19 +763,18 @@ export function computeVersusAtEqualCost(
   }
 
   if (!metricsA.bugAttackSpeed && !metricsB.bugAttackSpeed && metricsA.timeToKill !== null && metricsB.timeToKill !== null) {
-    // Compute damage taken by A during its TTK against B
-    const attackDataBA = computeEffectiveDamage(B, A); // B attacks A
-    const effectiveDamagePerCycleBA = attackDataBA.value * multipliers.multB;
+    // Combat ends when the first side is wiped — duration = min TTK
+    const combatDuration = Math.min(metricsA.timeToKill, metricsB.timeToKill);
+
     const totalAttackerHP_A = A.hitpoints * multipliers.multA;
-    const damageTakenByA = effectiveDamagePerCycleBA * metricsA.hitsToKill!;
+    const totalAttackerHP_B = B.hitpoints * multipliers.multB;
+
+    // damageTaken = total group DPS × combat duration
+    const damageTakenByA = (metricsB.dps ?? 0) * combatDuration;
     hpRemainingA = Math.max(0, totalAttackerHP_A - damageTakenByA);
     unitsRemainingA = Math.floor(hpRemainingA / A.hitpoints);
 
-    // Compute damage taken by B during its TTK against A
-    const attackDataAB = computeEffectiveDamage(A, B); // A attacks B
-    const effectiveDamagePerCycleAB = attackDataAB.value * multipliers.multA;
-    const totalAttackerHP_B = B.hitpoints * multipliers.multB;
-    const damageTakenByB = effectiveDamagePerCycleAB * metricsB.hitsToKill!;
+    const damageTakenByB = (metricsA.dps ?? 0) * combatDuration;
     hpRemainingB = Math.max(0, totalAttackerHP_B - damageTakenByB);
     unitsRemainingB = Math.floor(hpRemainingB / B.hitpoints);
   }
@@ -798,8 +797,16 @@ export function computeVersusAtEqualCost(
     winnerUnitsRemaining = unitsRemainingB;
     const costPerUnit = multipliers.totalCostB / multipliers.multB;
     resourceDifference = winnerUnitsRemaining * costPerUnit;
+  } else if (hpRemainingA > hpRemainingB) {
+    // Tiebreaker: same whole-unit count (often 0-0) but A has more HP fragments
+    winner = "attacker";
+    winnerHpRemaining = hpRemainingA;
+    winnerUnitsRemaining = 0;
+  } else if (hpRemainingB > hpRemainingA) {
+    winner = "defender";
+    winnerHpRemaining = hpRemainingB;
+    winnerUnitsRemaining = 0;
   } else {
-    // Draw if remaining units are equal (including 0-0)
     winner = "draw";
   }
 

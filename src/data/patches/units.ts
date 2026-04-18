@@ -228,6 +228,59 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
 
   //_________
   //
+  // ENGLISH
+  //
+  //_________
+
+  {
+    id: 'king',
+    reason: 'Raw data only has one age-2 variation. Adding age-3 and age-4 variations with cumulative stats from upgrade-king-3/4 tech effects (castle: +75 HP, +6 atk, +1 armor; imperial: +100 HP, +8 atk, +1 armor). Techs excluded via techUnitExclusions.',
+    after: (unit: any) => {
+      const base = unit.variations[0];
+      const makeVariation = (age: number, hp: number, swordDmg: number, meleeArmor: number, rangedArmor: number) => ({
+        ...base,
+        age,
+        id: `king-${age}`,
+        hitpoints: hp,
+        weapons: base.weapons.map((w: any, i: number) => i === 0 ? { ...w, damage: swordDmg } : w),
+        armor: [{ type: 'melee', value: meleeArmor }, { type: 'ranged', value: rangedArmor }],
+      });
+      return {
+        ...unit,
+        variations: [
+          base,
+          makeVariation(3, 295, 22, 3, 3),
+          makeVariation(4, 395, 30, 4, 4),
+        ],
+      };
+    },
+  },
+
+  {
+    id: "wynguard-footman",
+    reason: "The cost of the unit is wrong.",
+    after: (unit: any) => ({
+      ...unit,
+      variations: unit.variations.map((v: any) =>
+        v.age === 4 ? { ...v, costs: { ...v.costs, food: 50, gold: 67, total: 117 } } : v
+      )
+    })
+  },
+
+  {
+    id: "wynguard-ranger",
+    reason: "The cost of the unit is wrong.",
+    after: (unit: any) => ({
+      ...unit,
+      variations: unit.variations.map((v: any) =>
+        v.age === 4 ? { ...v, costs: { ...v.costs, food: 0, wood: 75, gold: 50, total: 125 } } : v
+      )
+    })
+  },
+
+
+  //_________
+  //
   // FRENCH
   //
   //_________

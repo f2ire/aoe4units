@@ -86,7 +86,62 @@ handcannoneer  | 2.125 | 1.181   | 1.310    | +62.2%  |
 
 **Average effective bonus:** +68.4% AS (theory: +80% combined).
 **Conclusion:**
+
+## [TECH] Network of Castle — English — 2026/04/18
+
+**Description:** +20% attack speed
+
+Unit             | Base   | Theory | Practice | Eff. %  |
+-----------------|--------|--------|----------|---------|
+spearman         | 1.875  | 1.563  | 1.620    | +15.7%  |
+man-at-arms      | 1.375  | 1.146  | 1.120    | +22.8%  |
+Wynguard Footman | 1.625  | 1.354  | 1.330    | +22.2%  |
+crossbowman      | 2.125  | 1.771  | 1.830    | +16.1%  |
+handcannoneer    | 2.125  | 1.771  | 1.790    | +18.7%  |
+longbowman       | 1.625  | 1.354  | 1.370    | +18.6%  |
+Wynguard Ranger  | 1.625  | 1.354  | 1.370    | +18.6%  |
+Horseman         | 1.750  | 1.458  | 1.560    | +12.2%  |
+King             | 2.375  | 1.979  | 1.950    | +21.8%  |
+Lancer           | 1.500  | 1.250  | 1.230    | +22.0%  |
+Trebuchet        | 11.375 | 9.479  | 9.530    | +19.3%  |
+Mangonel         | 6.875  | 5.729  | 5.830    | +17.9%  |
+Springald        | 3.125  | 2.604  | 2.640    | +18.4%  |
+Bombard          | 5.375  | 4.479  | 4.570    | +17.6%  |
+Ribauldequin     | 5.250  | 4.375  | 4.570    | +14.9%  |
+Villager         | 3.380  | 2.817  | 2.910    | +16.1%  |
+
+**Average effective bonus:** +18.3% AS (vs. +20% announced); +18.9% excluding siege/villagers.
+**Conclusion:** Average gap of ~1.7 pp, with a 12–23% spread. There is no uniform model; unit-specific corrections are required
+
+## [TECH] Network of Citadels — English — 2026/04/18
+
+**Description:** +30% attack speed
+
+Unit             | Base   | Theory | Practice | Eff. %  |
+-----------------|--------|--------|----------|---------|
+spearman         | 1.875  | 1.442  | 1.580    | +18.7%  |
+man-at-arms      | 1.375  | 1.058  | 1.120    | +22.8%  |
+Wynguard Footman | 1.625  | 1.250  | 1.320    | +23.1%  |
+crossbowman      | 2.125  | 1.635  | 1.720    | +23.5%  |
+handcannoneer    | 2.125  | 1.635  | 1.710    | +24.3%  |
+longbowman       | 1.625  | 1.250  | 1.330    | +22.2%  |
+Wynguard Ranger  | 1.625  | 1.250  | 1.330    | +22.2%  |
+Horseman         | 1.750  | 1.346  | 1.490    | +17.4%  |
+King             | 2.375  | 1.827  | 1.890    | +25.7%  |
+Lancer           | 1.500  | 1.154  | 1.170    | +28.2%  |
+Trebuchet        | 11.375 | 8.750  | 8.860    | +28.4%  |
+Mangonel         | 6.875  | 5.288  | 5.330    | +29.0%  |
+Springald        | 3.125  | 2.404  | 2.510    | +24.5%  |
+Bombard          | 5.375  | 4.135  | 4.280    | +25.6%  |
+Ribauldequin     | 5.250  | 4.038  | 4.250    | +23.5%  |
+Villager         | 3.380  | 2.600  | 2.790    | +21.1%  |
+
+**Average effective bonus:** +23.8% Attack Speed (vs. +30% announced); +22.8% excluding siege/villagers.
+**Conclusion:** Average gap of ~6.2 percentage points, with a spread of 17–29%. There is no uniform model; unit-specific corrections are required.
+
 <!-- TEMPLATE FOR NEXT EXPERIMENT
+
+**Description:** +50% + 20% attack speed
 
 ## [TYPE] Name — Civ — Date
 

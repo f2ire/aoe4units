@@ -408,13 +408,18 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
 
   {
     id: "ability-arrow-volley",
-    reason: 'Available for Byzantines after building Foreign Engineering Company. Duration is not yet considered.',
+    reason: 'Available for Byzantines after building Foreign Engineering Company. Duration is not yet considered. wynguard-ranger added to select.id so the ability appears for that unit.',
     after: (abilities) => ({
       ...abilities,
       civs: [...abilities.civs, 'by'],
       variations: abilities.variations.map(v => ({
         ...v,
-        civs: [...(v.civs || []), "by"]
+        civs: [...(v.civs || []), "by"],
+        effects: (v.effects || []).map((e: any) =>
+          e.select?.id?.includes('longbowman')
+            ? { ...e, select: { ...e.select, id: [...e.select.id, 'wynguard-ranger'] } }
+            : e
+        ),
       }))
     }),
     foreignEngineering: true,
@@ -426,6 +431,74 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     id: 'ability-place-palings',
     reason: 'UI-only: Ability that has no direct impact on unit combat stats. Hidden to avoid confusion in the ability selector.',
     after: (ability: Ability) => ({ ...ability, hidden: true })
+  },
+
+  {
+    id: 'ability-abbey-healing',
+    reason: 'UI-only: Ability that has no direct impact on unit combat stats. Hidden to avoid confusion in the ability selector.',
+    after: (ability: Ability) => ({ ...ability, hidden: true })
+  },
+
+  {
+    id: "ability-network-of-castles",
+    reason: "Per-unit AS corrections from in-game measurements (2026/04/18). No uniform model — corrections like Zeal.",
+    after: (ability: Ability) => ({
+      ...ability,
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        active: "manual",
+        effects: [
+          { property: 'attackSpeed', select: { id: ['spearman'] }, effect: 'multiply', value: 1.620 / 1.875, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['man-at-arms'] }, effect: 'multiply', value: 1.120 / 1.375, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['wynguard-footman'] }, effect: 'multiply', value: 1.330 / 1.625, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['crossbowman'] }, effect: 'multiply', value: 1.830 / 2.125, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['handcannoneer'] }, effect: 'multiply', value: 1.790 / 2.125, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['longbowman', 'wynguard-ranger'] }, effect: 'multiply', value: 1.370 / 1.625, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['horseman'] }, effect: 'multiply', value: 1.560 / 1.750, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['king'] }, effect: 'multiply', value: 1.950 / 2.375, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['knight'] }, effect: 'multiply', value: 1.230 / 1.500, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['counterweight-trebuchet'] }, effect: 'multiply', value: 9.530 / 11.375, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['mangonel'] }, effect: 'multiply', value: 5.830 / 6.875, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['springald'] }, effect: 'multiply', value: 2.640 / 3.125, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['bombard'] }, effect: 'multiply', value: 4.570 / 5.375, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['ribauldequin'] }, effect: 'multiply', value: 4.570 / 5.250, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['villager'] }, effect: 'multiply', value: 2.910 / 3.375, type: 'ability' },
+        ],
+      }))
+    }),
+    uiTooltip: "Real Attackspeed bonus : +18.3% AS with a 12–23% spread "
+  },
+
+  {
+    id: "ability-network-of-citadels",
+    reason: "Per-unit AS corrections from in-game measurements (2026/04/18). No uniform model — corrections like Zeal.",
+    after: (ability: Ability) => ({
+      ...ability,
+      minAge: 3,
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        active: "manual",
+        effects: [
+          { property: 'attackSpeed', select: { id: ['spearman'] }, effect: 'multiply', value: 1.580 / 1.875, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['man-at-arms'] }, effect: 'multiply', value: 1.120 / 1.375, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['wynguard-footman'] }, effect: 'multiply', value: 1.320 / 1.625, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['crossbowman'] }, effect: 'multiply', value: 1.720 / 2.125, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['handcannoneer'] }, effect: 'multiply', value: 1.710 / 2.125, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['longbowman', 'wynguard-ranger'] }, effect: 'multiply', value: 1.330 / 1.625, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['horseman'] }, effect: 'multiply', value: 1.490 / 1.750, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['king'] }, effect: 'multiply', value: 1.890 / 2.375, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['knight'] }, effect: 'multiply', value: 1.170 / 1.500, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['counterweight-trebuchet'] }, effect: 'multiply', value: 8.860 / 11.375, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['mangonel'] }, effect: 'multiply', value: 5.330 / 6.875, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['springald'] }, effect: 'multiply', value: 2.510 / 3.125, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['bombard'] }, effect: 'multiply', value: 4.280 / 5.375, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['ribauldequin'] }, effect: 'multiply', value: 4.250 / 5.250, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['villager'] }, effect: 'multiply', value: 2.790 / 3.375, type: 'ability' },
+        ],
+      }))
+    }),
+    uiTooltip: "Real Attackspeed bonus : +23.8% AS with a 17–29%% spread "
+
   },
 
   //___________
@@ -571,6 +644,13 @@ export const foreignEngineeringAbilityUnitRestrictions: Map<string, string[]> = 
 // Additional bonus damage on first hit only for: knight (age 2: +10, age 3: +12, age 4: +14)
 // and merc_ghulam (age 3: +5, age 4: +6). Per-age bonus applied in Sandbox.tsx.
 function createChargeAttackAbility(): Ability {
+
+  //___________
+  //
+  // BASE GAME
+  //
+  //___________
+
   const chargeEffects: Ability['effects'] = [
     // Speed boost for ALL melee units (displayed as moveSpeed effect)
     {
@@ -639,6 +719,12 @@ function createChargeAttackAbility(): Ability {
     shared: {}
   } as Ability;
 }
+
+//___________
+//
+// CHINESE
+//
+//___________
 
 // Synthetic ability — Ming Dynasty (Chinese).
 // +15% HP to all military units.
@@ -781,6 +867,50 @@ function createClocktowerAbility(): Ability {
   } as Ability;
 }
 
+//___________
+//
+// ENGLISH
+//
+//___________
+
+function createCouncilHallAbility(): Ability {
+  return {
+    id: 'ability-council-hall',
+    name: 'Council Hall',
+    type: 'ability',
+    civs: ['en'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    icon: '/abilities/council-hall.png',
+    description: 'Longbowmen cost 5% less.',
+    unique: false,
+    effects: [{
+      property: 'costReduction',
+      select: { id: ['longbowman'] },
+      effect: 'multiply',
+      value: 0.95,
+      type: 'ability',
+    }],
+    variations: [{
+      id: 'ability-council-hall-2',
+      baseId: 'ability-council-hall',
+      type: 'ability',
+      name: 'Council Hall',
+      pbgid: 999010,
+      attribName: 'ability_council_hall',
+      age: 2,
+      civs: ['en'],
+      description: 'Longbowmen cost 5% less.',
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
 export function applyAbilityPatches(abilities: Ability[]): Ability[] {
   // Add the created synthetic abilities
   const chargeAttackAbility = createChargeAttackAbility();
@@ -790,6 +920,7 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createYuanDynastyAbility(),
     createMingDynastyAbility(),
     createClocktowerAbility(),
+    createCouncilHallAbility(),
   ];
 
   return abilitiesWithCharge.map(ability => {

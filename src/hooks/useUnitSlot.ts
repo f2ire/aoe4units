@@ -9,6 +9,14 @@ import type { UnifiedWeapon } from "@/data/unified-units";
 import { foreignEngineeringAbilityUnitRestrictions } from "@/data/patches/abilities";
 import type { Ability, AbilityVariation } from "@/data/unified-abilities";
 
+// Upgrade groups: ordered arrays where index 0 = tier 1, index 1 = tier 2, etc.
+// Only one ability in a group can be active at a time; clicking one deactivates the others.
+// Unlike WEAPON_SWAP_GROUPS, clicking the active ability deactivates it.
+export const ABILITY_UPGRADE_GROUPS: readonly (readonly string[])[] = [
+  ['ability-dynasty-song', 'ability-dynasty-yuan', 'ability-dynasty-ming'],
+  ['ability-network-of-castles', 'ability-network-of-citadels'],
+];
+
 export function categorizeUnit(unit: AoE4Unit, selectedCiv?: string): string {
   const classes = unit.classes.map(c => c.toLowerCase());
   if (classes.includes('worker_elephant')) return 'other';
@@ -137,6 +145,14 @@ export function useUnitSlot() {
         if (next.has(abilityId)) return prev; // already active: no-op
         swapGroup.forEach(id => next.delete(id));
         next.add(abilityId);
+      } else if (ABILITY_UPGRADE_GROUPS.find(g => g.includes(abilityId))) {
+        const upgradeGroup = ABILITY_UPGRADE_GROUPS.find(g => g.includes(abilityId))!;
+        if (next.has(abilityId)) {
+          next.delete(abilityId); // deactivate — unlike swap groups, can toggle off
+        } else {
+          upgradeGroup.forEach(id => next.delete(id)); // deactivate others in group
+          next.add(abilityId);
+        }
       } else {
         if (next.has(abilityId)) {
           next.delete(abilityId);
@@ -192,6 +208,10 @@ export function useUnitSlot() {
     'clocktower-counterweight-trebuchet',
     'clocktower-nest-of-bees',
     'clocktower-springald',
+    'wynguard-army', 
+    'wynguard-footmen',
+    'wynguard-raiders',
+    'wynguard-rangers',
   ]);
 
   const filteredUnits = useMemo(() => {
@@ -444,6 +464,12 @@ export function useUnitSlot() {
     }
 
     if (result.moveSpeed > 2) result = { ...result, moveSpeed: 2 };
+
+    // Fixed attack speed overrides — ability sets an absolute AS regardless of techs
+    if (activeAbilities.has('ability-arrow-volley')) {
+      result = { ...result, attackSpeed: 0.6 };
+    }
+
     return result;
   }, [unit, variation, effectiveClasses, activeTechnologies, activeAbilities, selectedCiv, selectedAge]);
 

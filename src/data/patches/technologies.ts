@@ -708,6 +708,69 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   //___________
 
 
+  {
+    id: 'admiralty',
+    reason: 'Raw data has empty effects. Adds +1 range to Galley, Hulk, and Carrack per in-game description.',
+    update: {
+      effects: [
+        {
+          property: 'maxRange',
+          select: { id: ['galley', 'hulk', 'carrack'] },
+          effect: 'change',
+          value: 1,
+          type: 'passive',
+        }
+      ]
+    }
+  },
+
+  {
+    id: "network-of-citadels",
+    reason: "Useless tech for UI.",
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({ ...v, effects: [] }))
+    })
+  },
+
+  {
+    id: 'upgrade-king-3',
+    reason: 'Castle Age King stats are baked into the age-3 variation of the king unit (units.ts patch). Tech excluded so age selection drives the correct stats.',
+    excludedUnits: ['king'],
+  },
+  {
+    id: 'upgrade-king-4',
+    reason: 'Imperial Age King stats are baked into the age-4 variation of the king unit (units.ts patch). Tech excluded so age selection drives the correct stats.',
+    excludedUnits: ['king'],
+  },
+
+  {
+    id: "armor-clad",
+    reason: "Extend to Wynguard Footman.",
+    after: (tech: any) => ({
+      ...tech,
+      variations: tech.variations.map((v: any) => ({
+        ...v,
+        effects: v.effects.map((e: any) => ({
+          ...e,
+          select: {
+            ...e.select,
+            id: [...(e.select?.id || []), "wynguard-footman"]
+          }
+        }))
+      }))
+    })
+  },
+
+  {
+    id: "arrow-volley",
+    reason: "Useless tech for UI.",
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({ ...v, effects: [] }))
+    })
+  },
+
   //___________
   //
   // FRENCH
