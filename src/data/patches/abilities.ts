@@ -22,6 +22,11 @@ export const techAbilityInteractions: TechAbilityInteraction[] = [
     unitId: "royal-knight",
     apply: (stats) => ({ ...stats, meleeAttack: stats.meleeAttack + 7 }),
   },
+  {
+    requiredTech: 'enlistment-incentives',
+    requiredAbility: 'ability-keep-influence',
+    apply: (stats) => ({ ...stats, costMultiplier: (stats.costMultiplier ?? 1) * 0.95 }),
+  },
 ];
 
 //_________________
@@ -911,6 +916,50 @@ function createCouncilHallAbility(): Ability {
   } as Ability;
 }
 
+//___________
+//
+// FRENCH
+//
+//___________
+
+function createFrenchKeepInfluence(): Ability {
+  return {
+    id: 'ability-keep-influence',
+    name: 'Keep Influence',
+    type: 'ability',
+    civs: ['fr'],
+    displayClasses: [],
+    classes: [],
+    minAge: 3,
+    icon: '/abilities/keep-influence.png',
+    description: 'All Archery Ranges and Stables within this influence area produce units 20% cheaper.',
+    unique: true,
+    effects: [{
+      property: 'costReduction',
+      select: { class: [['ranged_infantry'], ['cavalry']] },
+      effect: 'multiply',
+      value: 0.8,
+      type: 'ability',
+    }],
+    variations: [{
+      id: 'ability-keep-influence-3',
+      baseId: 'ability-keep-influence',
+      type: 'ability',
+      name: 'Keep Influence',
+      pbgid: 999011,
+      attribName: 'ability_keep_influence',
+      age: 3,
+      civs: ['fr'],
+      description: 'All Archery Ranges and Stables within this influence area produce units 20% cheaper.',
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
 export function applyAbilityPatches(abilities: Ability[]): Ability[] {
   // Add the created synthetic abilities
   const chargeAttackAbility = createChargeAttackAbility();
@@ -921,6 +970,7 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createMingDynastyAbility(),
     createClocktowerAbility(),
     createCouncilHallAbility(),
+    createFrenchKeepInfluence(),
   ];
 
   return abilitiesWithCharge.map(ability => {

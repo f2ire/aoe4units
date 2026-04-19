@@ -139,12 +139,12 @@ export const TechnologySelector = ({
                     const iconPath = `/technologies/${iconFileName}`;
                     const patch = technologyPatches.find(p => p.id === tech.id);
                     const isForeignEngineering = selectedCiv === 'by' && foreignEngineeringTechIds.has(tech.id);
-                    // For FEC techs, only show the uiTooltip when playing as Byzantine
+                    // FEC techs: uiTooltip for Byzantine, uiTooltipNative for native civs
                     const patchTooltip = isForeignEngineering
                       ? patch?.uiTooltip
                       : (!foreignEngineeringTechIds.has(tech.id)
                           ? (patch?.uiTooltip || patch?.variations?.find(vp => vp.uiTooltip)?.uiTooltip)
-                          : undefined);
+                          : patch?.uiTooltipNative);
                     return (
                       <div key={tech.id} className="relative">
                         <TooltipProvider delayDuration={750}>

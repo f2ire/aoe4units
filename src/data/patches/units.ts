@@ -287,16 +287,65 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
 
   {
     id: 'royal-cannon',
-    reason: 'Add mercenary_byz class so the unit appears in the Byzantine mercenary category.',
+    reason: 'Add mercenary_byz class so the unit appears in the Byzantine mercenary category. Scale all damage sources ×1.3 to match in-game values.',
     after: (unit: unknown) => {
-      const u = unit as Record<string, unknown>;
+      const u = unit as any;
       return {
         ...u,
-        classes: [...(u.classes as string[]), 'mercenary_byz'],
+        classes: [...u.classes, 'mercenary_byz'],
+        variations: u.variations.map((v: any) => ({
+          ...v,
+          weapons: v.weapons.map((w: any, wi: number) => wi === 0 ? {
+            ...w,
+            damage: Math.round(w.damage * 1.3),
+            modifiers: w.modifiers.map((m: any) => ({
+              ...m,
+              value: Math.round(m.value * 1.3),
+            })),
+          } : w),
+        })),
       };
     },
   },
 
+
+  {
+    id: 'royal-culverin',
+    reason: 'Raw data undervalues all damage by ~30%.',
+    after: (unit: unknown) => {
+      const u = unit as any;
+      return {
+        ...u,
+        variations: u.variations.map((v: any) => ({
+          ...v,
+          weapons: v.weapons.map((w: any, wi: number) => wi === 0 ? {
+            ...w,
+            damage: Math.round(w.damage * 1.3),
+            modifiers: w.modifiers.map((m: any) => ({ ...m, value: Math.round(m.value * 1.3) })),
+          } : w),
+        })),
+      };
+    },
+  },
+
+  {
+    id: 'royal-ribauldequin',
+    reason: 'Raw data undervalues all damage by ~30%.',
+    after: (unit: unknown) => {
+      const u = unit as any;
+      return {
+        ...u,
+        variations: u.variations.map((v: any) => ({
+          ...v,
+          weapons: v.weapons.map((w: any, wi: number) => wi === 0 ? {
+            ...w,
+            damage: Math.round(w.damage * 1.3),
+            modifiers: w.modifiers.map((m: any) => ({ ...m, value: Math.round(m.value * 1.3) })),
+          } : w),
+        })),
+      };
+    },
+  },
 
   {
     id: 'manjaniq',

@@ -46,6 +46,8 @@ export interface TechnologyPatch<Technology, TechnologyVariation> {
   after?: (tech: Technology) => Technology;
   // Optionally attach a UI tooltip at the technology level
   uiTooltip?: string;
+  // Tooltip shown to the native civ (when foreignEngineering is true, uiTooltip is reserved for Byzantine)
+  uiTooltipNative?: string;
   // Mark techs only accessible via Byzantine Foreign Engineering Company age-up
   foreignEngineering?: boolean;
   // When foreignEngineering is true, restrict to these unit IDs only (for Byzantine)

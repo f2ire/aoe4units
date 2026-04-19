@@ -165,61 +165,24 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: "silk-bowstrings",
     reason: "Not implemented in data file.",
-    after: (tech) => ({
-      ...tech,
-      variations: tech.variations.map(v => ({
-        ...v,
-        effects: [
-          ...(v.effects || []),
-          {
-            property: 'maxRange',
-            select: {
-              "id": [
-                "longbowman",
-                "wynguard-ranger",
-                "zhuge-nu",
-                "archer",
-                "arbaletrier",
-                "crossbowman",
-                "longbowman",
-                "zhuge-nu",
-                "archer",
-                "arbaletrier",
-                "crossbowman",
-                "wynguard-ranger",
-                "javelin-thrower",
-                "gilded-crossbowman",
-                "gilded-archer",
-                "yumi-ashigaru",
-                "zhuge-nu",
-                "bedouin-skirmisher",
-                "yumi-bannerman",
-              ]
-            },
-            effect: 'change',
-            value: 1.5,
-            type: 'passive'
-          },
-          {
-            property: 'maxRange',
-            select: {
-              "id": [
-                "mangudai",
-                "khaganate-elite-mangudai",
-                "khaganate-horse-archer",
-                "horse-archer",
-                "camel-archer",
-                "khan",
-                "desert-raider",
-              ]
-            },
-            effect: 'change',
-            value: -0.75,
-            type: 'passive'
-          },
-        ]
-      }))
-    }),
+    update: {
+      effects: [
+        {
+          property: 'maxRange',
+          select: { id: ['longbowman', 'wynguard-ranger', 'archer', 'gilded-archer', 'yumi-ashigaru', 'yumi-bannerman'] },
+          effect: 'change',
+          value: 1.5,
+          type: 'passive'
+        },
+        {
+          property: 'maxRange',
+          select: { id: ['mangudai', 'khaganate-elite-mangudai', 'khaganate-horse-archer', 'horse-archer', 'camel-archer', 'khan', 'desert-raider'] },
+          effect: 'change',
+          value: -0.75,
+          type: 'passive'
+        },
+      ]
+    }
   },
   //_________________
   //
@@ -297,7 +260,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: 'composite-bows',
     reason: 'aoe4world reports the attack speed multiplier as 0.75 (−25%) but in-game testing shows the actual reduction is ~−23% (×0.76923). The tooltip in-game is also misleading (claims −33%).',
-    uiTooltip: 'The actual attack speed reduction is -30%, not -33% as shown in the tooltip.',
+    uiTooltip: 'The actual attack speed buff is 30%.',
     variations: [
       {
         match: { id: 'composite-bows-3' },
@@ -366,23 +329,17 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
   {
     id: "camel-handling",
-    reason: "Available for Byzantines after building Foreign Engineering Company. Raw effects only target camel-rider and camel-archer — desert-raider added to variation effects so getTechnologiesForUnit picks it up.",
+    reason: "Available for Byzantines after building Foreign Engineering Company. Raw effects are in variation.effects (tech.effects undefined) — promoted to top-level and desert-raider added.",
     after: (tech) => ({
       ...tech,
       civs: [...tech.civs, 'by'],
+      effects: [
+        ...(tech.variations[0]?.effects || []),
+        { property: 'moveSpeed', select: { id: ['desert-raider'] }, effect: 'multiply', value: 1.15, type: 'passive' },
+      ],
       variations: tech.variations.map(v => ({
         ...v,
         civs: [...(v.civs || []), "by"],
-        effects: [
-          ...(v.effects || []),
-          {
-            property: 'moveSpeed',
-            select: { id: ['desert-raider'] },
-            effect: 'multiply',
-            value: 1.15,
-            type: 'passive'
-          }
-        ]
       }))
     }),
     foreignEngineering: true,
@@ -663,43 +620,33 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: "paiks",
     reason: "Not implemented in data file.",
-    after: (tech) => ({
-      ...tech,
-      variations: tech.variations.map(v => ({
-        ...v,
-        effects: [
-          ...(v.effects || []),
-          {
-            property: 'maxRange',
-            select: { id: ['archer', 'crossbowman'] },
-            effect: 'change',
-            value: 0.5,
-            type: 'passive'
-          }
-        ]
-      }))
-    }),
+    update: {
+      effects: [
+        {
+          property: 'maxRange',
+          select: { id: ['archer', 'crossbowman'] },
+          effect: 'change',
+          value: 0.5,
+          type: 'passive'
+        }
+      ]
+    }
   },
 
   {
     id: "mahouts",
     reason: "Not implemented in data file.",
-    after: (tech) => ({
-      ...tech,
-      variations: tech.variations.map(v => ({
-        ...v,
-        effects: [
-          ...(v.effects || []),
-          {
-            property: 'moveSpeed',
-            select: { class: [['elephant']] },
-            effect: 'multiply',
-            value: 1.1,
-            type: 'passive'
-          }
-        ]
-      }))
-    }),
+    update: {
+      effects: [
+        {
+          property: 'moveSpeed',
+          select: { class: [['elephant']] },
+          effect: 'multiply',
+          value: 1.1,
+          type: 'passive'
+        }
+      ]
+    }
   },
   //___________
   //
@@ -767,8 +714,9 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     reason: "Useless tech for UI.",
     after: (tech) => ({
       ...tech,
-      variations: tech.variations.map(v => ({ ...v, effects: [] }))
-    })
+      effects: [],
+      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
+    }),
   },
 
   //___________
@@ -778,15 +726,31 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   //___________
 
   {
+    id: 'enlistment-incentives',
+    reason: 'Raw effect is property:unknown type:influence — no-op. Effect moved to techAbilityInteractions (requires ability-keep-influence to apply). Value 1.0 keeps the tech visible in isCombatTechnology.',
+    update: {
+      effects: [
+        {
+          property: 'costReduction',
+          select: { class: [['cavalry'], ['ranged_infantry']] },
+          effect: 'multiply',
+          value: 1.0,
+          type: 'passive',
+        }
+      ]
+    }
+  },
+
+  {
     id: "gambesons",
-    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    reason: "Available for Byzantines after building Foreign Engineering Company. Adds attackSpeed ×(1/1.2) on arbaletrier (raw data only has meleeArmor +5).",
     after: (tech) => ({
       ...tech,
       civs: [...tech.civs, 'by'],
       variations: tech.variations.map(v => ({
         ...v,
-        civs: [...(v.civs || []), "by"]
-      }))
+        civs: [...(v.civs || []), "by"],
+      })),
     }),
     foreignEngineering: true,
     foreignEngineeringUnits: ['arbaletrier'],
@@ -795,18 +759,22 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
   {
     id: "crossbow-stirrups",
-    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    reason: "Available for Byzantines after building Foreign Engineering Company. Raw value 0.8 corrected to ×(1/1.2) to match in-game.",
     after: (tech) => ({
       ...tech,
       civs: [...tech.civs, 'by'],
+      effects: [
+        { property: 'attackSpeed', select: { id: ['arbaletrier'] }, effect: 'multiply', value: 1 / 1.2, type: 'passive' },
+      ],
       variations: tech.variations.map(v => ({
         ...v,
-        civs: [...(v.civs || []), "by"]
-      }))
+        civs: [...(v.civs || []), "by"],
+      })),
     }),
     foreignEngineering: true,
     foreignEngineeringUnits: ['arbaletrier'],
     uiTooltip: "Available only with Foreign Engineering Company",
+    uiTooltipNative: "The actual attackspeed buff is 20%.",
   },
 
   {
@@ -866,6 +834,12 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     foreignEngineering: true,
     foreignEngineeringUnits: ['royal-knight'],
     uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  {
+    id: "chivalry",
+    reason: "Useless tech for UI.",
+    update: { effects: [] }
   },
   //___________
   //
