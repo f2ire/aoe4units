@@ -398,7 +398,7 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
 
   //_________
   //
-  // HRE
+  // HOLY ROMAN EMPIRE
   //
   //_________
 

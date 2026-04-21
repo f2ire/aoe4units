@@ -209,7 +209,7 @@ export function useUnitSlot() {
     'clocktower-counterweight-trebuchet',
     'clocktower-nest-of-bees',
     'clocktower-springald',
-    'wynguard-army', 
+    'wynguard-army',
     'wynguard-footmen',
     'wynguard-raiders',
     'wynguard-rangers',
@@ -295,8 +295,8 @@ export function useUnitSlot() {
   const abilities = useMemo<Ability[]>(() => {
     if (!unit) return [];
     const all = getAbilitiesForUnit(effectiveClasses, selectedCiv, selectedAge, unit.id);
-    // Desert Raider and Cataphract have no charge attack
-    let filtered = (unit.id === 'desert-raider' || unit.id === 'cataphract' || unit.id == "camel-rider")
+    // Knight types without charge attack
+    let filtered = (unit.id === 'desert-raider' || unit.id === 'cataphract' || unit.id == "camel-rider" || unit.id == "black-rider")
       ? all.filter(a => a.id !== 'charge-attack')
       : all;
     // FEC ability unit restrictions: only show to allowed unit IDs when playing as Byzantine
@@ -457,11 +457,11 @@ export function useUnitSlot() {
       }
     }
     // HRE infantry passive: +10% move speed (formerly a technology, now a baked-in passive not present in data)
-    // Also applies to landsknecht when used as Byzantine mercenary
+    // Age I: +5% only. Also applies to landsknecht when used as Byzantine mercenary.
     const isHREInfantry = selectedCiv === 'hr' && effectiveClasses.some(c => c === 'infantry' || c.includes('infantry'));
     const isLandsknecht = unit?.id === 'landsknecht' && selectedCiv === 'by';
     if (isHREInfantry || isLandsknecht) {
-      result = { ...result, moveSpeed: result.moveSpeed * 1.1 };
+      result = { ...result, moveSpeed: result.moveSpeed * (selectedAge === 1 ? 1.05 : 1.1) };
     }
 
     if (result.moveSpeed > 2) result = { ...result, moveSpeed: 2 };

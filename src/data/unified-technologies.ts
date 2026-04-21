@@ -84,7 +84,8 @@ const combatProperties = [
   'stoneCostReduction', // Stone-only cost multiplier
   'rangedResistance',    // Ranged damage resistance (%)
   'meleeResistance',     // Melee damage resistance (%, positive = reduction, negative = vulnerability)
-  'healingRate'          // HP healed per hit the unit lands
+  'healingRate',         // HP healed per hit the unit lands
+  'chargeMultiplier'     // First-hit bonus = primaryMeleeDamage × value (requires charge-attack)
 ];
 
 // Non-combatant target classes to exclude
@@ -313,6 +314,7 @@ export interface UnitStats {
   meleeResistance?: number;    // Melee damage resistance (positive = reduction, negative = vulnerability), e.g. 15 = −15%, −50 = +50% taken
   healingRate?: number;        // HP healed per hit the unit lands (e.g. Keshik: 3 HP/hit)
   rangedAttackMultiplier?: number; // Product of all rangedAttack multiply effects (tracked separately to correctly scale secondary weapons)
+  chargeMultiplier?: number;   // First-hit charge bonus = primaryMeleeDamage × chargeMultiplier (requires charge-attack active)
 }
 
 export function applyTechnologyEffects(
@@ -411,7 +413,7 @@ export function applyTechnologyEffects(
       if (!combatProperties.includes(property)) continue;
 
       // Handle special properties
-      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'costReduction' || property === 'stoneCostReduction' || property === 'rangedResistance' || property === 'meleeResistance' || property === 'healingRate') {
+      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'costReduction' || property === 'stoneCostReduction' || property === 'rangedResistance' || property === 'meleeResistance' || property === 'healingRate' || property === 'chargeMultiplier') {
         specialEffects.push({
           property,
           effectType: effect.effect as 'change' | 'multiply',
@@ -613,6 +615,18 @@ export function applyTechnologyEffects(
         modifiedStats.healingRate = current + effect.value;
       } else if (effect.effectType === 'multiply') {
         modifiedStats.healingRate = current * effect.value;
+      }
+    }
+  }
+
+  // Apply chargeMultiplier (first-hit bonus = primaryMeleeDamage × value)
+  for (const effect of specialEffects) {
+    if (effect.property === 'chargeMultiplier') {
+      const current = modifiedStats.chargeMultiplier ?? 0;
+      if (effect.effectType === 'change') {
+        modifiedStats.chargeMultiplier = current + effect.value;
+      } else if (effect.effectType === 'multiply') {
+        modifiedStats.chargeMultiplier = current * effect.value;
       }
     }
   }

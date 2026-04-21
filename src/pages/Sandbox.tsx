@@ -50,7 +50,7 @@ function getMercenarySubCategory(unit: { classes: string[] }): string {
 const MERCENARY_SUB_ORDER = ['Melee Infantry', 'Ranged Infantry', 'Melee Cavalry', 'Ranged Cavalry', 'Siege', 'Other'];
 
 // Function to calculate the charge bonus for a unit
-const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activeAbilities: Set<string>, age: number, activeTechnologies: Set<string> = new Set()): number => {
+const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activeAbilities: Set<string>, age: number, activeTechnologies: Set<string> = new Set(), chargeMultiplier?: number): number => {
   if (!unitData) return 0;
 
   // Get the base ID for variations
@@ -92,6 +92,12 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
 
   if (isFirelancer) {
     return 4;
+  }
+
+  // chargeMultiplier: bonus = % of unit's primary melee damage (e.g. Burgrave Palace: ×0.5)
+  if (chargeMultiplier && chargeMultiplier > 0) {
+    const primaryWeapon = getPrimaryWeapon(unitData as UnifiedVariation);
+    return (primaryWeapon?.damage ?? 0) * chargeMultiplier;
   }
 
   return 0;
@@ -438,7 +444,7 @@ const Sandbox = () => {
     attackSpeed: modifiedAllyStats.attackSpeed || 0,
     maxRange: modifiedAllyStats.maxRange || 0,
     bonusDamage: modifiedAllyStats.bonusDamage || [],
-    chargeBonus: getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly, activeTechnologiesAlly),
+    chargeBonus: getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly, activeTechnologiesAlly, modifiedAllyStats.chargeMultiplier),
     cost: variationAlly ? getTotalCost(variationAlly) : (unit1 ? getTotalCost(unit1) : 0),
     costs: variationAlly ? variationAlly.costs : (unit1 ? unit1.costs : undefined),
     population: 'costs' in (variationAlly || unit1 || {}) ? (variationAlly || unit1 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -465,7 +471,7 @@ const Sandbox = () => {
     attackSpeed: modifiedEnemyStats.attackSpeed || 0,
     maxRange: modifiedEnemyStats.maxRange || 0,
     bonusDamage: modifiedEnemyStats.bonusDamage || [],
-    chargeBonus: getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy, activeTechnologiesEnemy),
+    chargeBonus: getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy, activeTechnologiesEnemy, modifiedEnemyStats.chargeMultiplier),
     cost: variationEnemy ? getTotalCost(variationEnemy) : (unit2 ? getTotalCost(unit2) : 0),
     costs: variationEnemy ? variationEnemy.costs : (unit2 ? unit2.costs : undefined),
     population: 'costs' in (variationEnemy || unit2 || {}) ? (variationEnemy || unit2 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -1085,8 +1091,8 @@ const Sandbox = () => {
               const abilitiesArrayEnemy = Array.from(activeAbilitiesEnemy);
 
               // Compute charge bonuses
-              const chargeAlly = getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly, activeTechnologiesAlly);
-              const chargeEnemy = getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy, activeTechnologiesEnemy);
+              const chargeAlly = getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly, activeTechnologiesAlly, modifiedAllyStats.chargeMultiplier);
+              const chargeEnemy = getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy, activeTechnologiesEnemy, modifiedEnemyStats.chargeMultiplier);
 
               if (atEqualCost) {
                 const result = computeVersusAtEqualCost(

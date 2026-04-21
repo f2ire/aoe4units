@@ -140,7 +140,7 @@ export const TechnologySelector = ({
                       const isActive = activeTechnologies.has(tech.id);
                       const isLocked = lockedTechnologies?.has(tech.id) ?? false;
                       const iconFileName = tech.icon.split('/').pop() || '';
-                      const iconPath = `/technologies/${iconFileName}`;
+                      const iconPath = tech.icon.startsWith('http') ? tech.icon : `/technologies/${iconFileName}`;
                       const patch = technologyPatches.find(p => p.id === tech.id);
                       const isForeignEngineering = selectedCiv === 'by' && foreignEngineeringTechIds.has(tech.id);
                       // Per-unit tooltip takes priority; then FEC/native logic

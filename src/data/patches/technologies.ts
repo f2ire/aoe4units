@@ -1,6 +1,6 @@
 import type { TechnologyPatch } from './types';
 import { deepMerge } from './types';
-import type { Technology, TechnologyVariation } from '../unified-technologies';
+import type { Technology, TechnologyVariation, TechnologyEffect } from '../unified-technologies';
 
 // Replaces "religious" with "monk" in all effect select classes.
 // All monk units (imam, scholar, prelate, shaman, etc.) have class "monk", not "religious".
@@ -184,6 +184,46 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         },
       ]
     }
+  },
+
+  {
+    id: 'incendiary-arrows',
+    reason: 'Byzantine javelin-thrower excluded (not in-game). Raw data has typo tower-elepahnt → fixed. kipchak-archer added so triple-shot secondary arrows also scale with this tech.',
+    excludedUnits: ['javelin-thrower', 'batu-khan'],
+    unitTooltips: { 'kipchak-archer': 'For an unknown reason, incendiary arrows first reduce attack by 1 (both normal and triple attack) after applying the 20% bonus damage.' },
+    after: (tech: Technology) => ({
+      ...tech,
+      effects: [
+        ...(tech.effects || []).map(effect => ({
+          ...effect,
+          select: effect.select?.id ? {
+            ...effect.select,
+            id: [
+              ...effect.select.id.map(id => id === 'tower-elepahnt' ? 'tower-elephant' : id),
+              ...(!effect.select.id.includes('kipchak-archer') ? ['kipchak-archer'] : [])
+            ]
+          } : effect.select
+        })),
+        // kipchak-archer in-game loses 1 base damage before the ×1.2 is applied
+        { property: 'rangedAttack', select: { id: ['kipchak-archer'] }, effect: 'change', value: -1, type: 'passive' }
+      ]
+    }),
+  },
+
+  {
+    id: 'steeled-arrow',
+    reason: "Gunpowder units don't shot arrow arrows.",
+    excludedUnits: ['sultans-elite-tower-elephant', 'black-rider'],
+  },
+  {
+    id: 'balanced-projectiles',
+    reason: "Gunpowder units don't shot arrow arrows.",
+    excludedUnits: ['sultans-elite-tower-elephant', 'black-rider'],
+  },
+  {
+    id: 'platecutter-point',
+    reason: "Gunpowder units don't shot arrow arrows.",
+    excludedUnits: ['sultans-elite-tower-elephant', 'black-rider'],
   },
   //_________________
   //
@@ -458,53 +498,6 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     }
   },
 
-  {
-    id: 'incendiary-arrows',
-    reason: 'Byzantine javelin-thrower excluded (not in-game). Raw data has typo tower-elepahnt → fixed. kipchak-archer added so triple-shot secondary arrows also scale with this tech.',
-    excludedUnits: ['javelin-thrower', 'batu-khan'],
-    unitTooltips: { 'kipchak-archer': 'For an unknown reason, incendiary arrows first reduce attack by 1 (both normal and triple attack) after applying the 20% bonus damage.' },
-    after: (tech: Technology) => ({
-      ...tech,
-      effects: [
-        ...(tech.effects || []).map(effect => ({
-          ...effect,
-          select: effect.select?.id ? {
-            ...effect.select,
-            id: [
-              ...effect.select.id.map(id => id === 'tower-elepahnt' ? 'tower-elephant' : id),
-              ...(!effect.select.id.includes('kipchak-archer') ? ['kipchak-archer'] : [])
-            ]
-          } : effect.select
-        })),
-        // kipchak-archer in-game loses 1 base damage before the ×1.2 is applied
-        { property: 'rangedAttack', select: { id: ['kipchak-archer'] }, effect: 'change', value: -1, type: 'passive' }
-      ]
-    }),
-  },
-
-  // sultans-elite-tower-elephant has gunpowder class but also ranged+cavalry — these
-  // archer/ranged techs match it via [["ranged","cavalry"]] class group, which is incorrect.
-  // Chemistry (gunpowder class) is left untouched — it correctly applies to gunpowder units.
-  {
-    id: 'steeled-arrow',
-    reason: 'sultans-elite-tower-elephant has ranged+cavalry classes but fires gunpowder (Handcannon), not arrows.',
-    excludedUnits: ['sultans-elite-tower-elephant'],
-  },
-  {
-    id: 'balanced-projectiles',
-    reason: 'sultans-elite-tower-elephant has ranged+cavalry classes but fires gunpowder (Handcannon), not arrows.',
-    excludedUnits: ['sultans-elite-tower-elephant'],
-  },
-  {
-    id: 'platecutter-point',
-    reason: 'sultans-elite-tower-elephant has ranged+cavalry classes but fires gunpowder (Handcannon), not arrows.',
-    excludedUnits: ['sultans-elite-tower-elephant'],
-  },
-  {
-    id: 'inspired-warriors',
-    reason: 'sultans-elite-tower-elephant has ranged+cavalry classes but fires gunpowder (Handcannon), not arrows.',
-    excludedUnits: ['sultans-elite-tower-elephant'],
-  },
 
   //___________
   //
@@ -850,6 +843,119 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     reason: "Useless tech for UI.",
     update: { effects: [] }
   },
+
+  //___________
+  //
+  // GOLDEN HORDE
+  //
+  //___________
+
+
+  {
+    id: 'triple-shot',
+    reason: 'Kipchak Archer fires 2 extra arrows at 30% damage. Raw effects are generic +2 attack with no select — replaced with a zeroed no-op targeting kipchak-archer so the tech stays visible. Secondary weapon injection handles the actual DPS (burst=2, damageMultiplier=0.3).',
+    update: { effects: [{ property: 'rangedAttack', select: { id: ['kipchak-archer'] }, effect: 'change', value: 0, type: 'passive' }] },
+    injectWeapon: { unitId: 'kipchak-archer', weaponIndex: 0, damageMultiplier: 0.3, burstCount: 2, maxDamage: 10 },
+    uiTooltip: "For an unknown reason, the secondary weapon from Triple Shot can't reach over 10, even if it should.",
+  },
+
+  {
+    id: 'khan-and-torguuds',
+    reason: 'Raw hitpoints effect has no select (applies to all). Patched to target batu-khan and torguud. Cost reduction (-20%) missing from raw data — added.',
+    update: {
+      effects: [
+        { property: 'hitpoints', select: { id: ['batu-khan', 'torguud'] }, effect: 'change', value: 30, type: 'passive' },
+        { property: 'costReduction', select: { id: ['batu-khan', 'torguud'] }, effect: 'multiply', value: 0.8, type: 'passive' },
+      ]
+    }
+  },
+
+  {
+    id: 'stone-armies',
+    reason: 'Raw effects empty. Torguud: −20% stone cost. Rus Tribute: the age-4 variation stats are granted by this tech (age-4 variation removed from unit data). +30 HP, +4 melee attack, +5 vs cavalry bonus (3→8), +1 melee armor, +1 ranged armor.',
+    update: {
+      effects: [
+        { property: 'stoneCostReduction', select: { id: ['torguud'] }, effect: 'multiply', value: 0.8, type: 'passive' },
+        { property: 'hitpoints', select: { id: ['rus-tribute'] }, effect: 'change', value: 30, type: 'passive' },
+        { property: 'meleeAttack', select: { id: ['rus-tribute'] }, effect: 'change', value: 4, type: 'passive' },
+        { property: 'meleeAttack', select: { id: ['rus-tribute'] }, target: { class: [['cavalry']] }, effect: 'change', value: 5, type: 'bonus' },
+        { property: 'meleeArmor', select: { id: ['rus-tribute'] }, effect: 'change', value: 1, type: 'passive' },
+        { property: 'rangedArmor', select: { id: ['rus-tribute'] }, effect: 'change', value: 1, type: 'passive' },
+      ]
+    }
+  },
+
+  {
+    id: 'sarai-lancers',
+    reason: 'Raw effects empty. Keshik: -10% attack cycle (×1/1.1) and +1 healingRate. Torguud gains +1 healingRate (same healing as Keshik per description).',
+    update: {
+      effects: [
+        { property: 'attackSpeed', select: { id: ['keshik'] }, effect: 'multiply', value: 1 / 1.1, type: 'passive' },
+        { property: 'healingRate', select: { id: ['keshik'] }, effect: 'change', value: 1, type: 'passive' },
+        { property: 'healingRate', select: { id: ['torguud'] }, effect: 'change', value: 4, type: 'passive' },
+      ]
+    }
+  },
+
+  {
+    id: 'padded-armor',
+    reason: 'Raw hitpoints effect has no select (would apply to all units). Patched to target horseman and torguud only. Armor effects (+1 melee, +1 ranged) missing from raw data — added.',
+    update: {
+      effects: [
+        { property: 'hitpoints', select: { id: ['horseman', 'torguud'] }, effect: 'change', value: 20, type: 'passive' },
+        { property: 'meleeArmor', select: { id: ['horseman', 'torguud'] }, effect: 'change', value: 1, type: 'passive' },
+        { property: 'rangedArmor', select: { id: ['horseman', 'torguud'] }, effect: 'change', value: 1, type: 'passive' },
+      ]
+    }
+  },
+
+  {
+    id: 'battlefield-salvage',
+    reason: 'Raw variation effects have no select — tech invisible for all units. Patched top-level effects targeting kharash.',
+    update: {
+      effects: [
+        { property: 'meleeArmor', select: { id: ['kharash'] }, effect: 'change', value: 2, type: 'passive' },
+        { property: 'rangedArmor', select: { id: ['kharash'] }, effect: 'change', value: 2, type: 'passive' },
+        { property: 'hitpoints', select: { id: ['kharash'] }, effect: 'change', value: 25, type: 'passive' },
+      ]
+    }
+  },
+
+  {
+    id: 'muscovy-yasak',
+    reason: 'Raw effects empty. +2 ranged armor for heavy infantry and heavy cavalry.',
+    update: {
+      effects: [
+        { property: 'rangedArmor', select: { class: [['heavy']] }, effect: 'change', value: 2, type: 'passive' },
+      ]
+    }
+  },
+
+  //___________
+  //
+  // HOLY ROMAN EMPIRE
+  //
+  //___________
+
+  {
+    id: 'awl-pikes',
+    reason: 'Raw effects have no select — apply to all units. Restricted to spearman and horseman per description.',
+    update: {
+      effects: [
+        { property: 'meleeAttack', select: { id: ['spearman', 'horseman'] }, effect: 'change', value: 2, type: 'passive' },
+      ]
+    }
+  },
+
+  {
+    id: 'inspired-warriors',
+    reason: 'Useless for UI. Only show the linked ability.',
+    after: (tech) => ({
+      ...tech,
+      effects: [],
+      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
+    })
+  },
   //___________
   //
   // MALIANS
@@ -994,86 +1100,6 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   },
 
   {
-    id: 'triple-shot',
-    reason: 'Kipchak Archer fires 2 extra arrows at 30% damage. Raw effects are generic +2 attack with no select — replaced with a zeroed no-op targeting kipchak-archer so the tech stays visible. Secondary weapon injection handles the actual DPS (burst=2, damageMultiplier=0.3).',
-    update: { effects: [{ property: 'rangedAttack', select: { id: ['kipchak-archer'] }, effect: 'change', value: 0, type: 'passive' }] },
-    injectWeapon: { unitId: 'kipchak-archer', weaponIndex: 0, damageMultiplier: 0.3, burstCount: 2, maxDamage: 10 },
-    uiTooltip: "For an unknown reason, the secondary weapon from Triple Shot can't reach over 10, even if it should.",
-  },
-
-  {
-    id: 'khan-and-torguuds',
-    reason: 'Raw hitpoints effect has no select (applies to all). Patched to target batu-khan and torguud. Cost reduction (-20%) missing from raw data — added.',
-    update: {
-      effects: [
-        { property: 'hitpoints', select: { id: ['batu-khan', 'torguud'] }, effect: 'change', value: 30, type: 'passive' },
-        { property: 'costReduction', select: { id: ['batu-khan', 'torguud'] }, effect: 'multiply', value: 0.8, type: 'passive' },
-      ]
-    }
-  },
-
-  {
-    id: 'stone-armies',
-    reason: 'Raw effects empty. Torguud: −20% stone cost. Rus Tribute: the age-4 variation stats are granted by this tech (age-4 variation removed from unit data). +30 HP, +4 melee attack, +5 vs cavalry bonus (3→8), +1 melee armor, +1 ranged armor.',
-    update: {
-      effects: [
-        { property: 'stoneCostReduction', select: { id: ['torguud'] }, effect: 'multiply', value: 0.8, type: 'passive' },
-        { property: 'hitpoints', select: { id: ['rus-tribute'] }, effect: 'change', value: 30, type: 'passive' },
-        { property: 'meleeAttack', select: { id: ['rus-tribute'] }, effect: 'change', value: 4, type: 'passive' },
-        { property: 'meleeAttack', select: { id: ['rus-tribute'] }, target: { class: [['cavalry']] }, effect: 'change', value: 5, type: 'bonus' },
-        { property: 'meleeArmor', select: { id: ['rus-tribute'] }, effect: 'change', value: 1, type: 'passive' },
-        { property: 'rangedArmor', select: { id: ['rus-tribute'] }, effect: 'change', value: 1, type: 'passive' },
-      ]
-    }
-  },
-
-  {
-    id: 'sarai-lancers',
-    reason: 'Raw effects empty. Keshik: -10% attack cycle (×1/1.1) and +1 healingRate. Torguud gains +1 healingRate (same healing as Keshik per description).',
-    update: {
-      effects: [
-        { property: 'attackSpeed', select: { id: ['keshik'] }, effect: 'multiply', value: 1/1.1, type: 'passive' },
-        { property: 'healingRate', select: { id: ['keshik'] }, effect: 'change', value: 1, type: 'passive' },
-        { property: 'healingRate', select: { id: ['torguud'] }, effect: 'change', value: 4, type: 'passive' },
-      ]
-    }
-  },
-
-  {
-    id: 'padded-armor',
-    reason: 'Raw hitpoints effect has no select (would apply to all units). Patched to target horseman and torguud only. Armor effects (+1 melee, +1 ranged) missing from raw data — added.',
-    update: {
-      effects: [
-        { property: 'hitpoints', select: { id: ['horseman', 'torguud'] }, effect: 'change', value: 20, type: 'passive' },
-        { property: 'meleeArmor', select: { id: ['horseman', 'torguud'] }, effect: 'change', value: 1, type: 'passive' },
-        { property: 'rangedArmor', select: { id: ['horseman', 'torguud'] }, effect: 'change', value: 1, type: 'passive' },
-      ]
-    }
-  },
-
-  {
-    id: 'battlefield-salvage',
-    reason: 'Raw variation effects have no select — tech invisible for all units. Patched top-level effects targeting kharash.',
-    update: {
-      effects: [
-        { property: 'meleeArmor', select: { id: ['kharash'] }, effect: 'change', value: 2, type: 'passive' },
-        { property: 'rangedArmor', select: { id: ['kharash'] }, effect: 'change', value: 2, type: 'passive' },
-        { property: 'hitpoints', select: { id: ['kharash'] }, effect: 'change', value: 25, type: 'passive' },
-      ]
-    }
-  },
-
-  {
-    id: 'muscovy-yasak',
-    reason: 'Raw effects empty. +2 ranged armor for heavy infantry and heavy cavalry.',
-    update: {
-      effects: [
-        { property: 'rangedArmor', select: { class: [['heavy']] }, effect: 'change', value: 2, type: 'passive' },
-      ]
-    }
-  },
-
-  {
     id: "boyars-fortitude",
     reason: 'Available for Byzantines.',
     after: (abilities) => ({
@@ -1089,8 +1115,43 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     uiTooltip: "Available only with Foreign Engineering Company",
   },
 
-
 ];
+
+function createBurgravePalaceAgeUp(): Technology {
+  return {
+    id: 'burgrave-palace-age-up',
+    name: 'Burgrave Palace',
+    type: 'technology',
+    civs: ['hr'],
+    classes: ['age_up_upgrade'],
+    displayClasses: [],
+    minAge: 3,
+    icon: 'https://data.aoe4world.com/images/buildings/burgrave-palace-2.png',
+    description: 'Infantry gain +50% charge damage.',
+    unique: true,
+    effects: [
+      {
+        property: 'chargeMultiplier',
+        select: { class: [['melee_infantry']] },
+        effect: 'change',
+        value: 0.5,
+        type: 'passive'
+      }
+    ] as TechnologyEffect[],
+    variations: [
+      {
+        id: 'burgrave-palace-age-up-3',
+        baseId: 'burgrave-palace-age-up',
+        pbgid: 0,
+        attribName: '',
+        civs: ['hr'],
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        effects: [] as TechnologyEffect[],
+      }
+    ],
+    shared: {}
+  } as Technology;
+}
 
 // Maps tech ID → { unitId, weaponIndex, damageMultiplier?, burstCount? } for secondary weapon injection
 export const weaponInjectionMap: Map<string, { unitId: string; weaponIndex: number; damageMultiplier?: number; burstCount?: number; maxDamage?: number }> = new Map(
@@ -1126,7 +1187,12 @@ export const foreignEngineeringUnitRestrictions: Map<string, string[]> = new Map
 export function applyTechnologyPatches(allTechs: Technology[]): Technology[] {
   if (!Array.isArray(allTechs) || technologyPatches.length === 0) return allTechs;
 
-  return allTechs.map((tech) => {
+  const allWithSynthetic = [
+    ...allTechs,
+    createBurgravePalaceAgeUp(),
+  ];
+
+  return allWithSynthetic.map((tech) => {
     const patch = technologyPatches.find(p => p.id === tech.id);
     if (!patch) return tech;
 

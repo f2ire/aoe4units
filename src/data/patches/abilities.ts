@@ -572,6 +572,29 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     uiTooltip: 'Duration not modelled.',
   },
 
+  //______________________
+  //
+  // HOLY ROMAN EMPIRE
+  //
+  //______________________
+
+  {
+    id: "ability-inspired-warriors",
+    reason: "Change active always to manual.",
+    after: (ability: Ability) => ({
+      ...ability,
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        effects: [
+          { property: 'meleeAttack', select: { id: ['melee'] }, effect: 'multiply', value: 1.15, type: 'ability' },
+          { property: 'rangedAttack', select: { id: ['ranged', 'siege'] }, effect: 'multiply', value: 1.15, type: 'ability' },
+          { property: 'siegeAttack', select: { id: ['siege'] }, effect: 'multiply', value: 1, type: 'ability' }
+        ],
+        active: 'manual'
+      }))
+    })
+  },
+
   //___________
   //
   // OTTOMANS
