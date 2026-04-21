@@ -130,7 +130,7 @@ export function getVersusDebuffMultiplier(attackerClasses: string[], defenderAbi
 }
 
 // Computes the effective damage per hit from attacker to defender
-function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, chargeBonus: number = 0, isFirstAttack: boolean = false, weaponOverride?: UnifiedWeapon): { value: number; base: number; bonus: number; armorApplied: number; weapon?: UnifiedWeapon; debuffMultiplier?: number; cannotAttack?: boolean; resistanceApplied?: number; vulnerabilityApplied?: number } {
+function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, chargeBonus: number = 0, isFirstAttack: boolean = false, weaponOverride?: UnifiedWeapon): { value: number; base: number; bonus: number; armorApplied: number; weapon?: UnifiedWeapon; debuffMultiplier?: number; cannotAttack?: boolean; resistanceApplied?: number } {
   // Ram (and similar units): can only attack buildings
   const RAM_CLASSES = ["ram", "workshop_ram"];
   if (attacker.classes.some(c => RAM_CLASSES.includes(c.toLowerCase()))) {
@@ -236,29 +236,18 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
     damagePerProjectile = damagePerProjectile * debuffMultiplier;
   }
 
-  // Apply the defender's resistance (e.g. Ram resists 95% of ranged damage)
-  // Resistance is applied after armor, before clamping to 1
+  // Apply the defender's resistance (positive = damage reduction, negative = vulnerability)
   const resistancePct = getResistanceValue(defender as unknown as AoE4Unit, weapon.type);
   let resistanceApplied: number | undefined;
-  if (resistancePct > 0) {
+  if (resistancePct !== 0) {
     damagePerProjectile = damagePerProjectile * (1 - resistancePct / 100);
     resistanceApplied = resistancePct;
-  }
-
-  // Apply melee vulnerability (e.g. Sipahi during Fortitude: +50% melee damage taken)
-  let vulnerabilityApplied: number | undefined;
-  if (weapon.type === 'melee') {
-    const vulnerabilityPct = getResistanceValue(defender as unknown as AoE4Unit, 'melee_vulnerability');
-    if (vulnerabilityPct > 0) {
-      damagePerProjectile = damagePerProjectile * (1 + vulnerabilityPct / 100);
-      vulnerabilityApplied = vulnerabilityPct;
-    }
   }
 
   const clampedPerProjectile = damagePerProjectile < 1 ? 1 : damagePerProjectile;
   const totalDamage = clampedPerProjectile * burstCount;
 
-  return { value: totalDamage, base: baseDamage * burstCount, bonus: (bonusDamage + chargeBonus_applied) * burstCount, armorApplied: armorValue, weapon, debuffMultiplier: debuffMultiplier !== 1.0 ? debuffMultiplier : undefined, resistanceApplied, vulnerabilityApplied };
+  return { value: totalDamage, base: baseDamage * burstCount, bonus: (bonusDamage + chargeBonus_applied) * burstCount, armorApplied: armorValue, weapon, debuffMultiplier: debuffMultiplier !== 1.0 ? debuffMultiplier : undefined, resistanceApplied };
 }
 
 function round(value: number, decimals: number): number {
@@ -484,7 +473,8 @@ function computeMetrics(
   defender: CombatEntity,
   chargeBonus: number = 0,
   attackerMultiplier: number = 1,
-  defenderMultiplier: number = 1
+  defenderMultiplier: number = 1,
+  discreteTTK: boolean = false
 ): VersusMetrics {
   const chargeWeapon = getChargeWeapon(attacker);
   const hasChargeWeapon = !!chargeWeapon && (attacker.activeAbilities?.includes('charge-attack') ?? false);
@@ -541,17 +531,43 @@ function computeMetrics(
       }
     }
 
-    // Secondary weapons: each fires independently, DPS summed (Option A)
-    if (attacker.secondaryWeapons && attacker.secondaryWeapons.length > 0) {
+    // Secondary weapons
+    if (attacker.secondaryWeapons && attacker.secondaryWeapons.length > 0 && attackSpeed > 0) {
+      let totalSecDPS = 0;
       for (const secWeapon of attacker.secondaryWeapons) {
         if (!secWeapon.speed || secWeapon.speed <= 0) continue;
         const secData = computeEffectiveDamage(attacker, defender, 0, false, secWeapon);
-        const secDPS = round(secData.value / secWeapon.speed, 2);
-        dps = round((dps ?? 0) + secDPS, 2);
+        totalSecDPS += secData.value / secWeapon.speed;
       }
-      // Recalculate TTK from combined DPS
-      if (dps !== null && dps > 0) {
-        timeToKill = round((defender.hitpoints * defenderMultiplier) / dps, 1);
+      if (totalSecDPS > 0) {
+        if (discreteTTK) {
+          // Discrete model (versus): secondary damage per primary cycle → recompute HTK then TTK = HTK × AS.
+          // First cycle may differ when a charge weapon has a different speed.
+          // firstAttackData already includes charge/bleed bonus, so the first-hit reduction is preserved.
+          const totalDefHP = defender.hitpoints * defenderMultiplier;
+          const secPerFirstCycle = totalSecDPS * firstHitSpeed;
+          const secPerNormalCycle = totalSecDPS * attackSpeed;
+          const effectiveFirstCycle = firstAttackData.value * attackerMultiplier + secPerFirstCycle;
+          const effectiveNormalCycle = normalAttackData.value * attackerMultiplier + secPerNormalCycle;
+          if (effectiveFirstCycle >= totalDefHP) {
+            hitsToKill = 1;
+            timeToKill = round(firstHitSpeed, 1);
+          } else {
+            const additionalHits = Math.ceil((totalDefHP - effectiveFirstCycle) / effectiveNormalCycle);
+            hitsToKill = 1 + additionalHits;
+            timeToKill = round(firstHitSpeed + additionalHits * attackSpeed, 1);
+          }
+          const totalDmg = effectiveFirstCycle + (hitsToKill - 1) * effectiveNormalCycle;
+          const totalTime = firstHitSpeed + (hitsToKill - 1) * attackSpeed;
+          dps = round(totalDmg / totalTime, 2);
+        } else {
+          // Continuous model (equal cost): add secondary DPS then TTK = HP / combinedDPS.
+          dps = round((dps ?? 0) + totalSecDPS, 2);
+          if (dps > 0) {
+            timeToKill = round((defender.hitpoints * defenderMultiplier) / dps, 1);
+            hitsToKill = Math.ceil(timeToKill / attackSpeed);
+          }
+        }
       }
     }
 
@@ -584,7 +600,8 @@ function computeMetrics(
   }
 
   const debuffText = normalAttackData.debuffMultiplier ? ` × ${normalAttackData.debuffMultiplier} (debuff)` : '';
-  const chargeText = chargeBonus > 0 ? ` + Charge(${chargeBonus})` : '';
+  const isBleedUnit = attacker.classes.some(c => c.toLowerCase() === 'kipchak_archer');
+  const chargeText = chargeBonus > 0 ? ` + ${isBleedUnit ? 'Bleed' : 'Charge'}(${chargeBonus})` : '';
   const chargeWeaponText = hasChargeWeapon
     ? ` [1st hit: ${chargeWeapon!.name} (${firstAttackData.value} dmg, t=${round(firstHitSpeed, 3)}s)]`
     : '';
@@ -667,8 +684,8 @@ export function computeVersus(
 ): VersusResult {
   const A = toCombatEntity(a, activeAbilitiesA);
   const B = toCombatEntity(b, activeAbilitiesB);
-  let metricsA = computeMetrics(A, B, chargeBonusA);
-  let metricsB = computeMetrics(B, A, chargeBonusB);
+  let metricsA = computeMetrics(A, B, chargeBonusA, 1, 1, true);
+  let metricsB = computeMetrics(B, A, chargeBonusB, 1, 1, true);
 
   // Apply movement / kiting adjustments (only when enabled)
   if (allowKiting) {

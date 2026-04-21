@@ -75,6 +75,49 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
     },
   },
 
+  {
+    id: 'culverin',
+    reason: 'aoe4world encodes composite class targets as nested string arrays (["naval","unit"]) instead of underscored identifiers ("naval_unit"). Applies transformMultiClassTargets to the whole unit, then fixes the remaining edge cases (naval_unit, war_elephant) on the age-4 variation.',
+    after: (unit: unknown) => transformMultiClassTargets(unit),
+    variations: [
+      {
+        match: { age: 4 },
+        after: (variation: unknown) => {
+          const v = variation as Record<string, unknown>;
+          if (Array.isArray(v.weapons) && v.weapons[0]) {
+            const weapon = v.weapons[0] as Record<string, unknown>;
+            if (Array.isArray(weapon.modifiers)) {
+              weapon.modifiers = weapon.modifiers.map((mod: unknown) => {
+                const m = mod as Record<string, unknown>;
+                if (
+                  m.property === 'siegeAttack' &&
+                  m.target &&
+                  typeof m.target === 'object' &&
+                  Array.isArray((m.target as Record<string, unknown>).class)
+                ) {
+                  const target = m.target as Record<string, unknown>;
+                  const classArray = target.class as unknown[];
+                  if (Array.isArray(classArray[0])) {
+                    const classes = classArray[0] as string[];
+                    if (classes.includes('naval') && classes.includes('unit')) {
+                      return { ...m, target: { class: [['naval_unit']] } };
+                    }
+                    if (classes.includes('war') && classes.includes('elephant')) {
+                      return { ...m, target: { class: [['war_elephant']] } };
+                    }
+                  }
+                }
+                return m;
+              });
+            }
+          }
+          return variation;
+        }
+      }
+    ]
+  },
+
+
   //_________
   //
   // AYYUBIDS
@@ -376,6 +419,24 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
 
   //_________
   //
+  // GOLDEN HORDE
+  //
+  //_________
+
+  {
+    id: 'rus-tribute',
+    reason: 'The age-4 variation stats are granted by the stone-armies tech, not by normal age-up. Remove age-4 variation so the tech controls the upgrade.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      return {
+        ...u,
+        variations: (u.variations as Record<string, unknown>[]).filter(v => v.id !== 'rus-tribute-4'),
+      };
+    },
+  },
+
+  //_________
+  //
   // MONGOLS
   //
   //_________
@@ -400,47 +461,6 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
     },
   },
 
-  {
-    id: 'culverin',
-    reason: 'aoe4world encodes composite class targets as nested string arrays (["naval","unit"]) instead of underscored identifiers ("naval_unit"). Applies transformMultiClassTargets to the whole unit, then fixes the remaining edge cases (naval_unit, war_elephant) on the age-4 variation.',
-    after: (unit: unknown) => transformMultiClassTargets(unit),
-    variations: [
-      {
-        match: { age: 4 },
-        after: (variation: unknown) => {
-          const v = variation as Record<string, unknown>;
-          if (Array.isArray(v.weapons) && v.weapons[0]) {
-            const weapon = v.weapons[0] as Record<string, unknown>;
-            if (Array.isArray(weapon.modifiers)) {
-              weapon.modifiers = weapon.modifiers.map((mod: unknown) => {
-                const m = mod as Record<string, unknown>;
-                if (
-                  m.property === 'siegeAttack' &&
-                  m.target &&
-                  typeof m.target === 'object' &&
-                  Array.isArray((m.target as Record<string, unknown>).class)
-                ) {
-                  const target = m.target as Record<string, unknown>;
-                  const classArray = target.class as unknown[];
-                  if (Array.isArray(classArray[0])) {
-                    const classes = classArray[0] as string[];
-                    if (classes.includes('naval') && classes.includes('unit')) {
-                      return { ...m, target: { class: [['naval_unit']] } };
-                    }
-                    if (classes.includes('war') && classes.includes('elephant')) {
-                      return { ...m, target: { class: [['war_elephant']] } };
-                    }
-                  }
-                }
-                return m;
-              });
-            }
-          }
-          return variation;
-        }
-      }
-    ]
-  },
 
 ];
 

@@ -54,8 +54,12 @@ export interface TechnologyPatch<Technology, TechnologyVariation> {
   foreignEngineeringUnits?: string[];
   // Unit IDs that should never see this tech (regardless of civ)
   excludedUnits?: string[];
+  // Per-unit tooltip: shown instead of uiTooltip when the selected unit matches the key
+  unitTooltips?: Record<string, string>;
   // Inject a secondary weapon from another unit (e.g. thunderclap-bombs → nest-of-bees)
-  injectWeapon?: { unitId: string; weaponIndex?: number };
+  // damageMultiplier: scales secondary damage relative to modifiedStats.rangedAttack (e.g. 0.3 = 30%)
+  // burstCount: overrides the weapon's burst count
+  injectWeapon?: { unitId: string; weaponIndex?: number; damageMultiplier?: number; burstCount?: number; maxDamage?: number };
 }
 
 // Small deep-merge utility (non-mutating)

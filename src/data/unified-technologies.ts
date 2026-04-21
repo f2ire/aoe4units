@@ -4,6 +4,7 @@ export interface TechnologyEffect {
   select?: {
     class?: string[][];
     id?: string[];
+    excludeId?: string[];
   };
   effect: string; // "change", "multiply"
   value: number;
@@ -80,8 +81,9 @@ const combatProperties = [
   'gunpowderAttack',  // Gunpowder damage (special property for gunpowder weapons)
   'burst',            // Number of projectiles
   'costReduction',    // Unit production cost multiplier
+  'stoneCostReduction', // Stone-only cost multiplier
   'rangedResistance',    // Ranged damage resistance (%)
-  'meleeVulnerability',  // Extra melee damage taken (%, positive = takes more damage)
+  'meleeResistance',     // Melee damage resistance (%, positive = reduction, negative = vulnerability)
   'healingRate'          // HP healed per hit the unit lands
 ];
 
@@ -306,9 +308,11 @@ export interface UnitStats {
   burst?: number;
   bonusDamage?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   costMultiplier?: number; // Production cost multiplier (e.g. 0.8 = -20%)
+  stoneCostMultiplier?: number; // Stone-only cost multiplier (e.g. 0.8 = -20% stone)
   rangedResistance?: number;   // Ranged damage resistance percentage (0-100), e.g. 30 = 30% reduction
-  meleeVulnerability?: number; // Extra melee damage taken percentage (0-100), e.g. 50 = +50% melee damage received
+  meleeResistance?: number;    // Melee damage resistance (positive = reduction, negative = vulnerability), e.g. 15 = −15%, −50 = +50% taken
   healingRate?: number;        // HP healed per hit the unit lands (e.g. Keshik: 3 HP/hit)
+  rangedAttackMultiplier?: number; // Product of all rangedAttack multiply effects (tracked separately to correctly scale secondary weapons)
 }
 
 export function applyTechnologyEffects(
@@ -394,16 +398,20 @@ export function applyTechnologyEffects(
         );
       }
 
+      // No select = applies to all units
+      const noSelect = !effect.select || (!effect.select.id && !effect.select.class);
       // The effect applies if the unit matches by ID OR by class OR by ID-as-class
-      const matches = matchesById || matchesByClass || matchesByIdAsClass;
+      const matches = noSelect || matchesById || matchesByClass || matchesByIdAsClass;
       if (!matches) continue;
+      // excludeId: explicit unit exclusion even when class/id matches
+      if (unitId && effect.select?.excludeId?.includes(unitId)) continue;
 
       // Determine the relevant property
       const property = effect.property;
       if (!combatProperties.includes(property)) continue;
 
       // Handle special properties
-      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'costReduction' || property === 'rangedResistance' || property === 'meleeVulnerability' || property === 'healingRate') {
+      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'costReduction' || property === 'stoneCostReduction' || property === 'rangedResistance' || property === 'meleeResistance' || property === 'healingRate') {
         specialEffects.push({
           property,
           effectType: effect.effect as 'change' | 'multiply',
@@ -490,6 +498,7 @@ export function applyTechnologyEffects(
   // For all other stats: multiplicative chaining (standard).
   const hpBeforePhase2 = modifiedStats.hitpoints;
   let hpMultiplierDelta = 0;
+  let rangedAttackMultiplier = 1;
 
   for (const effect of applicableEffects) {
     if (effect.effectType === 'multiply') {
@@ -501,9 +510,12 @@ export function applyTechnologyEffects(
         hpMultiplierDelta += (effect.value - 1);
       } else {
         (modifiedStats[effect.statKey] as number) *= effect.value;
+        if (effect.statKey === 'rangedAttack') rangedAttackMultiplier *= effect.value;
       }
     }
   }
+
+  if (rangedAttackMultiplier !== 1) modifiedStats.rangedAttackMultiplier = rangedAttackMultiplier;
 
   // Apply accumulated HP multiplier (additive stacking on pre-Phase-2 value)
   if (hpMultiplierDelta !== 0) {
@@ -557,6 +569,18 @@ export function applyTechnologyEffects(
     }
   }
 
+  // Apply stoneCostReduction
+  for (const effect of specialEffects) {
+    if (effect.property === 'stoneCostReduction') {
+      if (modifiedStats.stoneCostMultiplier == null) modifiedStats.stoneCostMultiplier = 1.0;
+      if (effect.effectType === 'multiply') {
+        modifiedStats.stoneCostMultiplier *= effect.value;
+      } else if (effect.effectType === 'change') {
+        modifiedStats.stoneCostMultiplier += effect.value;
+      }
+    }
+  }
+
   // Apply rangedResistance
   for (const effect of specialEffects) {
     if (effect.property === 'rangedResistance') {
@@ -569,14 +593,14 @@ export function applyTechnologyEffects(
     }
   }
 
-  // Apply meleeVulnerability (positive = takes more melee damage)
+  // Apply meleeResistance
   for (const effect of specialEffects) {
-    if (effect.property === 'meleeVulnerability') {
-      const current = modifiedStats.meleeVulnerability ?? 0;
+    if (effect.property === 'meleeResistance') {
+      const current = modifiedStats.meleeResistance ?? 0;
       if (effect.effectType === 'change') {
-        modifiedStats.meleeVulnerability = current + effect.value;
+        modifiedStats.meleeResistance = current + effect.value;
       } else if (effect.effectType === 'multiply') {
-        modifiedStats.meleeVulnerability = current * effect.value;
+        modifiedStats.meleeResistance = current * effect.value;
       }
     }
   }
@@ -756,6 +780,9 @@ export function getActiveTechnologyVariationsWithTiers(
 
 // Categorise technologies by main effect type
 export function categorizeTechnology(tech: Technology): string {
+  // Age-up upgrades always get their own category regardless of effects
+  if (tech.classes?.includes('age_up_upgrade')) return 'Age';
+
   // Use effects at the technology level (all-optimized_tec.json) or at the variation level
   const effects = (tech.effects && tech.effects.length > 0 ? tech.effects : tech.variations[0]?.effects) || [];
 

@@ -162,6 +162,7 @@ export function abilityAffectsUnit(
       );
     }
 
+    if (unitId && effect.select?.excludeId?.includes(unitId)) return false;
     return matchesById || matchesByClass || matchesByIdAsClass;
   });
 }
@@ -214,9 +215,10 @@ export function getAbilitiesForUnit(
           );
         }
         
+        if (unitId && effect.select?.excludeId?.includes(unitId)) return false;
         return matchesById || matchesByClass || matchesByIdAsClass;
       });
-      
+
       if (affectsUnit) return true;
     }
     

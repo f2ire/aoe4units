@@ -529,6 +529,49 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     reason: "UI-only: Conversion is a monk ability that has no direct impact on unit combat stats. Hidden to avoid confusion in the ability selector.",
     after: (ability: Ability) => ({ ...ability, hidden: true }),
   },
+
+  //_________________
+  //
+  // GOLDEN HORDE
+  //
+  //_________________
+
+
+  {
+    id: 'ability-defensive-aura-edict',
+    reason: 'Raw effects empty; adds +10% HP to military units as described in-game.',
+    update: {
+      effects: [{
+        property: 'hitpoints',
+        select: { class: [['annihilation_condition']] },
+        effect: 'multiply',
+        value: 1.1,
+        type: 'passive',
+      }],
+      active: 'manual',
+    },
+  },
+
+  {
+    id: 'ability-glorious-charge',
+    reason: 'Raw effects empty. Models +50% move speed and −15% all damage taken. minAge corrected to 3. Duration (30s) not modelled.',
+    update: {
+      minAge: 3,
+      effects: [
+        { property: 'moveSpeed', select: { class: [['military']] }, effect: 'multiply', value: 1.5, type: 'ability' },
+        { property: 'rangedResistance', select: { class: [['military']] }, effect: 'change', value: 15, type: 'ability' },
+        { property: 'meleeResistance', select: { class: [['military']] }, effect: 'change', value: 15, type: 'ability' },
+      ],
+    },
+    uiTooltip: 'Duration not modelled.',
+  },
+
+  {
+    id: 'ability-khan-debuff-arrow',
+    reason: '...',
+    uiTooltip: 'Duration not modelled.',
+  },
+
   //___________
   //
   // OTTOMANS
@@ -543,7 +586,6 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
       civs: [...abilities.civs, 'by'],
       variations: abilities.variations.map(v => ({
         ...v,
-        ...v,
         civs: [...(v.civs || []), "by"],
         effects: [
           {
@@ -555,10 +597,10 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
             duration: 10
           },
           {
-            property: 'meleeVulnerability',
+            property: 'meleeResistance',
             select: { id: ['sipahi'] },
             effect: 'change',
-            value: 50,
+            value: -50,
             type: 'ability',
             duration: 10
           }
@@ -575,13 +617,13 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   //___________
   {
     id: "ability-battle-veteran",
-    reason: 'Available for Byzantines.',
+    reason: 'Available for Byzantines and Golden Horde (keshik unit shared with Mongols).',
     after: (abilities) => ({
       ...abilities,
-      civs: [...abilities.civs, 'by'],
+      civs: [...abilities.civs, 'by', 'gol'],
       variations: abilities.variations.map(v => ({
         ...v,
-        civs: [...(v.civs || []), "by"]
+        civs: [...(v.civs || []), "by", "gol"]
       }))
     }),
   },
@@ -960,6 +1002,138 @@ function createFrenchKeepInfluence(): Ability {
   } as Ability;
 }
 
+//___________
+//
+// GOLDEN HORDE
+//
+//___________
+
+// Synthetic ability — Kharash Aura (Golden Horde).
+// Bonus Armor: +1 melee and +1 ranged armor to all non-siege units.
+function createKharashAura(): Ability {
+  return {
+    id: 'ability-kharash-aura',
+    name: 'Kharash Bonus Armor',
+    type: 'ability',
+    civs: ['gol'],
+    displayClasses: [],
+    classes: [],
+    minAge: 1,
+    icon: '/abilities/kharash-aura.png',
+    description: 'Kharash Bonus Armor: all non-siege units gain +1 melee and +1 ranged armor.',
+    unique: false,
+    effects: [
+      { property: 'meleeArmor', select: { class: [['annihilation_condition']], excludeId: ['kharash'] }, effect: 'change', value: 1, type: 'ability' },
+      { property: 'rangedArmor', select: { class: [['annihilation_condition']], excludeId: ['kharash'] }, effect: 'change', value: 1, type: 'ability' },
+    ],
+    variations: [{
+      id: 'ability-kharash-aura-1',
+      baseId: 'ability-kharash-aura',
+      type: 'ability',
+      name: 'Kharash Bonus Armor',
+      pbgid: 999103,
+      attribName: 'ability_kharash_aura',
+      age: 1,
+      civs: ['gol'],
+      description: 'Kharash Bonus Armor: all non-siege units gain +1 melee and +1 ranged armor.',
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+// Synthetic ability — Khan Debuff Arrow (Golden Horde).
+// Khan fires a signal arrow: enemies in the area take +10% damage.
+// Modelled as ×1.1 attack on annihilation_condition units (the attackers dealing into the debuffed zone).
+function createKhanDebuffArrow(): Ability {
+  const effects = [
+    { property: 'meleeAttack', select: { class: [['annihilation_condition']], excludeId: ['battering-ram', 'trade-ship', 'fishing-boat', 'trader'] }, effect: 'multiply', value: 1.1, type: 'ability' },
+    { property: 'rangedAttack', select: { class: [['annihilation_condition']], excludeId: ['battering-ram', 'trade-ship', 'fishing-boat', 'trader'] }, effect: 'multiply', value: 1.1, type: 'ability' },
+    { property: 'siegeAttack', select: { class: [['annihilation_condition']], excludeId: ['battering-ram', 'trade-ship', 'fishing-boat', 'trader'] }, effect: 'multiply', value: 1.1, type: 'ability' },
+  ];
+  return {
+    id: 'ability-khan-debuff-arrow',
+    name: 'Khan Debuff Arrow (+10%)',
+    type: 'ability',
+    civs: ['gol'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    icon: 'https://data.aoe4world.com/images/technologies/khan-debuff-arrow-2.png',
+    description: 'Khan fires a signal arrow. Enemies in the area take +10% damage for 10s.',
+    unique: true,
+    effects,
+    variations: [{
+      id: 'ability-khan-debuff-arrow-v',
+      baseId: 'ability-khan-debuff-arrow',
+      type: 'ability',
+      name: 'Khan Debuff Arrow (+10%)',
+      pbgid: 999200,
+      attribName: 'ability_khan_debuff_arrow',
+      age: 2,
+      civs: ['gol'],
+      description: 'Khan fires a signal arrow. Enemies in the area take +10% damage for 10s.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+// Synthetic ability — Khan War Cry (Mongols / Golden Horde).
+// Khan shout boosts attack of nearby annihilation_condition units.
+// Three mutually-exclusive tiers (age 2/3/4): +10% / +20% / +30% attack.
+function createKhanWarcry(age: 2 | 3 | 4, multiplier: number): Ability {
+  const pct = Math.round((multiplier - 1) * 100);
+  const effects = [
+    { property: 'meleeAttack', select: { class: [['annihilation_condition']] }, effect: 'multiply', value: multiplier, type: 'ability' },
+    { property: 'rangedAttack', select: { class: [['annihilation_condition']] }, effect: 'multiply', value: multiplier, type: 'ability' },
+  ];
+  return {
+    id: `ability-khan-warcry-${age}`,
+    name: `Khan War Cry (+${pct}%)`,
+    type: 'ability',
+    civs: ['mo', 'gol'],
+    displayClasses: [],
+    classes: [],
+    minAge: age,
+    icon: '/abilities/khan-warcry.png',
+    description: `Khan War Cry: units gain +${pct}% attack.`,
+    unique: false,
+    effects,
+    variations: [{
+      id: `ability-khan-warcry-${age}-v`,
+      baseId: `ability-khan-warcry-${age}`,
+      type: 'ability',
+      name: `Khan War Cry (+${pct}%)`,
+      pbgid: 999100 + age,
+      attribName: `ability_khan_warcry_${age}`,
+      age,
+      civs: ['mo', 'gol'],
+      description: `Khan War Cry: units gain +${pct}% attack.`,
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+
+// Display row grouping for AbilitySelector.
+// Each entry reserves a dedicated row with a short label.
+// Abilities not listed here share the default "ABI:" row.
+// Order matters: rows render in array order, default row first.
+export const ABILITY_ROW_GROUPS: readonly { label: string; ids: readonly string[] }[] = [
+  { label: 'WC', ids: ['ability-khan-warcry-2', 'ability-khan-warcry-3', 'ability-khan-warcry-4'] },
+];
+
 export function applyAbilityPatches(abilities: Ability[]): Ability[] {
   // Add the created synthetic abilities
   const chargeAttackAbility = createChargeAttackAbility();
@@ -971,6 +1145,11 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createClocktowerAbility(),
     createCouncilHallAbility(),
     createFrenchKeepInfluence(),
+    createKhanWarcry(2, 1.1),
+    createKhanWarcry(3, 1.2),
+    createKhanWarcry(4, 1.3),
+    createKhanDebuffArrow(),
+    createKharashAura(),
   ];
 
   return abilitiesWithCharge.map(ability => {

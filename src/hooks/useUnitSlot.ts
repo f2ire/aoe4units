@@ -15,6 +15,7 @@ import type { Ability, AbilityVariation } from "@/data/unified-abilities";
 export const ABILITY_UPGRADE_GROUPS: readonly (readonly string[])[] = [
   ['ability-dynasty-song', 'ability-dynasty-yuan', 'ability-dynasty-ming'],
   ['ability-network-of-castles', 'ability-network-of-citadels'],
+  ['ability-khan-warcry-2', 'ability-khan-warcry-3', 'ability-khan-warcry-4'],
 ];
 
 export function categorizeUnit(unit: AoE4Unit, selectedCiv?: string): string {
@@ -410,7 +411,7 @@ export function useUnitSlot() {
     const data = effectiveVariation || unit;
     if (!data) return {
       hitpoints: 0, meleeAttack: 0, rangedAttack: 0,
-      meleeArmor: 0, rangedArmor: 0, moveSpeed: 0, attackSpeed: 0, bonusDamage: [], rangedResistance: 0,
+      meleeArmor: 0, rangedArmor: 0, moveSpeed: 0, attackSpeed: 0, bonusDamage: [], rangedResistance: 0, meleeResistance: 0,
     };
 
     const weapon = getPrimaryWeapon(data);
@@ -426,9 +427,9 @@ export function useUnitSlot() {
       attackSpeed: weapon?.speed || 0,
       maxRange: weapon?.range?.max || 0,
       burst: weapon?.burst?.count || 1,
-      bonusDamage: weapon?.modifiers || [],
+      bonusDamage: (weapon?.modifiers || []).map((m: any) => ({ ...m, fromWeapon: true })), // eslint-disable-line @typescript-eslint/no-explicit-any
       rangedResistance: getResistanceValue(data, 'ranged'),
-      meleeVulnerability: 0,
+      meleeResistance: getResistanceValue(data, 'melee'),
       healingRate: 0,
     };
 
@@ -486,8 +487,12 @@ export function useUnitSlot() {
       const sourceUnit = aoe4Units.find(u => u.id === injection.unitId);
       if (!sourceUnit) continue;
       const sourceVariation = sourceUnit.variations[sourceUnit.variations.length - 1];
-      const weapon = sourceVariation?.weapons?.[injection.weaponIndex];
-      if (weapon) weapons.push(weapon);
+      let weapon: any = sourceVariation?.weapons?.[injection.weaponIndex]; // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (!weapon) continue;
+      if (injection.burstCount !== undefined) weapon = { ...weapon, burst: { count: injection.burstCount } };
+      if (injection.damageMultiplier !== undefined) weapon = { ...weapon, damageMultiplier: injection.damageMultiplier };
+      if (injection.maxDamage !== undefined) weapon = { ...weapon, maxDamage: injection.maxDamage };
+      weapons.push(weapon);
     }
     return weapons;
   }, [activeTechnologies, variation]);

@@ -202,7 +202,8 @@ export const UnitCard = ({
   const meleeArmor = getArmorValue(displayData, 'melee');
   const rangedArmor = getArmorValue(displayData, 'ranged');
   const rangedResistance = getResistanceValue(displayData, 'ranged');
-  const meleeVulnerability = getResistanceValue(displayData, 'melee_vulnerability');
+  const meleeResistanceRaw = getResistanceValue(displayData, 'melee');
+  const meleeVulnerability = meleeResistanceRaw < 0 ? -meleeResistanceRaw : 0;
   const totalCost = variation ? getTotalCost(variation) : (unit ? getTotalCost(unit) : 0);
   const costs = variation ? variation.costs : unit!.costs;
   const productionTime = (costs as unknown as { time?: number })?.time;
@@ -388,7 +389,7 @@ export const UnitCard = ({
                           <div key={idx} className="flex justify-between text-xs">
                             <span className={cn('flex items-center gap-1', comparison.color)}>
                               {comparison.symbol && <span className="text-[10px]">{comparison.symbol}</span>}
-                              +{Math.round(modifier.value)} Charge
+                              +{Math.round(modifier.value)} {modifier.chargeBonusLabel ?? 'Charge'}
                             </span>
                           </div>
                         );
@@ -440,8 +441,8 @@ export const UnitCard = ({
               <span className={cn('flex items-center gap-1', getComparisonColor(meleeArmor, compareMeleeArmor).color)}>
                 {getComparisonColor(meleeArmor, compareMeleeArmor).symbol && <span className="text-xs">{getComparisonColor(meleeArmor, compareMeleeArmor).symbol}</span>}
                 <span
-                  title={meleeVulnerability > 0 ? `+${meleeVulnerability}% melee damage taken (applied after armor)` : undefined}
-                  className={meleeVulnerability > 0 ? 'underline decoration-dotted cursor-help text-orange-400' : undefined}>
+                  title={meleeVulnerability > 0 ? `+${meleeVulnerability}% melee damage taken (applied after armor)` : meleeResistanceRaw > 0 ? `${meleeResistanceRaw}% melee damage resistance (applied after armor)` : undefined}
+                  className={meleeVulnerability > 0 ? 'underline decoration-dotted cursor-help text-orange-400' : meleeResistanceRaw > 0 ? 'underline decoration-dotted cursor-help' : undefined}>
                   {Math.round(meleeArmor)}
                 </span>
               </span>
@@ -938,8 +939,8 @@ export const UnitCard = ({
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Melee Armor</span>
                   <span
-                    title={meleeVulnerability > 0 ? `+${meleeVulnerability}% melee damage taken (applied after armor)` : undefined}
-                    className={meleeVulnerability > 0 ? 'underline decoration-dotted cursor-help text-orange-400' : undefined}>
+                    title={meleeVulnerability > 0 ? `+${meleeVulnerability}% melee damage taken (applied after armor)` : meleeResistanceRaw > 0 ? `${meleeResistanceRaw}% melee damage resistance (applied after armor)` : undefined}
+                    className={meleeVulnerability > 0 ? 'underline decoration-dotted cursor-help text-orange-400' : meleeResistanceRaw > 0 ? 'underline decoration-dotted cursor-help' : undefined}>
                     {Math.round(meleeArmor)}
                   </span>
                 </div>
@@ -949,10 +950,16 @@ export const UnitCard = ({
                     <span className="text-orange-400">+{meleeVulnerability}%</span>
                   </div>
                 )}
+                {meleeResistanceRaw > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Melee Resist.</span>
+                    <span>{meleeResistanceRaw}%</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Ranged Armor</span>
                   <span
-                    title={rangedResistance > 0 ? `${rangedResistance}% damage resistance vs ranged attacks (applied after armor)` : undefined}
+                    title={rangedResistance > 0 ? `${rangedResistance}% damage damage resistance (applied after armor)` : undefined}
                     className={rangedResistance > 0 ? 'underline decoration-dotted cursor-help' : undefined}>
                     {Math.round(rangedArmor)}
                   </span>

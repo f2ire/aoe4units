@@ -50,7 +50,7 @@ function getMercenarySubCategory(unit: { classes: string[] }): string {
 const MERCENARY_SUB_ORDER = ['Melee Infantry', 'Ranged Infantry', 'Melee Cavalry', 'Ranged Cavalry', 'Siege', 'Other'];
 
 // Function to calculate the charge bonus for a unit
-const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activeAbilities: Set<string>, age: number): number => {
+const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activeAbilities: Set<string>, age: number, activeTechnologies: Set<string> = new Set()): number => {
   if (!unitData) return 0;
 
   // Get the base ID for variations
@@ -59,6 +59,10 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
 
   // Cataphract: ability-trample behaves like a charge — +12 bonus on first hit only
   if (activeAbilities.has('ability-trample') && baseId === 'cataphract') return 12;
+
+  // Kipchak Archer: bleed — +12 base bonus damage once per combat (always active)
+  // Incendiary Arrows adds +5.2 to the bleed value
+  if (baseId === 'kipchak-archer') return 12 + (activeTechnologies.has('incendiary-arrows') ? 7.2 : 0);
 
   if (!activeAbilities.has('charge-attack')) return 0;
 
@@ -179,17 +183,17 @@ const Sandbox = () => {
         { type: 'ranged', value: modifiedAllyStats.rangedArmor }
       ],
       resistance: [
-        ...(variationAlly.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee_vulnerability'),
+        ...(variationAlly.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee'),
         ...((modifiedAllyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedAllyStats.rangedResistance! }] : []),
-        ...((modifiedAllyStats.meleeVulnerability ?? 0) > 0 ? [{ type: 'melee_vulnerability', value: modifiedAllyStats.meleeVulnerability! }] : [])
+        ...((modifiedAllyStats.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: modifiedAllyStats.meleeResistance! }] : []),
       ],
-      costs: modifiedAllyStats.costMultiplier != null && modifiedAllyStats.costMultiplier !== 1.0 ? {
+      costs: (modifiedAllyStats.costMultiplier != null && modifiedAllyStats.costMultiplier !== 1.0) || (modifiedAllyStats.stoneCostMultiplier != null && modifiedAllyStats.stoneCostMultiplier !== 1.0) ? {
         ...variationAlly.costs,
-        food: Math.round((variationAlly.costs.food || 0) * modifiedAllyStats.costMultiplier),
-        wood: Math.round((variationAlly.costs.wood || 0) * modifiedAllyStats.costMultiplier),
-        gold: Math.round((variationAlly.costs.gold || 0) * modifiedAllyStats.costMultiplier),
-        stone: Math.round((variationAlly.costs.stone || 0) * modifiedAllyStats.costMultiplier),
-        oliveoil: Math.round((variationAlly.costs.oliveoil || 0) * modifiedAllyStats.costMultiplier),
+        food: Math.round((variationAlly.costs.food || 0) * (modifiedAllyStats.costMultiplier ?? 1)),
+        wood: Math.round((variationAlly.costs.wood || 0) * (modifiedAllyStats.costMultiplier ?? 1)),
+        gold: Math.round((variationAlly.costs.gold || 0) * (modifiedAllyStats.costMultiplier ?? 1)),
+        stone: Math.round((variationAlly.costs.stone || 0) * (modifiedAllyStats.costMultiplier ?? 1) * (modifiedAllyStats.stoneCostMultiplier ?? 1)),
+        oliveoil: Math.round((variationAlly.costs.oliveoil || 0) * (modifiedAllyStats.costMultiplier ?? 1)),
       } : variationAlly.costs,
       movement: variationAlly.movement ? {
         ...variationAlly.movement,
@@ -197,16 +201,26 @@ const Sandbox = () => {
       } : undefined,
       healingRate: modifiedAllyStats.healingRate ?? 0,
       secondaryWeapons: (() => {
-        const primaryBaseDamage = getPrimaryWeapon(variationAlly)?.damage || 0;
+        const primaryWeaponAlly = getPrimaryWeapon(variationAlly);
+        const primaryBaseDamage = primaryWeaponAlly?.damage || 0;
         const meleeAttackDelta = modifiedAllyStats.meleeAttack - primaryBaseDamage;
+        const isPrimaryRangedAlly = primaryWeaponAlly?.type === 'ranged' || primaryWeaponAlly?.type === 'siege';
+        const rangedBaseAlly = isPrimaryRangedAlly ? primaryBaseDamage : (secondaryWeaponsAlly.find((sw: any) => sw.type === 'ranged' || sw.type === 'siege')?.damage || 0); // eslint-disable-line @typescript-eslint/no-explicit-any
+        const rangedMultiplierAlly = modifiedAllyStats.rangedAttackMultiplier ?? 1;
+        const rangedFlatDeltaAlly = modifiedAllyStats.rangedAttack / rangedMultiplierAlly - rangedBaseAlly;
         return secondaryWeaponsAlly.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
           ...w,
-          damage: w.type === 'ranged' || w.type === 'siege'
-            ? modifiedAllyStats.rangedAttack * debuffMultiplier
-            : (w.damage + meleeAttackDelta) * debuffMultiplier,
+          damage: (() => {
+            const raw = w.type === 'ranged' || w.type === 'siege'
+              ? w.damageMultiplier != null
+                ? (rangedBaseAlly * w.damageMultiplier + rangedFlatDeltaAlly) * rangedMultiplierAlly * debuffMultiplier
+                : modifiedAllyStats.rangedAttack * debuffMultiplier
+              : (w.damage + meleeAttackDelta) * debuffMultiplier;
+            return w.maxDamage != null ? Math.min(raw, w.maxDamage) : raw;
+          })(),
           modifiers: (w.type === 'ranged' || w.type === 'siege')
-            ? filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], w.type)
-            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], 'melee')],
+            ? filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], w.type).filter((m: any) => !m.chargeBonusLabel) // eslint-disable-line @typescript-eslint/no-explicit-any
+            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], 'melee').filter((b: any) => !b.fromWeapon)], // eslint-disable-line @typescript-eslint/no-explicit-any
         }));
       })(),
     };
@@ -236,17 +250,17 @@ const Sandbox = () => {
         { type: 'ranged', value: modifiedEnemyStats.rangedArmor }
       ],
       resistance: [
-        ...(variationEnemy.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee_vulnerability'),
+        ...(variationEnemy.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee'),
         ...((modifiedEnemyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedEnemyStats.rangedResistance! }] : []),
-        ...((modifiedEnemyStats.meleeVulnerability ?? 0) > 0 ? [{ type: 'melee_vulnerability', value: modifiedEnemyStats.meleeVulnerability! }] : [])
+        ...((modifiedEnemyStats.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: modifiedEnemyStats.meleeResistance! }] : []),
       ],
-      costs: modifiedEnemyStats.costMultiplier != null && modifiedEnemyStats.costMultiplier !== 1.0 ? {
+      costs: (modifiedEnemyStats.costMultiplier != null && modifiedEnemyStats.costMultiplier !== 1.0) || (modifiedEnemyStats.stoneCostMultiplier != null && modifiedEnemyStats.stoneCostMultiplier !== 1.0) ? {
         ...variationEnemy.costs,
-        food: Math.round((variationEnemy.costs.food || 0) * modifiedEnemyStats.costMultiplier),
-        wood: Math.round((variationEnemy.costs.wood || 0) * modifiedEnemyStats.costMultiplier),
-        gold: Math.round((variationEnemy.costs.gold || 0) * modifiedEnemyStats.costMultiplier),
-        stone: Math.round((variationEnemy.costs.stone || 0) * modifiedEnemyStats.costMultiplier),
-        oliveoil: Math.round((variationEnemy.costs.oliveoil || 0) * modifiedEnemyStats.costMultiplier),
+        food: Math.round((variationEnemy.costs.food || 0) * (modifiedEnemyStats.costMultiplier ?? 1)),
+        wood: Math.round((variationEnemy.costs.wood || 0) * (modifiedEnemyStats.costMultiplier ?? 1)),
+        gold: Math.round((variationEnemy.costs.gold || 0) * (modifiedEnemyStats.costMultiplier ?? 1)),
+        stone: Math.round((variationEnemy.costs.stone || 0) * (modifiedEnemyStats.costMultiplier ?? 1) * (modifiedEnemyStats.stoneCostMultiplier ?? 1)),
+        oliveoil: Math.round((variationEnemy.costs.oliveoil || 0) * (modifiedEnemyStats.costMultiplier ?? 1)),
       } : variationEnemy.costs,
       movement: variationEnemy.movement ? {
         ...variationEnemy.movement,
@@ -254,16 +268,26 @@ const Sandbox = () => {
       } : undefined,
       healingRate: modifiedEnemyStats.healingRate ?? 0,
       secondaryWeapons: (() => {
-        const primaryBaseDamage = getPrimaryWeapon(variationEnemy)?.damage || 0;
+        const primaryWeaponEnemy = getPrimaryWeapon(variationEnemy);
+        const primaryBaseDamage = primaryWeaponEnemy?.damage || 0;
         const meleeAttackDelta = modifiedEnemyStats.meleeAttack - primaryBaseDamage;
+        const isPrimaryRangedEnemy = primaryWeaponEnemy?.type === 'ranged' || primaryWeaponEnemy?.type === 'siege';
+        const rangedBaseEnemy = isPrimaryRangedEnemy ? primaryBaseDamage : (secondaryWeaponsEnemy.find((sw: any) => sw.type === 'ranged' || sw.type === 'siege')?.damage || 0); // eslint-disable-line @typescript-eslint/no-explicit-any
+        const rangedMultiplierEnemy = modifiedEnemyStats.rangedAttackMultiplier ?? 1;
+        const rangedFlatDeltaEnemy = modifiedEnemyStats.rangedAttack / rangedMultiplierEnemy - rangedBaseEnemy;
         return secondaryWeaponsEnemy.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
           ...w,
-          damage: w.type === 'ranged' || w.type === 'siege'
-            ? modifiedEnemyStats.rangedAttack * debuffMultiplier
-            : (w.damage + meleeAttackDelta) * debuffMultiplier,
+          damage: (() => {
+            const raw = w.type === 'ranged' || w.type === 'siege'
+              ? w.damageMultiplier != null
+                ? (rangedBaseEnemy * w.damageMultiplier + rangedFlatDeltaEnemy) * rangedMultiplierEnemy * debuffMultiplier
+                : modifiedEnemyStats.rangedAttack * debuffMultiplier
+              : (w.damage + meleeAttackDelta) * debuffMultiplier;
+            return w.maxDamage != null ? Math.min(raw, w.maxDamage) : raw;
+          })(),
           modifiers: (w.type === 'ranged' || w.type === 'siege')
             ? filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], w.type)
-            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], 'melee')],
+            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], 'melee').filter((b: any) => !b.fromWeapon)], // eslint-disable-line @typescript-eslint/no-explicit-any
         }));
       })(),
     };
@@ -298,9 +322,9 @@ const Sandbox = () => {
         { type: 'ranged', value: modifiedAllyStats.rangedArmor }
       ],
       resistance: [
-        ...(unit1.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee_vulnerability'),
+        ...(unit1.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee'),
         ...((modifiedAllyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedAllyStats.rangedResistance! }] : []),
-        ...((modifiedAllyStats.meleeVulnerability ?? 0) > 0 ? [{ type: 'melee_vulnerability', value: modifiedAllyStats.meleeVulnerability! }] : [])
+        ...((modifiedAllyStats.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: modifiedAllyStats.meleeResistance! }] : []),
       ],
       movement: unit1.movement ? {
         ...unit1.movement,
@@ -308,16 +332,26 @@ const Sandbox = () => {
       } : undefined,
       healingRate: modifiedAllyStats.healingRate ?? 0,
       secondaryWeapons: (() => {
-        const primaryBaseDamage = getPrimaryWeapon(unit1)?.damage || 0;
+        const primaryWeaponU1 = getPrimaryWeapon(unit1);
+        const primaryBaseDamage = primaryWeaponU1?.damage || 0;
         const meleeAttackDelta = modifiedAllyStats.meleeAttack - primaryBaseDamage;
+        const isPrimaryRangedU1 = primaryWeaponU1?.type === 'ranged' || primaryWeaponU1?.type === 'siege';
+        const rangedBaseU1 = isPrimaryRangedU1 ? primaryBaseDamage : (secondaryWeaponsAlly.find((sw: any) => sw.type === 'ranged' || sw.type === 'siege')?.damage || 0); // eslint-disable-line @typescript-eslint/no-explicit-any
+        const rangedMultiplierU1 = modifiedAllyStats.rangedAttackMultiplier ?? 1;
+        const rangedFlatDeltaU1 = modifiedAllyStats.rangedAttack / rangedMultiplierU1 - rangedBaseU1;
         return secondaryWeaponsAlly.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
           ...w,
-          damage: w.type === 'ranged' || w.type === 'siege'
-            ? modifiedAllyStats.rangedAttack * debuffMultiplier
-            : (w.damage + meleeAttackDelta) * debuffMultiplier,
+          damage: (() => {
+            const raw = w.type === 'ranged' || w.type === 'siege'
+              ? w.damageMultiplier != null
+                ? (rangedBaseU1 * w.damageMultiplier + rangedFlatDeltaU1) * rangedMultiplierU1 * debuffMultiplier
+                : modifiedAllyStats.rangedAttack * debuffMultiplier
+              : (w.damage + meleeAttackDelta) * debuffMultiplier;
+            return w.maxDamage != null ? Math.min(raw, w.maxDamage) : raw;
+          })(),
           modifiers: (w.type === 'ranged' || w.type === 'siege')
-            ? filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], w.type)
-            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], 'melee')],
+            ? filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], w.type).filter((m: any) => !m.chargeBonusLabel) // eslint-disable-line @typescript-eslint/no-explicit-any
+            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], 'melee').filter((b: any) => !b.fromWeapon)], // eslint-disable-line @typescript-eslint/no-explicit-any
         }));
       })(),
     };
@@ -348,9 +382,9 @@ const Sandbox = () => {
         { type: 'ranged', value: modifiedEnemyStats.rangedArmor }
       ],
       resistance: [
-        ...(unit2.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee_vulnerability'),
+        ...(unit2.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee'),
         ...((modifiedEnemyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedEnemyStats.rangedResistance! }] : []),
-        ...((modifiedEnemyStats.meleeVulnerability ?? 0) > 0 ? [{ type: 'melee_vulnerability', value: modifiedEnemyStats.meleeVulnerability! }] : [])
+        ...((modifiedEnemyStats.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: modifiedEnemyStats.meleeResistance! }] : []),
       ],
       movement: unit2.movement ? {
         ...unit2.movement,
@@ -358,16 +392,26 @@ const Sandbox = () => {
       } : undefined,
       healingRate: modifiedEnemyStats.healingRate ?? 0,
       secondaryWeapons: (() => {
-        const primaryBaseDamage = getPrimaryWeapon(unit2)?.damage || 0;
+        const primaryWeaponU2 = getPrimaryWeapon(unit2);
+        const primaryBaseDamage = primaryWeaponU2?.damage || 0;
         const meleeAttackDelta = modifiedEnemyStats.meleeAttack - primaryBaseDamage;
+        const isPrimaryRangedU2 = primaryWeaponU2?.type === 'ranged' || primaryWeaponU2?.type === 'siege';
+        const rangedBaseU2 = isPrimaryRangedU2 ? primaryBaseDamage : (secondaryWeaponsEnemy.find((sw: any) => sw.type === 'ranged' || sw.type === 'siege')?.damage || 0); // eslint-disable-line @typescript-eslint/no-explicit-any
+        const rangedMultiplierU2 = modifiedEnemyStats.rangedAttackMultiplier ?? 1;
+        const rangedFlatDeltaU2 = modifiedEnemyStats.rangedAttack / rangedMultiplierU2 - rangedBaseU2;
         return secondaryWeaponsEnemy.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
           ...w,
-          damage: w.type === 'ranged' || w.type === 'siege'
-            ? modifiedEnemyStats.rangedAttack * debuffMultiplier
-            : (w.damage + meleeAttackDelta) * debuffMultiplier,
+          damage: (() => {
+            const raw = w.type === 'ranged' || w.type === 'siege'
+              ? w.damageMultiplier != null
+                ? (rangedBaseU2 * w.damageMultiplier + rangedFlatDeltaU2) * rangedMultiplierU2 * debuffMultiplier
+                : modifiedEnemyStats.rangedAttack * debuffMultiplier
+              : (w.damage + meleeAttackDelta) * debuffMultiplier;
+            return w.maxDamage != null ? Math.min(raw, w.maxDamage) : raw;
+          })(),
           modifiers: (w.type === 'ranged' || w.type === 'siege')
             ? filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], w.type)
-            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], 'melee')],
+            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], 'melee').filter((b: any) => !b.fromWeapon)], // eslint-disable-line @typescript-eslint/no-explicit-any
         }));
       })(),
     };
@@ -394,7 +438,7 @@ const Sandbox = () => {
     attackSpeed: modifiedAllyStats.attackSpeed || 0,
     maxRange: modifiedAllyStats.maxRange || 0,
     bonusDamage: modifiedAllyStats.bonusDamage || [],
-    chargeBonus: getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly),
+    chargeBonus: getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly, activeTechnologiesAlly),
     cost: variationAlly ? getTotalCost(variationAlly) : (unit1 ? getTotalCost(unit1) : 0),
     costs: variationAlly ? variationAlly.costs : (unit1 ? unit1.costs : undefined),
     population: 'costs' in (variationAlly || unit1 || {}) ? (variationAlly || unit1 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -421,7 +465,7 @@ const Sandbox = () => {
     attackSpeed: modifiedEnemyStats.attackSpeed || 0,
     maxRange: modifiedEnemyStats.maxRange || 0,
     bonusDamage: modifiedEnemyStats.bonusDamage || [],
-    chargeBonus: getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy),
+    chargeBonus: getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy, activeTechnologiesEnemy),
     cost: variationEnemy ? getTotalCost(variationEnemy) : (unit2 ? getTotalCost(unit2) : 0),
     costs: variationEnemy ? variationEnemy.costs : (unit2 ? unit2.costs : undefined),
     population: 'costs' in (variationEnemy || unit2 || {}) ? (variationEnemy || unit2 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -447,9 +491,11 @@ const Sandbox = () => {
 
   if (allyHasChargeBonus || enemyHasChargeBonus) {
     if (allyHasChargeBonus) {
+      const allyBaseId = variationAlly?.baseId || unit1?.id;
       alignedAllyBonuses.push({
         isChargeBonus: true,
-        value: allyStats?.chargeBonus
+        value: allyStats?.chargeBonus,
+        chargeBonusLabel: allyBaseId === 'kipchak-archer' ? 'Bleed' : 'Charge'
       });
       allyChargeLineIndex = 0;
     } else {
@@ -457,9 +503,11 @@ const Sandbox = () => {
     }
 
     if (enemyHasChargeBonus) {
+      const enemyBaseId = variationEnemy?.baseId || unit2?.id;
       alignedEnemyBonuses.push({
         isChargeBonus: true,
-        value: enemyStats?.chargeBonus
+        value: enemyStats?.chargeBonus,
+        chargeBonusLabel: enemyBaseId === 'kipchak-archer' ? 'Bleed' : 'Charge'
       });
       enemyChargeLineIndex = 0;
     } else {
@@ -919,6 +967,7 @@ const Sandbox = () => {
                       orientation="left"
                       selectedCiv={selectedCivAlly}
                       lockedTechnologies={lockedTechnologiesAlly}
+                      unitId={variationAlly?.baseId ?? unit1?.id}
                     />
                     <AbilitySelector
                       abilities={abilitiesAlly}
@@ -1007,6 +1056,7 @@ const Sandbox = () => {
                       onToggle={toggleTechnologyEnemy}
                       selectedCiv={selectedCivEnemy}
                       lockedTechnologies={lockedTechnologiesEnemy}
+                      unitId={variationEnemy?.baseId ?? unit2?.id}
                     />
                     <AbilitySelector
                       abilities={abilitiesEnemy}
@@ -1035,8 +1085,8 @@ const Sandbox = () => {
               const abilitiesArrayEnemy = Array.from(activeAbilitiesEnemy);
 
               // Compute charge bonuses
-              const chargeAlly = getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly);
-              const chargeEnemy = getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy);
+              const chargeAlly = getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly, activeTechnologiesAlly);
+              const chargeEnemy = getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy, activeTechnologiesEnemy);
 
               if (atEqualCost) {
                 const result = computeVersusAtEqualCost(
@@ -1164,6 +1214,7 @@ const Sandbox = () => {
                           orientation="left"
                           selectedCiv={selectedCivAlly}
                           lockedTechnologies={lockedTechnologiesAlly}
+                          unitId={variationAlly?.baseId ?? unit1?.id}
                         />
                         <AbilitySelector
                           abilities={abilitiesAlly}
@@ -1219,6 +1270,7 @@ const Sandbox = () => {
                           orientation="right"
                           selectedCiv={selectedCivEnemy}
                           lockedTechnologies={lockedTechnologiesEnemy}
+                          unitId={variationEnemy?.baseId ?? unit2?.id}
                         />
                         <AbilitySelector
                           abilities={abilitiesEnemy}
