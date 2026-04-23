@@ -214,16 +214,38 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     id: 'steeled-arrow',
     reason: "Gunpowder units don't shot arrow arrows.",
     excludedUnits: ['sultans-elite-tower-elephant', 'black-rider'],
+    after: (tech: any) => ({
+      ...tech,
+      effects: [...(tech.effects || []), { property: 'rangedAttack', select: { id: ['earls-guard'] }, effect: 'change', value: 1, type: 'passive' }],
+    }),
   },
   {
     id: 'balanced-projectiles',
     reason: "Gunpowder units don't shot arrow arrows.",
     excludedUnits: ['sultans-elite-tower-elephant', 'black-rider'],
+    after: (tech: any) => ({
+      ...tech,
+      effects: [...(tech.effects || []), { property: 'rangedAttack', select: { id: ['earls-guard'] }, effect: 'change', value: 1, type: 'passive' }],
+    }),
   },
   {
     id: 'platecutter-point',
     reason: "Gunpowder units don't shot arrow arrows.",
     excludedUnits: ['sultans-elite-tower-elephant', 'black-rider'],
+    after: (tech: any) => ({
+      ...tech,
+      effects: [...(tech.effects || []), { property: 'rangedAttack', select: { id: ['earls-guard'] }, effect: 'change', value: 1, type: 'passive' }],
+    }),
+  },
+
+  {
+    id: "herbal-medicine",
+    reason: "Useless tech for UI.",
+    after: (tech) => ({
+      ...tech,
+      effects: [],
+      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
+    }),
   },
   //_________________
   //
@@ -955,6 +977,172 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
       effects: [],
       variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
     })
+  },
+
+  {
+    id: "fire-stations",
+    reason: "Useless tech for UI.",
+    after: (tech) => ({
+      ...tech,
+      effects: [],
+      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
+    }),
+  },
+  //__________________
+  //
+  // HOUSE OF LANCASTER
+  //
+  //__________________
+
+  {
+    id: 'padded-jack',
+    reason: 'Raw effects have no select — apply to all units. Restricted to spearman and horseman per description.',
+    update: {
+      effects: [
+        { property: 'meleeArmor', select: { id: ['spearman', 'yeoman'] }, effect: 'change', value: 3, type: 'passive' },
+      ]
+    }
+  },
+
+  {
+    id: 'billmen',
+    reason: 'Raw effects (meleeArmor/rangedArmor ×0) target the spearman itself — wrong. Actual effect: spearman reduces enemy armor by 1 on each hit. Replaced with armorPenetration +1 targeting spearman by ID.',
+    update: {
+      effects: [{
+        property: 'armorPenetration',
+        select: { id: ['spearman'] },
+        effect: 'change',
+        value: 1,
+        type: 'passive',
+      }],
+    },
+  },
+
+  {
+    id: 'military-tactics-training',
+    reason: 'Lord of Lancaster unique tech: +20% all bonus damage for all units. Raw effects empty — replaced with bonusDamageMultiplier ×1.2 targeting annihilation_condition (all units).',
+    update: {
+      effects: [{
+        property: 'bonusDamageMultiplier',
+        select: { class: [['annihilation_condition']] },
+        effect: 'multiply',
+        value: 1.2,
+        type: 'passive',
+      }],
+    },
+    excludedUnits: ['handcannoneer', 'monk', 'villager', 'trader', 'fishing-boat', 'trade-ship'],
+  },
+
+  {
+    id: 'throwing-dagger-drills',
+    reason: 'Earl\'s Guard dagger throw now hurls 2 daggers (+2 dmg each). Raw effects empty — kept as no-op (value 0) so the tech is visible; burst×damage logic is hardcoded in getChargeBonus (activeTechnologies.has).',
+    update: {
+      effects: [{
+        property: 'meleeAttack',
+        select: { id: ['earls-guard'] },
+        effect: 'change',
+        value: 0,
+        type: 'passive',
+      }],
+    },
+  },
+
+  {
+    id: 'burgundian-imports',
+    reason: 'Raw effect is empty.',
+    update: {
+      effects: [
+        {
+          property: 'costReduction',
+          select: { id: ['handcannoneer'] },
+          effect: 'multiply',
+          value: 0.75,
+          type: 'passive',
+        }
+      ]
+    }
+  },
+
+  {
+    id: 'hill-training',
+    reason: 'Raw effects empty. Grants hobelar charge damage = 125% of primary weapon damage via chargeMultiplier.',
+    update: {
+      effects: [{
+        property: 'chargeMultiplier',
+        select: { id: ['hobelar'] },
+        effect: 'change',
+        value: 1.25,
+        type: 'passive',
+      }],
+    },
+  },
+
+  {
+    id: 'ships-of-the-crown',
+    reason: 'Raw effects missing select (tech hidden) and use wrong effect type (change→multiply). Corrected: siegeAttack ×1.2, hitpoints ×1.15, maxRange +0.9 (+10% of base 9).',
+    update: {
+      effects: [
+        {
+          property: 'siegeAttack',
+          select: { id: ['carrack'] },
+          effect: 'multiply',
+          value: 1.2,
+          type: 'passive',
+        },
+        {
+          property: 'hitpoints',
+          select: { id: ['carrack'] },
+          effect: 'multiply',
+          value: 1.15,
+          type: 'passive',
+        },
+        {
+          property: 'maxRange',
+          select: { id: ['carrack'] },
+          effect: 'multiply',
+          value: 1.09,
+          type: 'passive',
+        },
+      ],
+    },
+  },
+
+  {
+    id: 'warwolf-trebuchet',
+    reason: 'Raw effect has no select (tech hidden) and wrong effect type (change→multiply for HP). Adding select + missing +2 range effect.',
+    update: {
+      effects: [
+        {
+          property: 'hitpoints',
+          select: { id: ['counterweight-trebuchet'] },
+          effect: 'multiply',
+          value: 1.5,
+          type: 'passive',
+        },
+        {
+          property: 'maxRange',
+          select: { id: ['counterweight-trebuchet'] },
+          effect: 'change',
+          value: 2,
+          type: 'passive',
+        },
+      ],
+    },
+  },
+
+  {
+    id: 'collar-of-esses',
+    reason: 'Raw effects empty. +5 bonus damage vs heavy for demilancer.',
+    update: {
+      effects: [{
+        property: 'meleeAttack',
+        select: { id: ['demilancer', 'knight'] },
+        effect: 'change',
+        value: 5,
+        type: 'bonus',
+        target: { class: [['heavy']] },
+      }],
+    },
   },
   //___________
   //

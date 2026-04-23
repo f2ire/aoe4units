@@ -20,6 +20,9 @@ export interface CombatEntity {
   activeAbilities?: string[]; // IDs of active abilities
   moveSpeed: number; // tiles/s (movement.speed from unit data)
   healingRate?: number; // HP healed per hit the unit lands (e.g. Keshik: 3 HP/hit)
+  armorPenetration?: number; // Enemy armor reduced by this amount on each hit (clamped ≥ 0)
+  chargeBonusBurst?: number; // Burst count for first-hit bonus display (e.g. 2 daggers for Earl's Guard)
+  chargeArmorType?: 'ranged'; // If set, first-hit charge bonus uses ranged armor/resistance instead of primary weapon armor
   continuousMovement?: boolean; // unit can move throughout entire attack cycle (e.g. Mangudai)
   selfDestructs?: boolean; // unit self-destructs on first hit — if hitsToKill > 1, it can never kill
   secondaryWeapons?: UnifiedWeapon[]; // additional weapons fired simultaneously (e.g. thunderclap-bombs)
@@ -60,6 +63,9 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     activeAbilities: activeAbilities || [],
     moveSpeed: source.movement?.speed ?? 0,
     healingRate: (source as any).healingRate ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
+    armorPenetration: (source as any).armorPenetration ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
+    chargeBonusBurst: (source as any).chargeBonusBurst ?? 1, // eslint-disable-line @typescript-eslint/no-explicit-any
+    chargeArmorType: (source as any).chargeArmorType, // eslint-disable-line @typescript-eslint/no-explicit-any
     continuousMovement: (source as any).continuousMovement ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
     selfDestructs: (source as any).selfDestructs ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
     secondaryWeapons: (source as any).secondaryWeapons ?? [], // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -224,11 +230,20 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
         armorValue = getArmorValue(defender as unknown as AoE4Unit, "ranged");
       }
     }
+    // Armor penetration: attacker reduces effective enemy armor (floor at 0)
+    if (attacker.armorPenetration) {
+      armorValue = Math.max(0, armorValue - attacker.armorPenetration);
+    }
   }
+
+  // If chargeArmorType === 'ranged', the charge bonus (e.g. dagger throw) is computed separately
+  // using ranged armor and ranged resistance instead of the primary weapon's armor type.
+  const isDaggerCharge = chargeBonus_applied > 0 && attacker.chargeArmorType === 'ranged';
+  const chargeInPrimary = isDaggerCharge ? 0 : chargeBonus_applied;
 
   // Damage per projectile: (baseDamage + bonus + chargeBonus - armor) * burst
   // Armor is applied to each projectile individually
-  let damagePerProjectile = baseDamage + bonusDamage + chargeBonus_applied - armorValue;
+  let damagePerProjectile = baseDamage + bonusDamage + chargeInPrimary - armorValue;
 
   // Apply versus debuffs (e.g. Camel Unease)
   const debuffMultiplier = getVersusDebuffMultiplier(attacker.classes, defender.activeAbilities || []);
@@ -245,9 +260,22 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
   }
 
   const clampedPerProjectile = damagePerProjectile < 1 ? 1 : damagePerProjectile;
-  const totalDamage = clampedPerProjectile * burstCount;
+  const totalPrimary = clampedPerProjectile * burstCount;
 
-  return { value: totalDamage, base: baseDamage * burstCount, bonus: (bonusDamage + chargeBonus_applied) * burstCount, armorApplied: armorValue, weapon, debuffMultiplier: debuffMultiplier !== 1.0 ? debuffMultiplier : undefined, resistanceApplied };
+  // Dagger charge: computed separately with ranged armor + ranged resistance (clamped to 0, not 1)
+  let daggerExtra = 0;
+  if (isDaggerCharge) {
+    const daggerBurst = attacker.chargeBonusBurst ?? 1;
+    const perDagger = chargeBonus_applied / daggerBurst;
+    const rangedArmorVal = getArmorValue(defender as unknown as AoE4Unit, 'ranged');
+    const rangedResPct = getResistanceValue(defender as unknown as AoE4Unit, 'ranged');
+    const perDaggerEff = Math.max(0, perDagger - rangedArmorVal);
+    daggerExtra = perDaggerEff * daggerBurst * (rangedResPct !== 0 ? (1 - rangedResPct / 100) : 1);
+  }
+
+  const totalDamage = totalPrimary + daggerExtra;
+
+  return { value: totalDamage, base: baseDamage * burstCount, bonus: (bonusDamage + chargeInPrimary) * burstCount, armorApplied: armorValue, weapon, debuffMultiplier: debuffMultiplier !== 1.0 ? debuffMultiplier : undefined, resistanceApplied };
 }
 
 function round(value: number, decimals: number): number {
@@ -601,7 +629,13 @@ function computeMetrics(
 
   const debuffText = normalAttackData.debuffMultiplier ? ` × ${normalAttackData.debuffMultiplier} (debuff)` : '';
   const isBleedUnit = attacker.classes.some(c => c.toLowerCase() === 'kipchak_archer');
-  const chargeText = chargeBonus > 0 ? ` + ${isBleedUnit ? 'Bleed' : 'Charge'}(${chargeBonus})` : '';
+  const isDaggerUnit = attacker.classes.some(c => c.toLowerCase() === 'lancaster_champion');
+  const chargeLabel = isBleedUnit ? 'Bleed' : isDaggerUnit ? 'Dagger' : 'Charge';
+  const chargeBonusBurst = attacker.chargeBonusBurst ?? 1;
+  const chargeBonusDisplay = chargeBonusBurst > 1
+    ? `${Math.round(chargeBonus / chargeBonusBurst)}×${chargeBonusBurst}`
+    : String(chargeBonus);
+  const chargeText = chargeBonus > 0 ? ` + ${chargeLabel}(${chargeBonusDisplay})` : '';
   const chargeWeaponText = hasChargeWeapon
     ? ` [1st hit: ${chargeWeapon!.name} (${firstAttackData.value} dmg, t=${round(firstHitSpeed, 3)}s)]`
     : '';

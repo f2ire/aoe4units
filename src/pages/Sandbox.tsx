@@ -50,7 +50,7 @@ function getMercenarySubCategory(unit: { classes: string[] }): string {
 const MERCENARY_SUB_ORDER = ['Melee Infantry', 'Ranged Infantry', 'Melee Cavalry', 'Ranged Cavalry', 'Siege', 'Other'];
 
 // Function to calculate the charge bonus for a unit
-const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activeAbilities: Set<string>, age: number, activeTechnologies: Set<string> = new Set(), chargeMultiplier?: number): number => {
+const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activeAbilities: Set<string>, age: number, activeTechnologies: Set<string> = new Set(), chargeMultiplier?: number, modifiedMeleeAttack?: number, abilityCounters?: Map<string, number>, modifiedRangedAttack?: number): number => {
   if (!unitData) return 0;
 
   // Get the base ID for variations
@@ -64,7 +64,27 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
   // Incendiary Arrows adds +5.2 to the bleed value
   if (baseId === 'kipchak-archer') return 12 + (activeTechnologies.has('incendiary-arrows') ? 7.2 : 0);
 
+  // Earl's Guard: dagger throw — ranged first-hit bonus, no melee tech scaling (only throwing-dagger-drills and house-unified apply)
+  if (activeAbilities.has('ability-dagger-throw') && baseId === 'earls-guard') {
+    const hasDrills = activeTechnologies.has('throwing-dagger-drills');
+    const castleBonus = abilityCounters?.get('ability-house-unified') ?? 0;
+    const rangedTechBonus = modifiedRangedAttack ?? 0;
+    const daggerBase = (age >= 4 ? 22 : 16) + (hasDrills ? 2 : 0) + castleBonus + rangedTechBonus;
+    const burstCount = hasDrills ? 2 : 1;
+    return daggerBase * burstCount;
+  }
+
   if (!activeAbilities.has('charge-attack')) return 0;
+
+  // Demilancer: knight class but unique charge values per age
+  if (baseId === 'demilancer') {
+    switch (age) {
+      case 2: return 4;
+      case 3: return 5;
+      case 4: return 14;
+      default: return 0;
+    }
+  }
 
   const isKnight = unitClasses.some(c => c.toLowerCase() === 'knight');
   const isGhulam = baseId === 'ghulam' || unitClasses.some(c => c.toLowerCase() === 'merc_ghulam');
@@ -103,6 +123,13 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
   return 0;
 };
 
+const getChargeBonusBurst = (unitData: AoE4Unit | UnifiedVariation | undefined, activeTechnologies: Set<string> = new Set()): number => {
+  if (!unitData) return 1;
+  const baseId = ('baseId' in unitData) ? unitData.baseId : unitData.id;
+  if (baseId === 'earls-guard' && activeTechnologies.has('throwing-dagger-drills')) return 2;
+  return 1;
+};
+
 const Sandbox = () => {
   const [isVersus, setIsVersus] = useState<boolean>(false);
   const [atEqualCost, setAtEqualCost] = useState<boolean>(false);
@@ -132,6 +159,9 @@ const Sandbox = () => {
     modifiedStats: modifiedAllyStats,
     toggleTechnology: toggleTechnologyAlly,
     toggleAbility: toggleAbilityAlly,
+    incrementAbility: incrementAbilityAlly,
+    decrementAbility: decrementAbilityAlly,
+    abilityCounters: abilityCountersAlly,
     lockedAbilities: lockedAbilitiesAlly,
     lockedTechnologies: lockedTechnologiesAlly,
     secondaryWeapons: secondaryWeaponsAlly,
@@ -152,6 +182,9 @@ const Sandbox = () => {
     modifiedStats: modifiedEnemyStats,
     toggleTechnology: toggleTechnologyEnemy,
     toggleAbility: toggleAbilityEnemy,
+    incrementAbility: incrementAbilityEnemy,
+    decrementAbility: decrementAbilityEnemy,
+    abilityCounters: abilityCountersEnemy,
     lockedAbilities: lockedAbilitiesEnemy,
     lockedTechnologies: lockedTechnologiesEnemy,
     secondaryWeapons: secondaryWeaponsEnemy,
@@ -206,6 +239,9 @@ const Sandbox = () => {
         speed: modifiedAllyStats.moveSpeed
       } : undefined,
       healingRate: modifiedAllyStats.healingRate ?? 0,
+      armorPenetration: modifiedAllyStats.armorPenetration ?? 0,
+      chargeBonusBurst: getChargeBonusBurst(variationAlly, activeTechnologiesAlly),
+      chargeArmorType: variationAlly.baseId === 'earls-guard' ? 'ranged' as const : undefined,
       secondaryWeapons: (() => {
         const primaryWeaponAlly = getPrimaryWeapon(variationAlly);
         const primaryBaseDamage = primaryWeaponAlly?.damage || 0;
@@ -273,6 +309,9 @@ const Sandbox = () => {
         speed: modifiedEnemyStats.moveSpeed
       } : undefined,
       healingRate: modifiedEnemyStats.healingRate ?? 0,
+      armorPenetration: modifiedEnemyStats.armorPenetration ?? 0,
+      chargeBonusBurst: getChargeBonusBurst(variationEnemy, activeTechnologiesEnemy),
+      chargeArmorType: variationEnemy.baseId === 'earls-guard' ? 'ranged' as const : undefined,
       secondaryWeapons: (() => {
         const primaryWeaponEnemy = getPrimaryWeapon(variationEnemy);
         const primaryBaseDamage = primaryWeaponEnemy?.damage || 0;
@@ -337,6 +376,9 @@ const Sandbox = () => {
         speed: modifiedAllyStats.moveSpeed
       } : undefined,
       healingRate: modifiedAllyStats.healingRate ?? 0,
+      armorPenetration: modifiedAllyStats.armorPenetration ?? 0,
+      chargeBonusBurst: getChargeBonusBurst(unit1, activeTechnologiesAlly),
+      chargeArmorType: unit1.id === 'earls-guard' ? 'ranged' as const : undefined,
       secondaryWeapons: (() => {
         const primaryWeaponU1 = getPrimaryWeapon(unit1);
         const primaryBaseDamage = primaryWeaponU1?.damage || 0;
@@ -397,6 +439,9 @@ const Sandbox = () => {
         speed: modifiedEnemyStats.moveSpeed
       } : undefined,
       healingRate: modifiedEnemyStats.healingRate ?? 0,
+      armorPenetration: modifiedEnemyStats.armorPenetration ?? 0,
+      chargeBonusBurst: getChargeBonusBurst(unit2, activeTechnologiesEnemy),
+      chargeArmorType: unit2.id === 'earls-guard' ? 'ranged' as const : undefined,
       secondaryWeapons: (() => {
         const primaryWeaponU2 = getPrimaryWeapon(unit2);
         const primaryBaseDamage = primaryWeaponU2?.damage || 0;
@@ -444,7 +489,7 @@ const Sandbox = () => {
     attackSpeed: modifiedAllyStats.attackSpeed || 0,
     maxRange: modifiedAllyStats.maxRange || 0,
     bonusDamage: modifiedAllyStats.bonusDamage || [],
-    chargeBonus: getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly, activeTechnologiesAlly, modifiedAllyStats.chargeMultiplier),
+    chargeBonus: getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly, activeTechnologiesAlly, modifiedAllyStats.chargeMultiplier, modifiedAllyStats.meleeAttack, abilityCountersAlly, modifiedAllyStats.rangedAttack),
     cost: variationAlly ? getTotalCost(variationAlly) : (unit1 ? getTotalCost(unit1) : 0),
     costs: variationAlly ? variationAlly.costs : (unit1 ? unit1.costs : undefined),
     population: 'costs' in (variationAlly || unit1 || {}) ? (variationAlly || unit1 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -471,7 +516,7 @@ const Sandbox = () => {
     attackSpeed: modifiedEnemyStats.attackSpeed || 0,
     maxRange: modifiedEnemyStats.maxRange || 0,
     bonusDamage: modifiedEnemyStats.bonusDamage || [],
-    chargeBonus: getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy, activeTechnologiesEnemy, modifiedEnemyStats.chargeMultiplier),
+    chargeBonus: getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy, activeTechnologiesEnemy, modifiedEnemyStats.chargeMultiplier, modifiedEnemyStats.meleeAttack, abilityCountersEnemy, modifiedEnemyStats.rangedAttack),
     cost: variationEnemy ? getTotalCost(variationEnemy) : (unit2 ? getTotalCost(unit2) : 0),
     costs: variationEnemy ? variationEnemy.costs : (unit2 ? unit2.costs : undefined),
     population: 'costs' in (variationEnemy || unit2 || {}) ? (variationEnemy || unit2 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -501,7 +546,8 @@ const Sandbox = () => {
       alignedAllyBonuses.push({
         isChargeBonus: true,
         value: allyStats?.chargeBonus,
-        chargeBonusLabel: allyBaseId === 'kipchak-archer' ? 'Bleed' : 'Charge'
+        chargeBonusLabel: allyBaseId === 'kipchak-archer' ? 'Bleed' : allyBaseId === 'earls-guard' ? 'Dagger' : 'Charge',
+        chargeBonusBurst: getChargeBonusBurst(allyData, activeTechnologiesAlly),
       });
       allyChargeLineIndex = 0;
     } else {
@@ -513,7 +559,8 @@ const Sandbox = () => {
       alignedEnemyBonuses.push({
         isChargeBonus: true,
         value: enemyStats?.chargeBonus,
-        chargeBonusLabel: enemyBaseId === 'kipchak-archer' ? 'Bleed' : 'Charge'
+        chargeBonusLabel: enemyBaseId === 'kipchak-archer' ? 'Bleed' : enemyBaseId === 'earls-guard' ? 'Dagger' : 'Charge',
+        chargeBonusBurst: getChargeBonusBurst(enemyData, activeTechnologiesEnemy),
       });
       enemyChargeLineIndex = 0;
     } else {
@@ -631,7 +678,9 @@ const Sandbox = () => {
             {isVersus && (
               <div className="inline-flex items-center gap-3">
                 {(() => {
-                  const sameCost = unit1 && unit2 && allyStats?.cost != null && enemyStats?.cost != null && allyStats.cost === enemyStats.cost;
+                  const allyEffectiveCost = modifiedVariationAlly ? getTotalCost(modifiedVariationAlly) : (allyStats?.cost ?? 0);
+                  const enemyEffectiveCost = modifiedVariationEnemy ? getTotalCost(modifiedVariationEnemy) : (enemyStats?.cost ?? 0);
+                  const sameCost = unit1 && unit2 && allyEffectiveCost > 0 && enemyEffectiveCost > 0 && allyEffectiveCost === enemyEffectiveCost;
                   return (
                     <div
                       className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card ${sameCost ? 'opacity-50' : ''}`}
@@ -982,6 +1031,9 @@ const Sandbox = () => {
                       orientation="left"
                       selectedCiv={selectedCivAlly}
                       lockedAbilities={lockedAbilitiesAlly}
+                      abilityCounters={abilityCountersAlly}
+                      onIncrement={incrementAbilityAlly}
+                      onDecrement={decrementAbilityAlly}
                     />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -1071,6 +1123,9 @@ const Sandbox = () => {
                       orientation="right"
                       selectedCiv={selectedCivEnemy}
                       lockedAbilities={lockedAbilitiesEnemy}
+                      abilityCounters={abilityCountersEnemy}
+                      onIncrement={incrementAbilityEnemy}
+                      onDecrement={decrementAbilityEnemy}
                     />
                   </div>
                 </div>
@@ -1091,8 +1146,8 @@ const Sandbox = () => {
               const abilitiesArrayEnemy = Array.from(activeAbilitiesEnemy);
 
               // Compute charge bonuses
-              const chargeAlly = getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly, activeTechnologiesAlly, modifiedAllyStats.chargeMultiplier);
-              const chargeEnemy = getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy, activeTechnologiesEnemy, modifiedEnemyStats.chargeMultiplier);
+              const chargeAlly = getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly, activeTechnologiesAlly, modifiedAllyStats.chargeMultiplier, modifiedAllyStats.meleeAttack, abilityCountersAlly, modifiedAllyStats.rangedAttack);
+              const chargeEnemy = getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy, activeTechnologiesEnemy, modifiedEnemyStats.chargeMultiplier, modifiedEnemyStats.meleeAttack, abilityCountersEnemy, modifiedEnemyStats.rangedAttack);
 
               if (atEqualCost) {
                 const result = computeVersusAtEqualCost(
@@ -1229,6 +1284,9 @@ const Sandbox = () => {
                           orientation="left"
                           selectedCiv={selectedCivAlly}
                           lockedAbilities={lockedAbilitiesAlly}
+                          abilityCounters={abilityCountersAlly}
+                          onIncrement={incrementAbilityAlly}
+                          onDecrement={decrementAbilityAlly}
                         />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1285,6 +1343,9 @@ const Sandbox = () => {
                           orientation="right"
                           selectedCiv={selectedCivEnemy}
                           lockedAbilities={lockedAbilitiesEnemy}
+                          abilityCounters={abilityCountersEnemy}
+                          onIncrement={incrementAbilityEnemy}
+                          onDecrement={decrementAbilityEnemy}
                         />
                       </div>
                     </div>

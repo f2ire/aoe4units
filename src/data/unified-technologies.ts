@@ -58,6 +58,11 @@ export interface Technology {
   description: string;
   variations: TechnologyVariation[];
   effects?: TechnologyEffect[]; // Effects at the technology level (all-optimized_tec.json)
+  counterMax?: number;                      // if set, renders as a counter ability (0 = inactive, max = counterMax)
+  counterStep?: number;                     // default per-stack increment (e.g. 0.05 for +5%)
+  unitCounterStep?: Record<string, number>; // per-unit override of counterStep (keyed by unit baseId)
+  counterDirection?: 'increase' | 'decrease' | 'additive'; // 'decrease' (default): 1/(1+N×step) — 'increase': 1+N×step — 'additive': N×step (flat bonus, used with effect:'change')
+  counterTooltipLabel?: string;             // label shown in tooltip (e.g. 'HP', defaults to 'attack cycle')
 }
 import allTechnologiesData from './all-optimized_tec.json';
 import { applyTechnologyPatches } from './patches/technologies';
@@ -76,7 +81,9 @@ const combatProperties = [
   'moveSpeed',
   'maxRange',         // Maximum range
   'attackSpeed',      // Attack speed
-  'bonusDamage',      // Bonus damage
+  'bonusDamage',            // Bonus damage
+  'bonusDamageMultiplier',  // Multiplies ALL existing bonus damage entries by a factor
+  'armorPenetration',       // Reduces enemy armor by N on each hit (clamped to 0)
   'siegeAttack',      // Siege damage (special property for siege weapons)
   'gunpowderAttack',  // Gunpowder damage (special property for gunpowder weapons)
   'burst',            // Number of projectiles
@@ -313,6 +320,7 @@ export interface UnitStats {
   rangedResistance?: number;   // Ranged damage resistance percentage (0-100), e.g. 30 = 30% reduction
   meleeResistance?: number;    // Melee damage resistance (positive = reduction, negative = vulnerability), e.g. 15 = −15%, −50 = +50% taken
   healingRate?: number;        // HP healed per hit the unit lands (e.g. Keshik: 3 HP/hit)
+  armorPenetration?: number;   // Enemy armor reduced by this amount on each hit (clamped to 0)
   rangedAttackMultiplier?: number; // Product of all rangedAttack multiply effects (tracked separately to correctly scale secondary weapons)
   chargeMultiplier?: number;   // First-hit charge bonus = primaryMeleeDamage × chargeMultiplier (requires charge-attack active)
 }
@@ -413,7 +421,7 @@ export function applyTechnologyEffects(
       if (!combatProperties.includes(property)) continue;
 
       // Handle special properties
-      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'costReduction' || property === 'stoneCostReduction' || property === 'rangedResistance' || property === 'meleeResistance' || property === 'healingRate' || property === 'chargeMultiplier') {
+      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'costReduction' || property === 'stoneCostReduction' || property === 'rangedResistance' || property === 'meleeResistance' || property === 'healingRate' || property === 'chargeMultiplier' || property === 'bonusDamageMultiplier' || property === 'armorPenetration') {
         specialEffects.push({
           property,
           effectType: effect.effect as 'change' | 'multiply',
@@ -631,6 +639,25 @@ export function applyTechnologyEffects(
     }
   }
 
+  // Apply armorPenetration (additive stacking)
+  for (const effect of specialEffects) {
+    if (effect.property === 'armorPenetration') {
+      if (effect.effectType === 'change') {
+        modifiedStats.armorPenetration = (modifiedStats.armorPenetration ?? 0) + effect.value;
+      } else if (effect.effectType === 'multiply') {
+        modifiedStats.armorPenetration = (modifiedStats.armorPenetration ?? 0) * effect.value;
+      }
+    }
+  }
+
+  // Accumulate bonusDamageMultiplier — applied to all bonus entries after they are fully built
+  let bonusDmgMultiplier = 1;
+  for (const effect of specialEffects) {
+    if (effect.property === 'bonusDamageMultiplier' && effect.effectType === 'multiply') {
+      bonusDmgMultiplier *= effect.value;
+    }
+  }
+
   // Apply damage bonuses
   if (modifiedStats.bonusDamage && Array.isArray(modifiedStats.bonusDamage)) {
     for (const effect of specialEffects) {
@@ -678,6 +705,11 @@ export function applyTechnologyEffects(
         }
       }
     }
+  }
+
+  // Apply bonusDamageMultiplier to all bonus entries accumulated this pass
+  if (bonusDmgMultiplier !== 1 && modifiedStats.bonusDamage && Array.isArray(modifiedStats.bonusDamage)) {
+    modifiedStats.bonusDamage = modifiedStats.bonusDamage.map((b: any) => ({ ...b, value: b.value * bonusDmgMultiplier })); // eslint-disable-line @typescript-eslint/no-explicit-any
   }
 
   return modifiedStats;

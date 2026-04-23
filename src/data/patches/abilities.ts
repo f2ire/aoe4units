@@ -595,6 +595,26 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     })
   },
 
+  {
+    id: 'ability-relic-garrisoned-dock',
+    reason: 'Counter ability: 1–5 relics garrisoned in a dock each grant +5% attack speed to naval military. Effective multiplier at N relics = ×1/(1+N×0.05). Raw value 0.95 is replaced by dynamic computation.',
+    update: {
+      counterMax: 5,
+      counterStep: 0.05,
+      unitCounterStep: { 'galley': 0.03 },
+    },
+  },
+
+  //___________
+  //
+  // HOUSE OF LANCASTER
+  //
+  //___________
+  {
+    id: "ability-house-unified",
+    reason: "Add Tooltip.",
+    uiTooltip: "Max value goes from 4 to 6 only if the Berkshire Palace has been constructed.",
+  },
   //___________
   //
   // OTTOMANS
@@ -1068,9 +1088,6 @@ function createKharashAura(): Ability {
   } as Ability;
 }
 
-// Synthetic ability — Khan Debuff Arrow (Golden Horde).
-// Khan fires a signal arrow: enemies in the area take +10% damage.
-// Modelled as ×1.1 attack on annihilation_condition units (the attackers dealing into the debuffed zone).
 function createKhanDebuffArrow(): Ability {
   const effects = [
     { property: 'meleeAttack', select: { class: [['annihilation_condition']], excludeId: ['battering-ram', 'trade-ship', 'fishing-boat', 'trader'] }, effect: 'multiply', value: 1.1, type: 'ability' },
@@ -1108,9 +1125,6 @@ function createKhanDebuffArrow(): Ability {
   } as Ability;
 }
 
-// Synthetic ability — Khan War Cry (Mongols / Golden Horde).
-// Khan shout boosts attack of nearby annihilation_condition units.
-// Three mutually-exclusive tiers (age 2/3/4): +10% / +20% / +30% attack.
 function createKhanWarcry(age: 2 | 3 | 4, multiplier: number): Ability {
   const pct = Math.round((multiplier - 1) * 100);
   const effects = [
@@ -1148,13 +1162,142 @@ function createKhanWarcry(age: 2 | 3 | 4, multiplier: number): Ability {
   } as Ability;
 }
 
+//__________________
+//
+// LORD OF LANCASTER
+//
+//__________________
 
+function createLordOfLancasterInspiration(): Ability {
+  return {
+    id: 'ability-lord-of-lancaster-inspiration',
+    name: 'Lord of Lancaster Inspiration',
+    type: 'ability',
+    civs: ['hl'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    icon: '/abilities/lord_of_lancaster_inspiration.png',
+    description: '+5% HP per stack (up to 4 stacks).',
+    unique: false,
+    counterMax: 4,
+    counterStep: 0.05,
+    counterDirection: 'increase' as const,
+    counterTooltipLabel: 'HP',
+    effects: [{
+      property: 'hitpoints',
+      select: { class: [['annihilation_condition'], ['military']] },
+      effect: 'multiply',
+      value: 1.0,
+      type: 'ability',
+    }],
+    variations: [{
+      id: 'ability-lord-of-lancaster-inspiration-1',
+      baseId: 'ability-lord-of-lancaster-inspiration',
+      type: 'ability',
+      name: 'Lord of Lancaster Inspiration',
+      pbgid: 999200,
+      attribName: 'ability_lord_of_lancaster_inspiration',
+      age: 1,
+      civs: ['en'],
+      description: '+5% HP per stack (up to 4 stacks).',
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createDaggerThrow(): Ability {
+  return {
+    id: 'ability-dagger-throw',
+    name: 'Dagger Throw',
+    type: 'ability',
+    civs: ['hl'],
+    displayClasses: [],
+    classes: [],
+    minAge: 3,
+    active: 'always',
+    icon: '/abilities/Dagger_Throw.png',
+    description: 'Throws a dagger at the start of combat dealing first-hit bonus damage (melee armor applies).',
+    unique: false,
+    effects: [{
+      property: 'unknown',
+      select: { id: ['earls-guard'] },
+      effect: 'change',
+      value: 0,
+      type: 'ability',
+    }],
+    variations: [{
+      id: 'ability-dagger-throw-1',
+      baseId: 'ability-dagger-throw',
+      type: 'ability',
+      name: 'Dagger Throw',
+      pbgid: 999201,
+      attribName: 'ability_dagger_throw',
+      age: 3,
+      civs: ['hl'],
+      description: 'Throws a dagger at the start of combat dealing first-hit bonus damage (melee armor applies).',
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createHouseUnified(): Ability {
+  return {
+    id: 'ability-house-unified',
+    name: 'House Unified',
+    type: 'ability',
+    civs: ['hl'],
+    displayClasses: [],
+    classes: [],
+    minAge: 3,
+    active: 'always',
+    icon: 'https://data.aoe4world.com/images/buildings/keep-3.png',
+    description: "Gains +1 damage for each active Keep (including Keep landmarks), up to a maximum of +4, or +6 if the Berkshire Palace has been constructed. This applies to both melee and dagger throw attacks.",
+    unique: true,
+    counterMax: 6,
+    counterStep: 1,
+    counterDirection: 'additive' as const,
+    counterTooltipLabel: 'damage',
+    effects: [{
+      property: 'meleeAttack',
+      select: { id: ['earls-guard', 'demilancer'] },
+      effect: 'change',
+      value: 1,
+      type: 'ability',
+    }],
+    variations: [{
+      id: 'ability-house-unified-1',
+      baseId: 'ability-house-unified',
+      type: 'ability',
+      name: 'House Unified',
+      pbgid: 999202,
+      attribName: 'ability_house_unified',
+      age: 3,
+      civs: ['hl'],
+      description: "Gains +1 damage for each active Keep (including Keep landmarks), up to a maximum of +4, or +6 if the Berkshire Palace has been constructed. This applies to both melee and dagger throw attacks.",
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
 // Display row grouping for AbilitySelector.
 // Each entry reserves a dedicated row with a short label.
 // Abilities not listed here share the default "ABI:" row.
 // Order matters: rows render in array order, default row first.
 export const ABILITY_ROW_GROUPS: readonly { label: string; ids: readonly string[] }[] = [
   { label: 'WC', ids: ['ability-khan-warcry-2', 'ability-khan-warcry-3', 'ability-khan-warcry-4'] },
+  { label: 'CTR', ids: ['ability-house-unified', 'ability-lord-of-lancaster-inspiration'] },
 ];
 
 export function applyAbilityPatches(abilities: Ability[]): Ability[] {
@@ -1173,6 +1316,9 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createKhanWarcry(4, 1.3),
     createKhanDebuffArrow(),
     createKharashAura(),
+    createLordOfLancasterInspiration(),
+    createDaggerThrow(),
+    createHouseUnified(),
   ];
 
   return abilitiesWithCharge.map(ability => {

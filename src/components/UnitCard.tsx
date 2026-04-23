@@ -389,7 +389,9 @@ export const UnitCard = ({
                           <div key={idx} className="flex justify-between text-xs">
                             <span className={cn('flex items-center gap-1', comparison.color)}>
                               {comparison.symbol && <span className="text-[10px]">{comparison.symbol}</span>}
-                              +{Math.round(modifier.value)} {modifier.chargeBonusLabel ?? 'Charge'}
+                              +{modifier.chargeBonusBurst > 1
+                                ? `${Math.round(modifier.value / modifier.chargeBonusBurst)}×${modifier.chargeBonusBurst}`
+                                : Math.round(modifier.value)} {modifier.chargeBonusLabel ?? 'Charge'}
                             </span>
                           </div>
                         );

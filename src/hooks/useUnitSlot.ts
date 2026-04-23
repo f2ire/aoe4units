@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { aoe4Units, AoE4Unit, getUnitVariation, getMaxAge, getPrimaryWeapon, getArmorValue, getResistanceValue } from "@/data/unified-units";
 import type { UnifiedVariation } from "@/data/unified-units";
 import { getTechnologiesForUnit, getActiveTechnologyVariationsWithTiers, applyTechnologyEffects, getAllTiersFromSameLine, allTechnologies, type UnitStats } from "@/data/unified-technologies";
-import { getAbilitiesForUnit, getActiveAbilityVariations } from "@/data/unified-abilities";
+import { getAbilitiesForUnit, getActiveAbilityVariations, getAbilityVariation } from "@/data/unified-abilities";
 import { techAbilityInteractions } from "@/data/patches/abilities";
 import { foreignEngineeringUnitRestrictions, techUnitExclusions, weaponInjectionMap } from "@/data/patches/technologies";
 import type { UnifiedWeapon } from "@/data/unified-units";
@@ -52,6 +52,7 @@ export function useUnitSlot() {
   const [variation, setVariation] = useState<UnifiedVariation | null>(null);
   const [activeTechnologies, setActiveTechnologies] = useState<Set<string>>(new Set());
   const [activeAbilities, setActiveAbilities] = useState<Set<string>>(new Set());
+  const [abilityCounters, setAbilityCounters] = useState<Map<string, number>>(new Map());
 
   // Stores a preferred weapon ability to activate on the next desert-raider unit load
   const pendingAbilityRef = useRef<string | null>(null);
@@ -61,6 +62,7 @@ export function useUnitSlot() {
     setVariation(null);
     setActiveTechnologies(new Set());
     setActiveAbilities(new Set());
+    setAbilityCounters(new Map());
     if (u && preferredAbility) {
       pendingAbilityRef.current = preferredAbility;
     }
@@ -182,6 +184,44 @@ export function useUnitSlot() {
     });
   }, []);
 
+  const incrementAbility = useCallback((abilityId: string) => {
+    const ability = abilitiesRef.current.find(a => a.id === abilityId);
+    if (!ability || ability.counterMax === undefined) return;
+    setAbilityCounters(prev => {
+      const current = prev.get(abilityId) ?? 0;
+      if (current >= ability.counterMax!) return prev;
+      const next = new Map(prev);
+      next.set(abilityId, current + 1);
+      return next;
+    });
+    setActiveAbilities(prev => {
+      if (prev.has(abilityId)) return prev;
+      const next = new Set(prev);
+      next.add(abilityId);
+      return next;
+    });
+  }, []);
+
+  const decrementAbility = useCallback((abilityId: string) => {
+    setAbilityCounters(prev => {
+      const current = prev.get(abilityId) ?? 0;
+      if (current <= 0) return prev;
+      const next = new Map(prev);
+      const newCount = current - 1;
+      if (newCount === 0) {
+        next.delete(abilityId);
+        setActiveAbilities(prevAbi => {
+          const nextAbi = new Set(prevAbi);
+          nextAbi.delete(abilityId);
+          return nextAbi;
+        });
+      } else {
+        next.set(abilityId, newCount);
+      }
+      return next;
+    });
+  }, []);
+
   // Reset unit if civ changes and unit is no longer available
   useEffect(() => {
     if (unit && selectedCiv !== "all" && !unit.civs.includes(selectedCiv)) {
@@ -213,6 +253,9 @@ export function useUnitSlot() {
     'wynguard-footmen',
     'wynguard-raiders',
     'wynguard-rangers',
+    'earls-retinue',
+    'garrison-command',
+    'gunpowder-contingent',
   ]);
 
   const filteredUnits = useMemo(() => {
@@ -431,10 +474,15 @@ export function useUnitSlot() {
       rangedResistance: getResistanceValue(data, 'ranged'),
       meleeResistance: getResistanceValue(data, 'melee'),
       healingRate: 0,
+      armorPenetration: 0,
     };
 
     const techVariations = getActiveTechnologyVariationsWithTiers(activeTechnologies, selectedCiv, selectedAge);
-    const abilityVariations = getActiveAbilityVariations(activeAbilities, selectedCiv, selectedAge);
+
+    // Counter abilities are handled with a dynamic value — exclude from normal variation flow
+    const counterAbilityIds = new Set(abilities.filter(a => a.counterMax !== undefined).map(a => a.id));
+    const activeAbilitiesNoCounter = new Set([...activeAbilities].filter(id => !counterAbilityIds.has(id)));
+    const abilityVariations = getActiveAbilityVariations(activeAbilitiesNoCounter, selectedCiv, selectedAge);
 
     // Base-modifying abilities (e.g. Clocktower) produce units with a higher HP base —
     // they are applied in a separate pass AFTER other abilities/techs so their ×HP acts
@@ -471,8 +519,29 @@ export function useUnitSlot() {
       result = { ...result, attackSpeed: 0.6 };
     }
 
+    // Counter abilities: apply with dynamic value 1/(1 + N × step)
+    for (const ability of abilities) {
+      if (ability.counterMax === undefined) continue;
+      if (!activeAbilities.has(ability.id)) continue;
+      const count = abilityCounters.get(ability.id) ?? 0;
+      if (count === 0) continue;
+      const step = (unit?.id ? ability.unitCounterStep?.[unit.id] : undefined) ?? ability.counterStep ?? 0.05;
+      const effectiveValue = ability.counterDirection === 'increase'
+        ? 1 + count * step
+        : ability.counterDirection === 'additive'
+          ? count * step
+          : 1 / (1 + count * step);
+      const counterVariation = getAbilityVariation(ability.id, selectedCiv, ability.minAge);
+      if (!counterVariation) continue;
+      const syntheticVariation = {
+        ...counterVariation,
+        effects: (counterVariation.effects || []).map((e: any) => ({ ...e, value: effectiveValue })), // eslint-disable-line @typescript-eslint/no-explicit-any
+      };
+      result = applyTechnologyEffects(result, effectiveClasses, [syntheticVariation], unit?.id);
+    }
+
     return result;
-  }, [unit, variation, effectiveClasses, activeTechnologies, activeAbilities, selectedCiv, selectedAge]);
+  }, [unit, variation, effectiveClasses, activeTechnologies, activeAbilities, selectedCiv, selectedAge, abilities, abilityCounters]);
 
   const secondaryWeapons = useMemo((): UnifiedWeapon[] => {
     const weapons: UnifiedWeapon[] = [];
@@ -511,6 +580,7 @@ export function useUnitSlot() {
     variation: effectiveVariation,
     activeTechnologies, setActiveTechnologies,
     activeAbilities, setActiveAbilities,
+    abilityCounters,
     openCategories, toggleCategory,
     filteredUnits,
     categorizedUnits,
@@ -519,6 +589,8 @@ export function useUnitSlot() {
     modifiedStats,
     toggleTechnology,
     toggleAbility,
+    incrementAbility,
+    decrementAbility,
     lockedAbilities,
     lockedTechnologies,
     secondaryWeapons,

@@ -435,6 +435,98 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
     },
   },
 
+  //_____________________
+  //
+  // LORD OF LANCASTER
+  //
+  //_____________________
+
+  {
+    id: 'lord-of-lancaster',
+    reason: 'aoe4world only has the age-2 variation with wrong HP (170→178). Adding age-3 and age-4 variations. Stats per in-game: HP (178/210/247), attack (14/16/18), armor (2/3/4 melee+ranged).',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      const variations = u.variations as Record<string, unknown>[];
+      const base = variations[0] as Record<string, unknown>;
+      const baseCosts = base.costs as Record<string, unknown>;
+
+      const makeVariation = (age: number, hp: number, damage: number, armor: number) => {
+        const weapons = (base.weapons as Record<string, unknown>[]).map((w, i) =>
+          i === 0 ? { ...w, damage } : w
+        );
+        const armorArr = [{ type: 'melee', value: armor }, { type: 'ranged', value: armor }];
+        return {
+          ...base,
+          age,
+          id: `lord-of-lancaster-${age}`,
+          icon: `https://data.aoe4world.com/images/units/lord-of-lancaster-2.png`,
+          hitpoints: hp,
+          weapons,
+          armor: armorArr,
+          costs: { ...baseCosts },
+        };
+      };
+
+      return {
+        ...u,
+        variations: [
+          makeVariation(2, 178, 14, 2),
+          makeVariation(3, 210, 16, 3),
+          makeVariation(4, 247, 18, 4),
+        ],
+      };
+    },
+  },
+
+  {
+    id: 'demilancer',
+    reason: 'Raw data is a placeholder with no stats (age-1 dummy). Adding age-2/3/4 variations per in-game: HP (130/150/190), attack (8/9/14), torch (13/17/21), armor (2/3/5 melee+ranged). Classes corrected to match knight.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      const variations = u.variations as Record<string, unknown>[];
+      const base = variations[0] as Record<string, unknown>;
+
+      const knightClasses = ['annihilation_condition', 'armored', 'cavalry', 'cavalry_armored', 'find_non_siege_land_military', 'formational', 'heavy', 'horse', 'human', 'included_by_military_hotkeys', 'knight', 'land_military', 'melee', 'military', 'military_cavalry', 'torch_thrower'];
+
+      const makeWeapons = (damage: number, torchDamage: number) => [
+        {
+          name: 'Lance', type: 'melee', damage, speed: 1.5,
+          range: { min: 0, max: 0.29 }, modifiers: [],
+          durations: { aim: 0, windup: 0.5, attack: 0.125, winddown: 0, reload: 0, setup: 0, teardown: 0, cooldown: 0.875 },
+        },
+        {
+          name: 'Torch', type: 'fire', damage: torchDamage, speed: 2.125,
+          range: { min: 0, max: 1.25 }, modifiers: [],
+          durations: { aim: 0, windup: 0.75, attack: 0.125, winddown: 0, reload: 0, setup: 0, teardown: 0, cooldown: 1.25 },
+        },
+      ];
+
+      const makeVariation = (age: number, name: string, hp: number, damage: number, torchDamage: number, armor: number) => ({
+        ...base,
+        age, id: `demilancer-${age}`, name, hitpoints: hp,
+        classes: knightClasses,
+        displayClasses: ['Heavy Melee Cavalry'],
+        weapons: makeWeapons(damage, torchDamage),
+        armor: [{ type: 'melee', value: armor }, { type: 'ranged', value: armor }],
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, total: 0, popcap: 1 },
+        movement: { speed: 1.62 },
+      });
+
+      return {
+        ...u,
+        name: 'Demilancer',
+        minAge: 2,
+        classes: knightClasses,
+        displayClasses: ['Heavy Melee Cavalry'],
+        variations: [
+          makeVariation(2, 'Regular Demilancer', 130, 8, 13, 2),
+          makeVariation(3, 'Veteran Demilancer', 150, 9, 17, 3),
+          makeVariation(4, 'Elite Demilancer', 190, 14, 21, 5),
+        ],
+      };
+    },
+  },
+
   //_________
   //
   // MONGOLS
@@ -462,6 +554,34 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
   },
 
 
+  // Lord of Lancaster ships cost 10% less (matches English civ passive baked into en costs in raw data)
+  ...(['galley', 'hulk', 'carrack', 'demolition-ship', 'transport-ship', 'fishing-boat'] as const).map(id => ({
+    id,
+    reason: 'Lord of Lancaster (hl) ships cost 10% less, matching the English civ passive. Raw data lacks this discount for hl variations.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      return {
+        ...u,
+        variations: (u.variations as Record<string, unknown>[]).map(v => {
+          if (!(v.civs as string[])?.includes('hl')) return v;
+          const c = v.costs as Record<string, number>;
+          return {
+            ...v,
+            costs: {
+              ...c,
+              food: Math.round((c.food || 0) * 0.9),
+              wood: Math.round((c.wood || 0) * 0.9),
+              gold: Math.round((c.gold || 0) * 0.9),
+              stone: Math.round((c.stone || 0) * 0.9),
+              oliveoil: Math.round((c.oliveoil || 0) * 0.9),
+              total: Math.round((c.total || 0) * 0.9),
+            },
+          };
+        }),
+      };
+    },
+  })),
+
 ];
 
 export function applyUnitPatches(unifiedUnits: unknown[]): unknown[] {
@@ -469,38 +589,39 @@ export function applyUnitPatches(unifiedUnits: unknown[]): unknown[] {
 
   return unifiedUnits.map((unit) => {
     const u = unit as Record<string, unknown>;
-    const patch = unitPatches.find(p => p.id === u.id);
-    if (!patch) return u;
+    const patches = unitPatches.filter(p => p.id === u.id);
+    if (patches.length === 0) return u;
 
     let updated: unknown = u;
 
-    updated = patch.update ? (deepMerge(updated, patch.update) as Record<string, unknown>) : { ...updated as Record<string, unknown> };
+    for (const patch of patches) {
+      updated = patch.update ? (deepMerge(updated, patch.update) as Record<string, unknown>) : { ...updated as Record<string, unknown> };
 
-    if (patch.variations?.length && Array.isArray((updated as Record<string, unknown>).variations)) {
-      const updatedRecord = updated as Record<string, unknown>;
-      updatedRecord.variations = ((updatedRecord.variations) as unknown[]).map((v: unknown) => {
-        const vData = v as Record<string, unknown>;
-        const vPatch = patch.variations!.find(vp => {
-          if (vp.match.id && vp.match.id !== vData.id) return false;
-          if (
-            typeof vp.match.age === 'number' &&
-            typeof vData.age === 'number' &&
-            vp.match.age !== vData.age
-          ) return false;
-          if (vp.match.civsIncludes && Array.isArray(vData.civs) && !vData.civs.includes?.(vp.match.civsIncludes)) return false;
-          return true;
+      if (patch.variations?.length && Array.isArray((updated as Record<string, unknown>).variations)) {
+        const updatedRecord = updated as Record<string, unknown>;
+        updatedRecord.variations = ((updatedRecord.variations) as unknown[]).map((v: unknown) => {
+          const vData = v as Record<string, unknown>;
+          const vPatch = patch.variations!.find(vp => {
+            if (vp.match.id && vp.match.id !== vData.id) return false;
+            if (
+              typeof vp.match.age === 'number' &&
+              typeof vData.age === 'number' &&
+              vp.match.age !== vData.age
+            ) return false;
+            if (vp.match.civsIncludes && Array.isArray(vData.civs) && !vData.civs.includes?.(vp.match.civsIncludes)) return false;
+            return true;
+          });
+          let updated_variation: Record<string, unknown> = vPatch ? (deepMerge(vData, vPatch.update) as Record<string, unknown>) : vData;
+          if (vPatch?.after) {
+            updated_variation = vPatch.after(updated_variation) as Record<string, unknown>;
+          }
+          return updated_variation;
         });
-        let updated_variation: Record<string, unknown> = vPatch ? (deepMerge(vData, vPatch.update) as Record<string, unknown>) : vData;
-        // Apply after function at variation level if provided
-        if (vPatch?.after) {
-          updated_variation = vPatch.after(updated_variation) as Record<string, unknown>;
-        }
-        return updated_variation;
-      });
-    }
+      }
 
-    if (patch.after) {
-      updated = patch.after(updated) as Record<string, unknown>;
+      if (patch.after) {
+        updated = patch.after(updated) as Record<string, unknown>;
+      }
     }
 
     return updated;
