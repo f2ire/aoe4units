@@ -27,6 +27,12 @@ export const techAbilityInteractions: TechAbilityInteraction[] = [
     requiredAbility: 'ability-keep-influence',
     apply: (stats) => ({ ...stats, costMultiplier: (stats.costMultiplier ?? 1) * 0.95 }),
   },
+
+  {
+    requiredTech: 'do-maru-armor',
+    requiredAbility: 'ability-deflective-armor',
+    apply: (stats) => ({ ...stats, moveSpeed: stats.moveSpeed * 1.1 })
+  }
 ];
 
 //_________________
@@ -617,6 +623,134 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   },
   //___________
   //
+  // JAPANESE
+  //
+  //___________
+
+
+  {
+    id: 'ability-five-mountain-ministries',
+    reason: 'Raw effects empty. Debuffs all enemy attackers: −50% damage (base + bonus). Duration 60s not modelled.',
+    after: (ability: Ability) => ({
+      ...ability,
+      effects: [
+        {
+          property: 'versusOpponentDamageDebuff',
+          select: { class: [['annihilation_condition']] },
+          effect: 'multiply',
+          value: 0.5,
+          type: 'ability',
+        },
+      ],
+      minAge: 3,
+      variations: ability.variations.map((v: AbilityVariation) => ({ ...v, active: 'manual', age: Math.max(v.age ?? 1, 3) })),
+    }),
+    uiTooltip: 'Duration not yet modelled.',
+  },
+
+  {
+    id: 'ability-kabura-ya',
+    reason: 'Raw variation effect is change:0 (no-op). Corrected to multiply:1.1. active:manual bypasses unlockedBy suppression (getAbilitiesForUnit line 249 hides abilities with unlockedBy when active !== manual). Duration 10s not modelled.',
+    after: (ability: Ability) => ({
+      ...ability,
+      active: 'manual',
+      minAge: 3,
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        active: 'manual',
+        age: Math.max(v.age ?? 1, 3),
+        effects: [
+          {
+            property: 'moveSpeed',
+            select: { id: ['onna-musha'] },
+            effect: 'multiply',
+            value: 1.1,
+            type: 'ability',
+          },
+        ],
+      })),
+    }),
+    uiTooltip: 'Duration 10s not modelled.',
+  },
+
+  {
+    id: "ability-buddhist-conversion",
+    reason: "Add Tooltip.",
+    uiTooltip: "Duration not yet modelled.",
+  },
+
+  {
+    id: "ability-nehan",
+    reason: "Add Tooltip.",
+    uiTooltip: "Duration not yet modelled.",
+  },
+
+  {
+    id: "ability-katana-bannerman-aura",
+    reason: "Auto-activates only for katana-bannerman via activeForIds. Raw variation already has meleeAttack ×1.15 on melee infantry.",
+    update: { active: 'always' },
+    after: (ability) => ({
+      ...ability,
+      activeForIds: ['katana-bannerman'],
+      variations: ability.variations.map(v => ({ ...v, active: 'always' }))
+    })
+  },
+
+  {
+    id: "ability-yumi-bannerman-aura",
+    reason: "Auto-activates only for yumi-bannerman via activeForIds. Raw variation already has rangedAttack ×1.15 on ranged infantry.",
+    update: { active: 'always' },
+    after: (ability) => ({
+      ...ability,
+      activeForIds: ['yumi-bannerman'],
+      variations: ability.variations.map(v => ({ ...v, active: 'always' }))
+    })
+  },
+
+  {
+    id: "ability-uma-bannerman-aura",
+    reason: "Auto-activates only for uma-bannerman via activeForIds. Raw has meleeAttack ×1.10 on cavalry; rangedAttack ×1.10 added for mounted ranged units.",
+    update: { active: 'always' },
+    after: (ability) => ({
+      ...ability,
+      activeForIds: ['uma-bannerman'],
+      variations: ability.variations.map(v => ({
+        ...v,
+        active: 'always',
+        effects: [
+          ...v.effects,
+          {
+            property: 'rangedAttack',
+            select: { class: [['cavalry']] },
+            effect: 'multiply',
+            value: 1.10,
+            type: 'ability',
+          },
+        ],
+      }))
+    })
+  },
+
+
+  {
+    id: 'ability-sabotage',
+    reason: 'Useless for this app.',
+    after: (ability) => ({ ...ability, hidden: true })
+  },
+
+  {
+    id: 'ability-shunshin',
+    reason: 'Useless for this app.',
+    after: (ability) => ({ ...ability, hidden: true })
+  },
+
+  {
+    id: 'ability-spy',
+    reason: 'Useless for this app.',
+    after: (ability) => ({ ...ability, hidden: true })
+  },
+  //___________
+  //
   // OTTOMANS
   //
   //___________
@@ -1164,7 +1298,7 @@ function createKhanWarcry(age: 2 | 3 | 4, multiplier: number): Ability {
 
 //__________________
 //
-// LORD OF LANCASTER
+// HOUSE OF LANCASTER
 //
 //__________________
 
@@ -1291,6 +1425,86 @@ function createHouseUnified(): Ability {
     shared: {}
   } as Ability;
 }
+
+//__________________
+//
+// JAPANESE
+//
+//__________________
+
+function createBuddhistConversion(): Ability {
+  const effects = [
+    { property: 'meleeAttack', select: { class: [['land_military']] }, effect: 'multiply', value: 1.2, type: 'ability' },
+    { property: 'rangedAttack', select: { class: [['land_military']] }, effect: 'multiply', value: 1.2, type: 'ability' },
+    { property: 'siegeAttack', select: { class: [['land_military']] }, effect: 'multiply', value: 1.2, type: 'ability' },
+  ];
+  return {
+    id: 'ability-buddhist-conversion',
+    name: 'Buddhist Conversion',
+    type: 'ability',
+    civs: ['ja'],
+    displayClasses: [],
+    classes: [],
+    minAge: 3,
+    active: 'manual',
+    icon: '/abilities/buddhist-conversion.png',
+    description: "When casting Buddhist Conversion, nearby allied units gain +20% damage for 20 seconds.",
+    unique: true,
+    effects,
+    variations: [{
+      id: 'ability-buddhist-conversion-v',
+      baseId: 'ability-buddhist-conversion',
+      type: 'ability',
+      name: 'Buddhist Conversion',
+      pbgid: 999300,
+      attribName: 'ability_buddhist_conversion',
+      age: 3,
+      civs: ['ja'],
+      description: "When casting Buddhist Conversion, nearby allied units gain +20% damage for 20 seconds.",
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createNehan(): Ability {
+  return {
+    id: 'ability-nehan',
+    name: 'Nehan',
+    type: 'ability',
+    civs: ['ja'],
+    displayClasses: [],
+    classes: [],
+    minAge: 4,
+    active: 'manual',
+    icon: 'https://data.aoe4world.com/images/technologies/nehan-4.png',
+    description: "When casting Buddhist Conversion, nearby allied units gain +25% movement speed for 20 seconds.",
+    unique: false,
+    effects: [
+      { property: 'moveSpeed', select: { class: [['land_military']] }, effect: 'multiply', value: 1.25, type: 'ability' },
+    ],
+    variations: [{
+      id: 'ability-nehan-v',
+      baseId: 'ability-nehan',
+      type: 'ability',
+      name: 'Nehan',
+      pbgid: 999301,
+      attribName: 'ability_nehan',
+      age: 4,
+      civs: ['ja'],
+      description: "When casting Buddhist Conversion, nearby allied units gain +20% damage for 20 seconds.",
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
 // Display row grouping for AbilitySelector.
 // Each entry reserves a dedicated row with a short label.
 // Abilities not listed here share the default "ABI:" row.
@@ -1298,6 +1512,7 @@ function createHouseUnified(): Ability {
 export const ABILITY_ROW_GROUPS: readonly { label: string; ids: readonly string[] }[] = [
   { label: 'WC', ids: ['ability-khan-warcry-2', 'ability-khan-warcry-3', 'ability-khan-warcry-4'] },
   { label: 'CTR', ids: ['ability-house-unified', 'ability-lord-of-lancaster-inspiration'] },
+  { label: 'CONV', ids: ['ability-buddhist-conversion', 'ability-nehan'] },
 ];
 
 export function applyAbilityPatches(abilities: Ability[]): Ability[] {
@@ -1319,6 +1534,8 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createLordOfLancasterInspiration(),
     createDaggerThrow(),
     createHouseUnified(),
+    createBuddhistConversion(),
+    createNehan(),
   ];
 
   return abilitiesWithCharge.map(ability => {

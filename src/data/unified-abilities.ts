@@ -12,6 +12,7 @@ import { getTechnologiesForUnit } from './unified-technologies';
 // Abilities share the same structure as technologies
 export interface Ability extends Technology {
   active?: string;
+  activeForIds?: string[]; // if set, auto-activates only when unit.id or unit.baseId is in this list
 }
 export interface AbilityVariation extends TechnologyVariation {
   active?: string;
@@ -128,17 +129,25 @@ export function abilityAffectsUnit(
     let matchesByClass = false;
     let matchesByIdAsClass = false;
     
-    // For versus debuff effects, only select.id matters (the unit that owns the ability)
-    // The select.class part defines the target of the effect, not who owns the ability
+    // For versus debuff effects, select.id = unit that owns the ability; select.class also checked for ownership
     if (effect.property === 'versusOpponentDamageDebuff') {
       if (effect.select?.id && unitId) {
-        matchesById = effect.select.id.some(id => 
+        matchesById = effect.select.id.some(id =>
           id.toLowerCase() === unitId.toLowerCase()
         );
       }
-      return matchesById;
+      if (effect.select?.class) {
+        matchesByClass = effect.select.class.some(classGroup =>
+          classGroup.every(className =>
+            unitClasses.some(unitClass =>
+              unitClass.toLowerCase() === className.toLowerCase()
+            )
+          )
+        );
+      }
+      return matchesById || matchesByClass;
     }
-    
+
     // For other effects, normal logic
     if (effect.select?.id && unitId) {
       matchesById = effect.select.id.some(id =>
@@ -191,12 +200,19 @@ export function getAbilitiesForUnit(
         let matchesByClass = false;
         let matchesByIdAsClass = false;
         
-        // For versus debuff effects, only select.id matters
+        // For versus debuff effects, select.id = unit that owns the ability; select.class also checked for ownership
         if (effect.property === 'versusOpponentDamageDebuff') {
           if (effect.select?.id && unitId) {
             matchesById = effect.select.id.some(id => id.toLowerCase() === unitId.toLowerCase());
           }
-          return matchesById;
+          if (effect.select?.class) {
+            matchesByClass = effect.select.class.some(classGroup =>
+              classGroup.every(className =>
+                unitClasses.some(unitClass => unitClass.toLowerCase() === className.toLowerCase())
+              )
+            );
+          }
+          return matchesById || matchesByClass;
         }
         
         // For other effects, normal logic

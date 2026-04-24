@@ -26,6 +26,7 @@ export interface CombatEntity {
   continuousMovement?: boolean; // unit can move throughout entire attack cycle (e.g. Mangudai)
   selfDestructs?: boolean; // unit self-destructs on first hit — if hitsToKill > 1, it can never kill
   secondaryWeapons?: UnifiedWeapon[]; // additional weapons fired simultaneously (e.g. thunderclap-bombs)
+  firstHitBlocked?: boolean; // defender absorbs first attack completely (0 damage, charge also nullified)
 }
 
 export interface VersusMetrics {
@@ -69,6 +70,7 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     continuousMovement: (source as any).continuousMovement ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
     selfDestructs: (source as any).selfDestructs ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
     secondaryWeapons: (source as any).secondaryWeapons ?? [], // eslint-disable-line @typescript-eslint/no-explicit-any
+    firstHitBlocked: (source as any).firstHitBlocked ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
   };
 }
 
@@ -517,6 +519,39 @@ function computeMetrics(
   let hitsToKill: number | null = null;
   let timeToKill: number | null = null;
   let dpsPerCost: number | null = null;
+
+  // First-hit block (Deflective Armor): defender absorbs first attack completely.
+  // Charge consumed but blocked. Attacker spends firstHitSpeed, then all normal hits.
+  if (defender.firstHitBlocked && !bugAttackSpeed) {
+    const totalDefHP = defender.hitpoints * defenderMultiplier;
+    const normalCycle = normalAttackData.value * attackerMultiplier;
+    let secNormalDPS = 0;
+    for (const secWeapon of (attacker.secondaryWeapons || [])) {
+      if (!secWeapon.speed || secWeapon.speed <= 0) continue;
+      const secData = computeEffectiveDamage(attacker, defender, 0, false, secWeapon);
+      secNormalDPS += secData.value / secWeapon.speed;
+    }
+    const effectiveNormalCycle = normalCycle + secNormalDPS * attackSpeed;
+    if (effectiveNormalCycle > 0) {
+      const normalHTK = Math.ceil(totalDefHP / effectiveNormalCycle);
+      hitsToKill = 1 + normalHTK;
+      timeToKill = round(firstHitSpeed + normalHTK * attackSpeed, 1);
+      dps = round(totalDefHP / timeToKill, 2);
+    }
+    if (attacker.selfDestructs && hitsToKill !== null && hitsToKill > 1) {
+      hitsToKill = null; timeToKill = null; dps = null;
+    }
+    const cost = totalCost(attacker);
+    dpsPerCost = cost > 0 ? round((normalAttackData.value / attackSpeed) / cost, 2) : null;
+    const debuffTxt = normalAttackData.debuffMultiplier ? ` × ${normalAttackData.debuffMultiplier} (debuff)` : '';
+    return {
+      id: attacker.id, name: attacker.name,
+      dps, dpsPerCost, hitsToKill, timeToKill,
+      effectiveDamagePerHit: normalAttackData.value,
+      bugAttackSpeed: false, cannotAttackUnits: false,
+      formula: `Deflect + Effective = max(1, (Base(${normalAttackData.base}) + Bonus(${normalAttackData.bonus}) - Armor(${normalAttackData.armorApplied}))${debuffTxt}) = ${normalAttackData.value}; DPS = ${dps}`,
+    };
+  }
 
   if (!bugAttackSpeed) {
     const totalDefenderHP = defender.hitpoints * defenderMultiplier;

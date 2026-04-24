@@ -240,6 +240,7 @@ const Sandbox = () => {
       } : undefined,
       healingRate: modifiedAllyStats.healingRate ?? 0,
       armorPenetration: modifiedAllyStats.armorPenetration ?? 0,
+      firstHitBlocked: activeAbilitiesAlly.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(variationAlly, activeTechnologiesAlly),
       chargeArmorType: variationAlly.baseId === 'earls-guard' ? 'ranged' as const : undefined,
       secondaryWeapons: (() => {
@@ -310,6 +311,7 @@ const Sandbox = () => {
       } : undefined,
       healingRate: modifiedEnemyStats.healingRate ?? 0,
       armorPenetration: modifiedEnemyStats.armorPenetration ?? 0,
+      firstHitBlocked: activeAbilitiesEnemy.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(variationEnemy, activeTechnologiesEnemy),
       chargeArmorType: variationEnemy.baseId === 'earls-guard' ? 'ranged' as const : undefined,
       secondaryWeapons: (() => {
@@ -377,6 +379,7 @@ const Sandbox = () => {
       } : undefined,
       healingRate: modifiedAllyStats.healingRate ?? 0,
       armorPenetration: modifiedAllyStats.armorPenetration ?? 0,
+      firstHitBlocked: activeAbilitiesAlly.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(unit1, activeTechnologiesAlly),
       chargeArmorType: unit1.id === 'earls-guard' ? 'ranged' as const : undefined,
       secondaryWeapons: (() => {
@@ -440,6 +443,7 @@ const Sandbox = () => {
       } : undefined,
       healingRate: modifiedEnemyStats.healingRate ?? 0,
       armorPenetration: modifiedEnemyStats.armorPenetration ?? 0,
+      firstHitBlocked: activeAbilitiesEnemy.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(unit2, activeTechnologiesEnemy),
       chargeArmorType: unit2.id === 'earls-guard' ? 'ranged' as const : undefined,
       secondaryWeapons: (() => {
@@ -1034,6 +1038,7 @@ const Sandbox = () => {
                       abilityCounters={abilityCountersAlly}
                       onIncrement={incrementAbilityAlly}
                       onDecrement={decrementAbilityAlly}
+                      unitId={variationAlly?.baseId ?? unit1?.id}
                     />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -1126,6 +1131,7 @@ const Sandbox = () => {
                       abilityCounters={abilityCountersEnemy}
                       onIncrement={incrementAbilityEnemy}
                       onDecrement={decrementAbilityEnemy}
+                      unitId={variationEnemy?.baseId ?? unit2?.id}
                     />
                   </div>
                 </div>
@@ -1287,6 +1293,7 @@ const Sandbox = () => {
                           abilityCounters={abilityCountersAlly}
                           onIncrement={incrementAbilityAlly}
                           onDecrement={decrementAbilityAlly}
+                          unitId={variationAlly?.baseId ?? unit1?.id}
                         />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1346,6 +1353,7 @@ const Sandbox = () => {
                           abilityCounters={abilityCountersEnemy}
                           onIncrement={incrementAbilityEnemy}
                           onDecrement={decrementAbilityEnemy}
+                          unitId={variationEnemy?.baseId ?? unit2?.id}
                         />
                       </div>
                     </div>

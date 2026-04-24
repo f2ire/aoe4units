@@ -128,6 +128,7 @@ export function useUnitSlot() {
   // Ability dependencies: a dependent ability can only be active when its required ability is active
   const ABILITY_DEPENDENCIES: Record<string, string> = {
     'ability-royal-knight-charge-damage': 'charge-attack',
+    'ability-nehan': 'ability-buddhist-conversion'
   };
 
   // Tech-gated abilities: a dependent ability can only be active when the required tech is also active
@@ -339,7 +340,7 @@ export function useUnitSlot() {
     if (!unit) return [];
     const all = getAbilitiesForUnit(effectiveClasses, selectedCiv, selectedAge, unit.id);
     // Knight types without charge attack
-    let filtered = (unit.id === 'desert-raider' || unit.id === 'cataphract' || unit.id == "camel-rider" || unit.id == "black-rider")
+    let filtered = (unit.id === 'desert-raider' || unit.id === 'cataphract' || unit.id == "camel-rider" || unit.id == "black-rider" || unit.id === 'shinobi')
       ? all.filter(a => a.id !== 'charge-attack')
       : all;
     // FEC ability unit restrictions: only show to allowed unit IDs when playing as Byzantine
@@ -378,7 +379,8 @@ export function useUnitSlot() {
       const swapGroup = WEAPON_SWAP_GROUPS.find(g => g.includes(defaultAbility)) || ([] as readonly string[]);
       const alwaysDefaults = abilities
         .filter(a => (a.active === 'always' || a.variations?.some((v: AbilityVariation) => v.active === 'always'))
-          && !(a.id in ABILITY_DEPENDENCIES)) // skip abilities with unmet dependencies
+          && !(a.id in ABILITY_DEPENDENCIES)
+          && (!a.activeForIds || a.activeForIds.includes(unit.id) || a.activeForIds.includes((unit as any).baseId)))
         .map(a => a.id);
       setActiveAbilities(prev => {
         if (!swapGroup.some(id => prev.has(id))) {
@@ -395,7 +397,8 @@ export function useUnitSlot() {
 
     const defaults = abilities
       .filter(a => (a.active === 'always' || a.variations?.some((v: AbilityVariation) => v.active === 'always'))
-        && !(a.id in ABILITY_DEPENDENCIES)) // skip abilities with unmet dependencies
+        && !(a.id in ABILITY_DEPENDENCIES)
+        && (!a.activeForIds || a.activeForIds.includes(unit.id) || a.activeForIds.includes((unit as any).baseId)))
       .map(a => a.id);
     if (defaults.length === 0) return;
     setActiveAbilities(prev => {

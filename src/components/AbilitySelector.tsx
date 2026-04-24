@@ -145,7 +145,8 @@ export const AbilitySelector = ({
     if (ability.counterMax !== undefined) return renderCounterAbilityButton(ability);
     const isActive = activeAbilities.has(ability.id);
     const isLocked = lockedAbilities?.has(ability.id) ?? false;
-    const isDefaultAlways = (hasActiveProperty(ability) && ability.active === 'always') || ability.variations?.some((v: AbilityVariation) => v.active === 'always');
+    const unitMatchesActiveForIds = !ability.activeForIds || (unitId != null && ability.activeForIds.includes(unitId));
+    const isDefaultAlways = unitMatchesActiveForIds && ((hasActiveProperty(ability) && ability.active === 'always') || ability.variations?.some((v: AbilityVariation) => v.active === 'always'));
     const iconPath = ability.icon;
     const isForeignEngineering = selectedCiv === 'by' && foreignEngineeringAbilityIds.has(ability.id);
     const patch = abilityPatches.find(p => p.id === ability.id);

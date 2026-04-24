@@ -529,6 +529,112 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
 
   //_________
   //
+  // JAPANESE
+  //
+  //_________
+
+  {
+    id: 'shinobi',
+    reason: 'Only age-2 variation in raw data. upgrade-shinobi-3/4 scaling techs (×1.15 per age) baked into age-3 and age-4 variations. Techs excluded via techUnitExclusions.',
+    after: (unit: any) => {
+      const base = unit.variations[0];
+      const makeVariation = (age: number, hp: number, wakizashiDmg: number, torchDmg: number) => ({
+        ...base,
+        age,
+        id: `shinobi-${age}`,
+        hitpoints: hp,
+        weapons: base.weapons.map((w: any, i: number) => i === 0
+          ? { ...w, damage: wakizashiDmg }
+          : i === 1 ? { ...w, damage: torchDmg } : w
+        ),
+      });
+      return {
+        ...unit,
+        variations: [
+          base,
+          makeVariation(3, 92, 23, 12),
+          makeVariation(4, 106, 26, 13),
+        ],
+      };
+    },
+  },
+
+  {
+    id: 'katana-bannerman',
+    reason: 'Raw data is a placeholder with no stats. Adding age-1/3/4 variations per in-game.',
+    after: (unit: any) => {
+      const base = unit.variations[0];
+      const makeVariation = (age: number, hp: number, swordDmg: number, meleeArmor: number, rangedArmor: number) => ({
+        ...base,
+        age,
+        id: `katana-bannerman-${age}`,
+        hitpoints: hp,
+        weapons: base.weapons.map((w: any, i: number) => i === 0 ? { ...w, damage: swordDmg } : w),
+        armor: [{ type: 'melee', value: meleeArmor }, { type: 'ranged', value: rangedArmor }],
+      });
+      return {
+        ...unit,
+        variations: [
+          base,
+          makeVariation(1, 155, 8, 3, 3),
+          makeVariation(3, 180, 10, 4, 4),
+          makeVariation(4, 215, 12, 5, 6),
+        ],
+      };
+    },
+  },
+
+  {
+    id: 'yumi-bannerman',
+    reason: 'Raw data is a placeholder with no stats. Adding age -3/4 variations per in-game.',
+    after: (unit: any) => {
+      const base = unit.variations[0];
+      const makeVariation = (age: number, hp: number, bowDmg: number, meleeArmor: number, rangedArmor: number) => ({
+        ...base,
+        age,
+        id: `yumi-bannerman-${age}`,
+        hitpoints: hp,
+        weapons: base.weapons.map((w: any, i: number) => i === 0 ? { ...w, damage: bowDmg } : w),
+        armor: [{ type: 'melee', value: meleeArmor }, { type: 'ranged', value: rangedArmor }],
+      });
+      return {
+        ...unit,
+        variations: [
+          base,
+          makeVariation(3, 170, 7, 2, 3),
+          makeVariation(4, 205, 8, 2, 3),
+        ],
+      };
+    },
+  },
+
+  {
+    id: 'uma-bannerman',
+    reason: 'Raw data is a placeholder with no stats. Adding age -3/4 variations per in-game.',
+    after: (unit: any) => {
+      const base = unit.variations[0];
+      const makeVariation = (age: number, hp: number, swordDmg: number, meleeArmor: number, rangedArmor: number) => ({
+        ...base,
+        age,
+        id: `yumi-bannerman-${age}`,
+        hitpoints: hp,
+        weapons: base.weapons.map((w: any, i: number) => i === 0 ? { ...w, damage: swordDmg } : w),
+        armor: [{ type: 'melee', value: meleeArmor }, { type: 'ranged', value: rangedArmor }],
+      });
+      return {
+        ...unit,
+        variations: [
+          base,
+          makeVariation(3, 270, 19, 4, 5),
+          makeVariation(4, 325, 24, 4, 5),
+        ],
+      };
+    },
+  },
+
+
+  //_________
+  //
   // MONGOLS
   //
   //_________

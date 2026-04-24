@@ -1146,6 +1146,111 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   },
   //___________
   //
+  // JAPANESE
+  //
+  //___________
+
+  {
+    id: 'upgrade-shinobi-3',
+    reason: 'Castle Age Shinobi scaling stats baked into the age-3 variation of shinobi (units.ts patch). Tech excluded so age selection drives the correct stats.',
+    excludedUnits: ['shinobi'],
+  },
+  {
+    id: 'upgrade-shinobi-4',
+    reason: 'Imperial Age Shinobi scaling stats baked into the age-4 variation of shinobi (units.ts patch). Tech excluded so age selection drives the correct stats.',
+    excludedUnits: ['shinobi'],
+  },
+
+  {
+    id: 'copper-plating',
+    reason: 'Raw uses multiply 1.02 (wrong). Corrected to change +2 for fire and ranged armor on ships.',
+    update: {
+      effects: [
+        {
+          property: 'fireArmor',
+          select: { class: [['ship'], ['warship']] },
+          effect: 'change',
+          value: 2,
+          type: 'passive',
+        },
+        {
+          property: 'rangedArmor',
+          select: { class: [['ship'], ['warship']] },
+          effect: 'change',
+          value: 2,
+          type: 'passive',
+        },
+      ],
+    },
+  },
+
+  {
+    id: 'odachi',
+    reason: 'Raw effect type is passive (flat +4 melee attack). Corrected to bonus vs infantry only. katana-bannerman excluded.',
+    update: {
+      effects: [{
+        property: 'meleeAttack',
+        select: { id: ['samurai'] },
+        effect: 'change',
+        value: 4,
+        type: 'bonus',
+        target: { class: [['infantry']] },
+      }],
+    },
+    excludedUnits: ['katana-bannerman'],
+  },
+
+  {
+    id: 'do-maru-armor',
+    reason: 'Effect changed in techAbilityInteractions.',
+    update: {
+      effects: [
+        { property: 'moveSpeed', select: { id: ['mounted-samurai'] }, effect: 'multiply', value: 1, type: 'ability' },
+      ],
+    },
+  },
+
+  {
+    id: 'kabura-ya-whistling-arrow',
+    reason: 'No UI value, covered by ability.',
+    after: (tech) => ({
+      ...tech,
+      effects: [],
+      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
+    })
+  },
+
+  {
+    id: 'daimyo-manor',
+    reason: 'No UI value, covered by ability.',
+    after: (tech) => ({
+      ...tech,
+      effects: [],
+      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
+    })
+  },
+
+  {
+    id: 'daimyo-palace',
+    reason: 'No UI value, covered by ability.',
+    after: (tech) => ({
+      ...tech,
+      effects: [],
+      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
+    })
+  },
+
+  {
+    id: 'shogunate-castle',
+    reason: 'No UI value, covered by ability.',
+    after: (tech) => ({
+      ...tech,
+      effects: [],
+      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
+    })
+  },
+  //___________
+  //
   // MALIANS
   //
   //___________
