@@ -329,6 +329,21 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
   //_________
 
   {
+    id: 'galleass',
+    reason: 'Raw weapon type is "ranged" but the Bombard fires siege/gunpowder projectiles. Corrected to "siege" so armor and damage calculations apply correctly.',
+    after: (unit: unknown) => {
+      const u = unit as any;
+      return {
+        ...u,
+        variations: u.variations.map((v: any) => ({
+          ...v,
+          weapons: v.weapons.map((w: any) => ({ ...w, type: 'siege' })),
+        })),
+      };
+    },
+  },
+
+  {
     id: 'royal-cannon',
     reason: 'Add mercenary_byz class so the unit appears in the Byzantine mercenary category. Scale all damage sources ×1.3 to match in-game values.',
     after: (unit: unknown) => {
@@ -659,6 +674,83 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
     },
   },
 
+
+  // Jeanne d'Arc — stat corrections
+  {
+    id: 'jeanne-darc-hunter',
+    reason: 'Raw JSON has Bow damage 5 and range 5. Corrected to damage 8, range 8 per in-game stats.',
+    after: (unit: any) => ({
+      ...unit,
+      variations: unit.variations.map((v: any) => ({
+        ...v,
+        weapons: v.weapons.map((w: any) =>
+          w.type === 'ranged' ? { ...w, damage: 8, range: { ...w.range, max: 8 } } : w
+        ),
+      })),
+    }),
+  },
+
+  {
+    id: 'jeanne-darc-markswoman',
+    reason: 'Handcannon fires through armor (siege damage). Changing weapon type ranged → siege so shouldIgnoreArmor fires and siegeAttack stat is used, preventing stacking with ranged-only buffs like steeled-arrow.',
+    after: (unit: any) => ({
+      ...unit,
+      variations: unit.variations.map((v: any) => ({
+        ...v,
+        weapons: v.weapons.map((w: any) =>
+          w.name === 'Handcannon' ? { ...w, type: 'siege' } : w
+        ),
+      })),
+    }),
+  },
+
+  // Jeanne d'Arc — ranged resistance (absent from raw data)
+  // Lv3 forms: 45% ranged resistance
+  {
+    id: 'jeanne-darc-knight',
+    reason: 'Jeanne Lv3 forms have 45% ranged resistance per in-game stats.',
+    after: (unit: any) => ({
+      ...unit,
+      variations: unit.variations.map((v: any) => ({
+        ...v,
+        resistance: [...(v.resistance || []), { type: 'ranged', value: 45 }],
+      })),
+    }),
+  },
+  {
+    id: 'jeanne-darc-mounted-archer',
+    reason: 'Jeanne Lv3 forms have 45% ranged resistance per in-game stats.',
+    after: (unit: any) => ({
+      ...unit,
+      variations: unit.variations.map((v: any) => ({
+        ...v,
+        resistance: [...(v.resistance || []), { type: 'ranged', value: 45 }],
+      })),
+    }),
+  },
+  // Lv4 forms: 60% ranged resistance
+  {
+    id: 'jeanne-darc-blast-cannon',
+    reason: 'Jeanne Lv4 forms have 60% ranged resistance per in-game stats.',
+    after: (unit: any) => ({
+      ...unit,
+      variations: unit.variations.map((v: any) => ({
+        ...v,
+        resistance: [...(v.resistance || []), { type: 'ranged', value: 60 }],
+      })),
+    }),
+  },
+  {
+    id: 'jeanne-darc-markswoman',
+    reason: 'Jeanne Lv4 forms have 60% ranged resistance per in-game stats.',
+    after: (unit: any) => ({
+      ...unit,
+      variations: unit.variations.map((v: any) => ({
+        ...v,
+        resistance: [...(v.resistance || []), { type: 'ranged', value: 60 }],
+      })),
+    }),
+  },
 
   // Lord of Lancaster ships cost 10% less (matches English civ passive baked into en costs in raw data)
   ...(['galley', 'hulk', 'carrack', 'demolition-ship', 'transport-ship', 'fishing-boat'] as const).map(id => ({

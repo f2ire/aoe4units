@@ -479,7 +479,7 @@ export const UnitCard = ({
                 </span>
               </div>
             )}
-            {productionTime && (
+            {!!productionTime && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Production Time</span>
                 <span className={cn('flex items-center gap-1', getComparisonColor(productionTime, compareProductionTime, false).color)}>
@@ -777,11 +777,11 @@ export const UnitCard = ({
                           <span>{versusMetrics.multiplier}× (cost {versusMetrics.totalCost})</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Enemy units</span>
+                          <span className="text-muted-foreground">Opponent units</span>
                           <span>{versusMetrics.opponentMultiplier}×</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Total enemy HP</span>
+                          <span className="text-muted-foreground">Total opponent HP</span>
                           <span>{displayData.hitpoints}×{versusMetrics.opponentMultiplier} = {defenderTotalHp}</span>
                         </div>
                         <div className="flex justify-between">

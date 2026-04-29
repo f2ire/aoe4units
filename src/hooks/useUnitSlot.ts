@@ -20,6 +20,7 @@ export const ABILITY_UPGRADE_GROUPS: readonly (readonly string[])[] = [
 
 export function categorizeUnit(unit: AoE4Unit, selectedCiv?: string): string {
   const classes = unit.classes.map(c => c.toLowerCase());
+  if (classes.includes('jeanne_d_arc')) return 'jeanne';
   if (classes.includes('worker_elephant')) return 'other';
   if (classes.includes('worker')) return 'other'; // trade/support units (e.g. atabeg)
   if (classes.includes('mercenary_byz') && selectedCiv === 'by') return 'mercenary';
@@ -34,6 +35,7 @@ export function categorizeUnit(unit: AoE4Unit, selectedCiv?: string): string {
 }
 
 const DEFAULT_OPEN_CATEGORIES: Record<string, boolean> = {
+  jeanne: true,
   melee_infantry: true,
   ranged: true,
   cavalry: true,
@@ -43,6 +45,7 @@ const DEFAULT_OPEN_CATEGORIES: Record<string, boolean> = {
   other: true,
   mercenary: false,
 };
+
 
 export function useUnitSlot() {
   const [unit, setUnitInternal] = useState<AoE4Unit | null>(null);
@@ -340,7 +343,16 @@ export function useUnitSlot() {
     if (!unit) return [];
     const all = getAbilitiesForUnit(effectiveClasses, selectedCiv, selectedAge, unit.id);
     // Knight types without charge attack
-    let filtered = (unit.id === 'desert-raider' || unit.id === 'cataphract' || unit.id == "camel-rider" || unit.id == "black-rider" || unit.id === 'shinobi')
+    let filtered = (
+      unit.id === 'desert-raider' ||
+      unit.id === 'cataphract' ||
+      unit.id == "camel-rider" ||
+      unit.id == "black-rider" ||
+      unit.id === 'shinobi' ||
+      unit.id === 'jeanne-darc-markswoman' ||
+      unit.id === 'jeanne-darc-mounted-archer' ||
+      unit.id === 'jeanne-darc-blast-cannon'
+    )
       ? all.filter(a => a.id !== 'charge-attack')
       : all;
     // FEC ability unit restrictions: only show to allowed unit IDs when playing as Byzantine
@@ -456,7 +468,7 @@ export function useUnitSlot() {
   const modifiedStats = useMemo(() => {
     const data = effectiveVariation || unit;
     if (!data) return {
-      hitpoints: 0, meleeAttack: 0, rangedAttack: 0,
+      hitpoints: 0, meleeAttack: 0, rangedAttack: 0, siegeAttack: 0,
       meleeArmor: 0, rangedArmor: 0, moveSpeed: 0, attackSpeed: 0, bonusDamage: [], rangedResistance: 0, meleeResistance: 0,
     };
 
@@ -464,9 +476,10 @@ export function useUnitSlot() {
     const baseStats: UnitStats = {
       hitpoints: data.hitpoints,
       meleeAttack: weapon?.type === 'melee' ? (weapon.damage || 0) : 0,
-      rangedAttack: (weapon?.type === 'ranged' || weapon?.type === 'siege')
+      rangedAttack: weapon?.type === 'ranged'
         ? (weapon.damage || 0)
         : ((data as any).secondaryWeapons?.[0]?.damage || 0), // eslint-disable-line @typescript-eslint/no-explicit-any
+      siegeAttack: weapon?.type === 'siege' ? (weapon.damage || 0) : 0,
       meleeArmor: getArmorValue(data, "melee"),
       rangedArmor: getArmorValue(data, "ranged"),
       moveSpeed: 'movement' in data ? (data as { movement?: { speed: number } }).movement?.speed || 0 : 0,
@@ -507,6 +520,15 @@ export function useUnitSlot() {
         result = interaction.apply(result);
       }
     }
+
+    if (
+      activeAbilities.has('ability-royal-knight-charge-damage') &&
+      activeAbilities.has('charge-attack') &&
+      (unit?.id === 'royal-knight' || unit?.id === 'jeanne-darc-knight')
+    ) {
+      result = { ...result, postChargeMeleeBonus: activeTechnologies.has('cantled-saddles') ? 10 : 3 };
+    }
+
     // HRE infantry passive: +10% move speed (formerly a technology, now a baked-in passive not present in data)
     // Age I: +5% only. Also applies to landsknecht when used as Byzantine mercenary.
     const isHREInfantry = selectedCiv === 'hr' && effectiveClasses.some(c => c === 'infantry' || c.includes('infantry'));
@@ -545,6 +567,96 @@ export function useUnitSlot() {
 
     return result;
   }, [unit, variation, effectiveClasses, activeTechnologies, activeAbilities, selectedCiv, selectedAge, abilities, abilityCounters]);
+
+  const activeTimedDuration = useMemo((): number | undefined => {
+    let minDuration: number | undefined = undefined;
+    for (const abilityId of activeAbilities) {
+      const v = getAbilityVariation(abilityId, selectedCiv, selectedAge);
+      for (const effect of v?.effects || []) {
+        if ('duration' in effect && typeof (effect as any).duration === 'number') { // eslint-disable-line @typescript-eslint/no-explicit-any
+          const d = (effect as any).duration as number; // eslint-disable-line @typescript-eslint/no-explicit-any
+          if (minDuration === undefined || d < minDuration) minDuration = d;
+        }
+      }
+    }
+    return minDuration;
+  }, [activeAbilities, selectedCiv, selectedAge]);
+
+  const modifiedStatsNoTimer = useMemo(() => {
+    const hasTimedEffects = [...activeAbilities].some(id => {
+      const v = getAbilityVariation(id, selectedCiv, selectedAge);
+      return v?.effects?.some((e: any) => 'duration' in e); // eslint-disable-line @typescript-eslint/no-explicit-any
+    });
+    if (!hasTimedEffects) return modifiedStats;
+    const data = effectiveVariation || unit;
+    if (!data) return modifiedStats;
+    const weapon = getPrimaryWeapon(data);
+    const baseStats: UnitStats = {
+      hitpoints: data.hitpoints,
+      meleeAttack: weapon?.type === 'melee' ? (weapon.damage || 0) : 0,
+      rangedAttack: weapon?.type === 'ranged'
+        ? (weapon.damage || 0)
+        : ((data as any).secondaryWeapons?.[0]?.damage || 0), // eslint-disable-line @typescript-eslint/no-explicit-any
+      siegeAttack: weapon?.type === 'siege' ? (weapon.damage || 0) : 0,
+      meleeArmor: getArmorValue(data, "melee"),
+      rangedArmor: getArmorValue(data, "ranged"),
+      moveSpeed: 'movement' in data ? (data as { movement?: { speed: number } }).movement?.speed || 0 : 0,
+      attackSpeed: weapon?.speed || 0,
+      maxRange: weapon?.range?.max || 0,
+      burst: weapon?.burst?.count || 1,
+      bonusDamage: (weapon?.modifiers || []).map((m: any) => ({ ...m, fromWeapon: true })), // eslint-disable-line @typescript-eslint/no-explicit-any
+      rangedResistance: getResistanceValue(data, 'ranged'),
+      meleeResistance: getResistanceValue(data, 'melee'),
+      healingRate: 0,
+      armorPenetration: 0,
+    };
+    const techVariations = getActiveTechnologyVariationsWithTiers(activeTechnologies, selectedCiv, selectedAge);
+    const counterAbilityIds = new Set(abilities.filter(a => a.counterMax !== undefined).map(a => a.id));
+    const activeAbilitiesFiltered = new Set([...activeAbilities].filter(id => !counterAbilityIds.has(id)));
+    const abilityVariations = getActiveAbilityVariations(activeAbilitiesFiltered, selectedCiv, selectedAge)
+      .map(v => ({ ...v, effects: (v.effects || []).filter((e: any) => !('duration' in e)) })); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const BASE_MODIFYING_ABILITY_IDS = new Set(['ability-astronomical-clocktower']);
+    const baseAbilityVariations = abilityVariations.filter(v => BASE_MODIFYING_ABILITY_IDS.has(v.baseId));
+    const regularAbilityVariations = abilityVariations.filter(v => !BASE_MODIFYING_ABILITY_IDS.has(v.baseId));
+    const withTechs = applyTechnologyEffects(baseStats, effectiveClasses, techVariations, unit?.id);
+    const withAbilities = applyTechnologyEffects(withTechs, effectiveClasses, regularAbilityVariations, unit?.id);
+    let result = applyTechnologyEffects(withAbilities, effectiveClasses, baseAbilityVariations, unit?.id);
+    for (const interaction of techAbilityInteractions) {
+      if (activeTechnologies.has(interaction.requiredTech) && activeAbilities.has(interaction.requiredAbility) && (!interaction.unitId || unit?.id === interaction.unitId)) {
+        const abilityVar = getAbilityVariation(interaction.requiredAbility, selectedCiv, selectedAge);
+        if (abilityVar?.effects?.some((e: any) => 'duration' in e)) continue; // eslint-disable-line @typescript-eslint/no-explicit-any
+        result = interaction.apply(result);
+      }
+    }
+    const isHREInfantry = selectedCiv === 'hr' && effectiveClasses.some(c => c === 'infantry' || c.includes('infantry'));
+    const isLandsknecht = unit?.id === 'landsknecht' && selectedCiv === 'by';
+    if (isHREInfantry || isLandsknecht) {
+      result = { ...result, moveSpeed: result.moveSpeed * (selectedAge === 1 ? 1.05 : 1.1) };
+    }
+    if (result.moveSpeed > 2) result = { ...result, moveSpeed: 2 };
+    if (activeAbilities.has('ability-arrow-volley')) {
+      result = { ...result, attackSpeed: 0.6 };
+    }
+    for (const ability of abilities) {
+      if (ability.counterMax === undefined || !activeAbilities.has(ability.id)) continue;
+      const count = abilityCounters.get(ability.id) ?? 0;
+      if (count === 0) continue;
+      const step = (unit?.id ? ability.unitCounterStep?.[unit.id] : undefined) ?? ability.counterStep ?? 0.05;
+      const effectiveValue = ability.counterDirection === 'increase'
+        ? 1 + count * step
+        : ability.counterDirection === 'additive'
+          ? count * step
+          : 1 / (1 + count * step);
+      const counterVariation = getAbilityVariation(ability.id, selectedCiv, ability.minAge);
+      if (!counterVariation) continue;
+      const syntheticVariation = {
+        ...counterVariation,
+        effects: (counterVariation.effects || []).map((e: any) => ({ ...e, value: effectiveValue })), // eslint-disable-line @typescript-eslint/no-explicit-any
+      };
+      result = applyTechnologyEffects(result, effectiveClasses, [syntheticVariation], unit?.id);
+    }
+    return result;
+  }, [modifiedStats, activeAbilities, unit, effectiveVariation, effectiveClasses, activeTechnologies, selectedCiv, selectedAge, abilities, abilityCounters]);
 
   const secondaryWeapons = useMemo((): UnifiedWeapon[] => {
     const weapons: UnifiedWeapon[] = [];
@@ -590,6 +702,8 @@ export function useUnitSlot() {
     techs,
     abilities,
     modifiedStats,
+    modifiedStatsNoTimer,
+    activeTimedDuration,
     toggleTechnology,
     toggleAbility,
     incrementAbility,

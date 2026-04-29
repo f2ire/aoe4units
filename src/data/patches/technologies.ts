@@ -210,10 +210,15 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     }),
   },
 
+  // Bloomery melee upgrade family — jeanne-darc-mounted-archer is ranged-only, no melee upgrades
+  { id: 'bloomery', reason: "jeanne-darc-mounted-archer is a ranged unit, melee upgrades don't apply.", excludedUnits: ['jeanne-darc-mounted-archer'] },
+  { id: 'decarbonization', reason: "jeanne-darc-mounted-archer is a ranged unit, melee upgrades don't apply.", excludedUnits: ['jeanne-darc-mounted-archer'] },
+  { id: 'damascus-steel', reason: "jeanne-darc-mounted-archer is a ranged unit, melee upgrades don't apply.", excludedUnits: ['jeanne-darc-mounted-archer'] },
+
   {
     id: 'steeled-arrow',
     reason: "Gunpowder units don't shot arrow arrows.",
-    excludedUnits: ['sultans-elite-tower-elephant', 'black-rider'],
+    excludedUnits: ['sultans-elite-tower-elephant', 'black-rider', 'jeanne-darc-markswoman'],
     after: (tech: any) => ({
       ...tech,
       effects: [...(tech.effects || []), { property: 'rangedAttack', select: { id: ['earls-guard'] }, effect: 'change', value: 1, type: 'passive' }],
@@ -222,7 +227,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: 'balanced-projectiles',
     reason: "Gunpowder units don't shot arrow arrows.",
-    excludedUnits: ['sultans-elite-tower-elephant', 'black-rider'],
+    excludedUnits: ['sultans-elite-tower-elephant', 'black-rider', 'jeanne-darc-markswoman'],
     after: (tech: any) => ({
       ...tech,
       effects: [...(tech.effects || []), { property: 'rangedAttack', select: { id: ['earls-guard'] }, effect: 'change', value: 1, type: 'passive' }],
@@ -231,7 +236,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: 'platecutter-point',
     reason: "Gunpowder units don't shot arrow arrows.",
-    excludedUnits: ['sultans-elite-tower-elephant', 'black-rider'],
+    excludedUnits: ['sultans-elite-tower-elephant', 'black-rider', 'jeanne-darc-markswoman'],
     after: (tech: any) => ({
       ...tech,
       effects: [...(tech.effects || []), { property: 'rangedAttack', select: { id: ['earls-guard'] }, effect: 'change', value: 1, type: 'passive' }],
@@ -290,7 +295,6 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     foreignEngineering: true,
     uiTooltip: 'Available only with Foreign Engineering Company',
   },
-
 
   {
     id: 'ability-quick-strike',
@@ -450,6 +454,17 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         }
       }
     ]
+  },
+
+  {
+    id: 'infantry-support',
+    reason: 'Raw effects empty. Adds +3 melee and +3 ranged armor to camels.',
+    update: {
+      effects: [
+        { property: 'meleeArmor', select: { class: [['camel']] }, effect: 'change', value: 3, type: 'passive' },
+        { property: 'rangedArmor', select: { class: [['camel']] }, effect: 'change', value: 3, type: 'passive' },
+      ]
+    }
   },
 
   //___________
@@ -750,6 +765,20 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   //___________
 
   {
+    id: 'long-guns',
+    reason: 'Raw uses rangedAttack but naval cannons deal siege damage — corrected to siegeAttack.',
+    update: {
+      effects: [{
+        property: 'siegeAttack',
+        select: { class: [['warship']], id: ['galleass'] },
+        effect: 'multiply',
+        value: 1.15,
+        type: 'passive',
+      }],
+    },
+  },
+
+  {
     id: 'enlistment-incentives',
     reason: 'Raw effect is property:unknown type:influence — no-op. Effect moved to techAbilityInteractions (requires ability-keep-influence to apply). Value 1.0 keeps the tech visible in isCombatTechnology.',
     update: {
@@ -802,29 +831,13 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   },
 
   {
-    id: "crossbow-stirrups",
-    reason: "Available for Byzantines after building Foreign Engineering Company.",
-    after: (tech) => ({
-      ...tech,
-      civs: [...tech.civs, 'by'],
-      variations: tech.variations.map(v => ({
-        ...v,
-        civs: [...(v.civs || []), "by"]
-      }))
-    }),
-    foreignEngineering: true,
-    foreignEngineeringUnits: ['arbaletrier'],
-    uiTooltip: "Available only with Foreign Engineering Company",
-  },
-
-  {
     id: "cantled-saddles",
     reason: "Available for Byzantines after building Foreign Engineering Company. Raw +10 bonus vs infantry/cavalry zeroed via value:0 (keeps tech visible in combatTechnologies) — conditional effect handled via techAbilityInteractions (requires charge-attack).",
     update: {
       effects: [
         {
           property: 'meleeAttack',
-          select: { id: ['royal-knight'] },
+          select: { id: ['royal-knight', 'jeanne-darc-knight'] },
           effect: 'change',
           value: 0,
           type: 'bonus'
@@ -885,6 +898,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     id: 'khan-and-torguuds',
     reason: 'Raw hitpoints effect has no select (applies to all). Patched to target batu-khan and torguud. Cost reduction (-20%) missing from raw data — added.',
     update: {
+      unique: true,
       effects: [
         { property: 'hitpoints', select: { id: ['batu-khan', 'torguud'] }, effect: 'change', value: 30, type: 'passive' },
         { property: 'costReduction', select: { id: ['batu-khan', 'torguud'] }, effect: 'multiply', value: 0.8, type: 'passive' },
@@ -896,6 +910,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     id: 'stone-armies',
     reason: 'Raw effects empty. Torguud: −20% stone cost. Rus Tribute: the age-4 variation stats are granted by this tech (age-4 variation removed from unit data). +30 HP, +4 melee attack, +5 vs cavalry bonus (3→8), +1 melee armor, +1 ranged armor.',
     update: {
+      unique: true,
       effects: [
         { property: 'stoneCostReduction', select: { id: ['torguud'] }, effect: 'multiply', value: 0.8, type: 'passive' },
         { property: 'hitpoints', select: { id: ['rus-tribute'] }, effect: 'change', value: 30, type: 'passive' },
@@ -947,9 +962,10 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     id: 'muscovy-yasak',
     reason: 'Raw effects empty. +2 ranged armor for heavy infantry and heavy cavalry.',
     update: {
+      unique: true,
       effects: [
         { property: 'rangedArmor', select: { class: [['heavy']] }, effect: 'change', value: 2, type: 'passive' },
-      ]
+      ],
     }
   },
 
@@ -1249,6 +1265,90 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
       variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
     })
   },
+  {
+    id: 'tawara',
+    reason: 'Raw effects empty. Villager move speed +7% (tier 1/3 of the Tawara/Takezaiku/Fudasashi line).',
+    update: {
+      effects: [{
+        property: 'moveSpeed',
+        select: { id: ['villager'] },
+        effect: 'multiply',
+        value: 1.07,
+        type: 'passive',
+      }],
+      displayClasses: ['Villager Speed Technology 1/3'],
+    },
+  },
+
+  {
+    id: 'takezaiku',
+    reason: 'Raw effects empty. Villager move speed +7% (tier 2/3 of the Tawara/Takezaiku/Fudasashi line). Selecting this tier also applies Tawara first.',
+    update: {
+      effects: [{
+        property: 'moveSpeed',
+        select: { id: ['villager'] },
+        effect: 'multiply',
+        value: 1.07,
+        type: 'passive',
+      }],
+      displayClasses: ['Villager Speed Technology 2/3'],
+    },
+  },
+
+  {
+    id: 'fudasashi',
+    reason: 'Raw effects empty. Villager move speed +7% (tier 3/3 of the Tawara/Takezaiku/Fudasashi line). Selecting this tier also applies Tawara and Takezaiku first.',
+    update: {
+      effects: [{
+        property: 'moveSpeed',
+        select: { id: ['villager'] },
+        effect: 'multiply',
+        value: 1.07,
+        type: 'passive',
+      }],
+      displayClasses: ['Villager Speed Technology 3/3'],
+    },
+  },
+
+  //_____________
+  //
+  // JEANNE D'ARC
+  //
+  //_____________
+
+
+  {
+    id: 'ordinance-company',
+    reason: 'Raw effects empty. Dummy costReduction (value 1.0) to stay visible in isCombatTechnology. Real effect in techAbilityInteractions (requires ability-consecrate active): resets foodCostMultiplier and applies costMultiplier ×0.75, effectively changing consecrate\'s food-only reduction to an all-cost reduction.',
+    update: {
+      effects: [
+        {
+          property: 'costReduction',
+          select: { id: ['annihilation_condition'] },
+          effect: 'multiply',
+          value: 1.0,
+          type: 'passive',
+        }
+      ]
+    }
+  },
+
+  {
+    id: 'companion-equipment',
+    reason: 'Raw data typo: meleeAttack effect targets "jeannes-companion" (does not exist) instead of "jeannes-champion". Fixed via after.',
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map((v: any) => ({
+        ...v,
+        effects: (v.effects || []).map((e: any) =>
+          e.select?.id?.includes('jeannes-companion')
+            ? { ...e, select: { ...e.select, id: e.select.id.map((id: string) => id === 'jeannes-companion' ? 'jeannes-champion' : id) } }
+            : e
+        ),
+      })),
+    }),
+  },
+
   //___________
   //
   // MALIANS

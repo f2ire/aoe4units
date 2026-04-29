@@ -22,11 +22,12 @@ export interface CombatEntity {
   healingRate?: number; // HP healed per hit the unit lands (e.g. Keshik: 3 HP/hit)
   armorPenetration?: number; // Enemy armor reduced by this amount on each hit (clamped ≥ 0)
   chargeBonusBurst?: number; // Burst count for first-hit bonus display (e.g. 2 daggers for Earl's Guard)
-  chargeArmorType?: 'ranged'; // If set, first-hit charge bonus uses ranged armor/resistance instead of primary weapon armor
+  chargeArmorType?: 'ranged' | 'none'; // 'ranged': charge uses ranged armor (dagger); 'none': charge ignores armor+resistance entirely (holy wrath)
   continuousMovement?: boolean; // unit can move throughout entire attack cycle (e.g. Mangudai)
   selfDestructs?: boolean; // unit self-destructs on first hit — if hitsToKill > 1, it can never kill
   secondaryWeapons?: UnifiedWeapon[]; // additional weapons fired simultaneously (e.g. thunderclap-bombs)
   firstHitBlocked?: boolean; // defender absorbs first attack completely (0 damage, charge also nullified)
+  postChargeMeleeBonus?: number; // melee attack bonus active from hit 2 onward only — subtracted from hit 1 (charge hit)
 }
 
 export interface VersusMetrics {
@@ -71,6 +72,7 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     selfDestructs: (source as any).selfDestructs ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
     secondaryWeapons: (source as any).secondaryWeapons ?? [], // eslint-disable-line @typescript-eslint/no-explicit-any
     firstHitBlocked: (source as any).firstHitBlocked ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
+    postChargeMeleeBonus: (source as any).postChargeMeleeBonus ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
   };
 }
 
@@ -152,6 +154,11 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
   if (!weapon) return { value: 1, base: 0, bonus: 0, armorApplied: 0, weapon }; // No weapon -> minimal
 
   const baseDamage = weapon.damage || 0;
+  // Post-charge buff (royal-knight/jeanne-darc-knight): only active from hit 2 onward — subtract it from the charge hit
+  const postChargeBonus = attacker.postChargeMeleeBonus ?? 0;
+  const effectiveBaseDamage = (isFirstAttack && chargeBonus > 0 && postChargeBonus > 0 && weapon.type === 'melee')
+    ? Math.max(0, baseDamage - postChargeBonus)
+    : baseDamage;
 
   // Number of projectiles (burst)
   const burstCount = weapon.burst?.count || 1;
@@ -238,14 +245,14 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
     }
   }
 
-  // If chargeArmorType === 'ranged', the charge bonus (e.g. dagger throw) is computed separately
-  // using ranged armor and ranged resistance instead of the primary weapon's armor type.
+  // chargeArmorType: 'ranged' → dagger path (ranged armor/resistance); 'none' → flat bonus ignoring all armor+resistance
   const isDaggerCharge = chargeBonus_applied > 0 && attacker.chargeArmorType === 'ranged';
-  const chargeInPrimary = isDaggerCharge ? 0 : chargeBonus_applied;
+  const isStrikeCharge = chargeBonus_applied > 0 && attacker.chargeArmorType === 'none';
+  const chargeInPrimary = (isDaggerCharge || isStrikeCharge) ? 0 : chargeBonus_applied;
 
-  // Damage per projectile: (baseDamage + bonus + chargeBonus - armor) * burst
+  // Damage per projectile: (effectiveBaseDamage + bonus + chargeBonus - armor) * burst
   // Armor is applied to each projectile individually
-  let damagePerProjectile = baseDamage + bonusDamage + chargeInPrimary - armorValue;
+  let damagePerProjectile = effectiveBaseDamage + bonusDamage + chargeInPrimary - armorValue;
 
   // Apply versus debuffs (e.g. Camel Unease)
   const debuffMultiplier = getVersusDebuffMultiplier(attacker.classes, defender.activeAbilities || []);
@@ -275,9 +282,12 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
     daggerExtra = perDaggerEff * daggerBurst * (rangedResPct !== 0 ? (1 - rangedResPct / 100) : 1);
   }
 
-  const totalDamage = totalPrimary + daggerExtra;
+  // Holy wrath (strike): flat bonus, no armor, no resistance
+  const strikeExtra = isStrikeCharge ? chargeBonus_applied : 0;
 
-  return { value: totalDamage, base: baseDamage * burstCount, bonus: (bonusDamage + chargeInPrimary) * burstCount, armorApplied: armorValue, weapon, debuffMultiplier: debuffMultiplier !== 1.0 ? debuffMultiplier : undefined, resistanceApplied };
+  const totalDamage = totalPrimary + daggerExtra + strikeExtra;
+
+  return { value: totalDamage, base: effectiveBaseDamage * burstCount, bonus: (bonusDamage + chargeInPrimary) * burstCount, armorApplied: armorValue, weapon, debuffMultiplier: debuffMultiplier !== 1.0 ? debuffMultiplier : undefined, resistanceApplied };
 }
 
 function round(value: number, decimals: number): number {
@@ -337,6 +347,10 @@ function applyKitingToMetrics(
   A: CombatEntity,
   B: CombatEntity,
   d0: number = START_DISTANCE,
+  AnoTimer?: CombatEntity,
+  timedDurationA?: number,
+  BnoTimer?: CombatEntity,
+  timedDurationB?: number,
 ): { adjustedA: VersusMetrics; adjustedB: VersusMetrics } {
   const A_isRanged = isRangedUnit(A);
   const B_isRanged = isRangedUnit(B);
@@ -442,7 +456,19 @@ function applyKitingToMetrics(
   }
 
   // ── Melee can catch ranged ────────────────────────────────────────────────
-  const t_approach = Math.max(0, d0 - rangeMax) / effectiveMeleeSpeed;
+  const meleeNoTimer = isAranged ? BnoTimer : AnoTimer;
+  const timedDurationMelee = isAranged ? timedDurationB : timedDurationA;
+  const d_approach = Math.max(0, d0 - rangeMax);
+  let t_approach: number;
+  if (meleeNoTimer && timedDurationMelee !== undefined && d_approach > 0) {
+    const normalMeleeSpeed = meleeNoTimer.moveSpeed;
+    const d_in_duration = effectiveMeleeSpeed * timedDurationMelee;
+    t_approach = (normalMeleeSpeed > 0 && d_in_duration < d_approach)
+      ? timedDurationMelee + (d_approach - d_in_duration) / normalMeleeSpeed
+      : d_approach / effectiveMeleeSpeed;
+  } else {
+    t_approach = d_approach / effectiveMeleeSpeed;
+  }
   const freeHits = Math.floor(t_approach / attackCycle);
   const d_kite_start = Math.min(d0, rangeMax); // distance at start of kiting
   const absDelta = Math.abs(delta);
@@ -504,7 +530,11 @@ function computeMetrics(
   chargeBonus: number = 0,
   attackerMultiplier: number = 1,
   defenderMultiplier: number = 1,
-  discreteTTK: boolean = false
+  discreteTTK: boolean = false,
+  attackerNoTimer?: CombatEntity,
+  timedDurationAttacker?: number,
+  defenderNoTimer?: CombatEntity,
+  timedDurationDefender?: number,
 ): VersusMetrics {
   const chargeWeapon = getChargeWeapon(attacker);
   const hasChargeWeapon = !!chargeWeapon && (attacker.activeAbilities?.includes('charge-attack') ?? false);
@@ -646,6 +676,53 @@ function computeMetrics(
     dps = null;
   }
 
+  // Phase-based duration correction: attacker ability expires before the fight ends.
+  // Phase 1 (0 → timedDurationAttacker): attacker uses full ability stats.
+  // Phase 2 (remainder): attacker uses base stats without the timed ability.
+  if (attackerNoTimer && timedDurationAttacker !== undefined && timeToKill !== null && timeToKill > timedDurationAttacker && !bugAttackSpeed && !attacker.selfDestructs) {
+    const noTimerData = computeEffectiveDamage(attackerNoTimer, defender, 0, false);
+    const noTimerDmgPerHit = noTimerData.value * attackerMultiplier;
+    const noTimerAttackSpeed = noTimerData.weapon?.speed ?? attackSpeed;
+    if (noTimerDmgPerHit > 0 && noTimerAttackSpeed > 0) {
+      const totalDefHP = defender.hitpoints * defenderMultiplier;
+      const hitsInDuration = Math.floor(timedDurationAttacker / attackSpeed);
+      const normalDmgPerHit = normalAttackData.value * attackerMultiplier;
+      const firstDmgPerHit = firstAttackData.value * attackerMultiplier;
+      // Hit 1 carries the charge bonus (includes holy wrath); remaining hits are normal
+      const dmgInDuration = hitsInDuration >= 1
+        ? firstDmgPerHit + (hitsInDuration - 1) * normalDmgPerHit
+        : 0;
+      if (dmgInDuration < totalDefHP) {
+        const remainingHP = totalDefHP - dmgInDuration;
+        const remainingHits = Math.ceil(remainingHP / noTimerDmgPerHit);
+        hitsToKill = hitsInDuration + remainingHits;
+        timeToKill = round(hitsInDuration * attackSpeed + remainingHits * noTimerAttackSpeed, 1);
+        dps = round((dmgInDuration + remainingHits * noTimerDmgPerHit) / timeToKill, 2);
+      }
+    }
+  }
+
+  // Phase-based duration correction: defender timed resistance/armor expires before the fight ends.
+  // Phase 1 (0 → timedDurationDefender): attacker hits defender with boosted stats (lower damage).
+  // Phase 2 (remainder): attacker hits defender without timed stats (higher damage).
+  if (defenderNoTimer && timedDurationDefender !== undefined && timeToKill !== null && timeToKill > timedDurationDefender && !bugAttackSpeed && !attacker.selfDestructs) {
+    const noTimerDefData = computeEffectiveDamage(attacker, defenderNoTimer, 0, false);
+    const noTimerDefDmgPerHit = noTimerDefData.value * attackerMultiplier;
+    const phase1DmgPerHit = normalAttackData.value * attackerMultiplier;
+    if (noTimerDefDmgPerHit > 0 && attackSpeed > 0 && noTimerDefDmgPerHit !== phase1DmgPerHit) {
+      const totalDefHP = defender.hitpoints * defenderMultiplier;
+      const hitsInDuration = Math.floor(timedDurationDefender / attackSpeed);
+      const dmgInDuration = hitsInDuration * phase1DmgPerHit;
+      if (dmgInDuration < totalDefHP) {
+        const remainingHP = totalDefHP - dmgInDuration;
+        const remainingHits = Math.ceil(remainingHP / noTimerDefDmgPerHit);
+        hitsToKill = hitsInDuration + remainingHits;
+        timeToKill = round((hitsInDuration + remainingHits) * attackSpeed, 1);
+        dps = round(totalDefHP / timeToKill, 2);
+      }
+    }
+  }
+
   // Special case: attacker cannot attack units (e.g. ram)
   if (normalAttackData.cannotAttack) {
     return {
@@ -665,7 +742,8 @@ function computeMetrics(
   const debuffText = normalAttackData.debuffMultiplier ? ` × ${normalAttackData.debuffMultiplier} (debuff)` : '';
   const isBleedUnit = attacker.classes.some(c => c.toLowerCase() === 'kipchak_archer');
   const isDaggerUnit = attacker.classes.some(c => c.toLowerCase() === 'lancaster_champion');
-  const chargeLabel = isBleedUnit ? 'Bleed' : isDaggerUnit ? 'Dagger' : 'Charge';
+  const isStrikeUnit = attacker.chargeArmorType === 'none';
+  const chargeLabel = isStrikeUnit ? 'Strike' : isBleedUnit ? 'Bleed' : isDaggerUnit ? 'Dagger' : 'Charge';
   const chargeBonusBurst = attacker.chargeBonusBurst ?? 1;
   const chargeBonusDisplay = chargeBonusBurst > 1
     ? `${Math.round(chargeBonus / chargeBonusBurst)}×${chargeBonusBurst}`
@@ -750,15 +828,21 @@ export function computeVersus(
   chargeBonusB: number = 0,
   allowKiting: boolean = false,
   startDistance: number = START_DISTANCE,
+  aNoTimer?: AoE4Unit | UnifiedVariation,
+  bNoTimer?: AoE4Unit | UnifiedVariation,
+  timedDurationA?: number,
+  timedDurationB?: number,
 ): VersusResult {
   const A = toCombatEntity(a, activeAbilitiesA);
   const B = toCombatEntity(b, activeAbilitiesB);
-  let metricsA = computeMetrics(A, B, chargeBonusA, 1, 1, true);
-  let metricsB = computeMetrics(B, A, chargeBonusB, 1, 1, true);
+  const AnoTimer = aNoTimer ? toCombatEntity(aNoTimer, activeAbilitiesA) : undefined;
+  const BnoTimer = bNoTimer ? toCombatEntity(bNoTimer, activeAbilitiesB) : undefined;
+  let metricsA = computeMetrics(A, B, chargeBonusA, 1, 1, true, AnoTimer, timedDurationA, BnoTimer, timedDurationB);
+  let metricsB = computeMetrics(B, A, chargeBonusB, 1, 1, true, BnoTimer, timedDurationB, AnoTimer, timedDurationA);
 
   // Apply movement / kiting adjustments (only when enabled)
   if (allowKiting) {
-    ({ adjustedA: metricsA, adjustedB: metricsB } = applyKitingToMetrics(metricsA, metricsB, A, B, startDistance));
+    ({ adjustedA: metricsA, adjustedB: metricsB } = applyKitingToMetrics(metricsA, metricsB, A, B, startDistance, AnoTimer, timedDurationA, BnoTimer, timedDurationB));
   }
 
   // Determine winner via TTK (lower wins), draw if within <=5%

@@ -23,9 +23,24 @@ export const techAbilityInteractions: TechAbilityInteraction[] = [
     apply: (stats) => ({ ...stats, meleeAttack: stats.meleeAttack + 7 }),
   },
   {
+    requiredTech: "cantled-saddles",
+    requiredAbility: "ability-royal-knight-charge-damage",
+    unitId: "jeanne-darc-knight",
+    apply: (stats) => ({ ...stats, meleeAttack: stats.meleeAttack + 7 }),
+  },
+  {
     requiredTech: 'enlistment-incentives',
     requiredAbility: 'ability-keep-influence',
     apply: (stats) => ({ ...stats, costMultiplier: (stats.costMultiplier ?? 1) * 0.95 }),
+  },
+  {
+    requiredTech: 'ordinance-company',
+    requiredAbility: 'ability-consecrate',
+    apply: (stats) => ({
+      ...stats,
+      foodCostMultiplier: 1.0,
+      costMultiplier: (stats.costMultiplier ?? 1) * 0.75,
+    }),
   },
 
   {
@@ -40,6 +55,8 @@ export const techAbilityInteractions: TechAbilityInteraction[] = [
 // ABBASID DYNASTY
 //
 //_________________
+
+const JD_FORM_IDS = ['jeanne-darc-peasant', 'jeanne-darc-woman-at-arms', 'jeanne-darc-hunter', 'jeanne-darc-knight', 'jeanne-darc-mounted-archer', 'jeanne-darc-blast-cannon', 'jeanne-darc-markswoman'];
 
 export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   {
@@ -194,7 +211,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
 
   {
     id: "ability-desert-raider-blade",
-    reason: 'Available for Byzantines after building Foreign Engineering Company. Duration is not yet considered.',
+    reason: 'Available for Byzantines after building Foreign Engineering Company.',
     after: (abilities) => ({
       ...abilities,
       civs: [...abilities.civs, 'by'],
@@ -207,7 +224,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
 
   {
     id: "ability-desert-raider-bow",
-    reason: 'Available for Byzantines after building Foreign Engineering Company. Duration is not yet considered.',
+    reason: 'Available for Byzantines after building Foreign Engineering Company.',
     after: (abilities) => ({
       ...abilities,
       civs: [...abilities.civs, 'by'],
@@ -233,24 +250,24 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
       variations: ability.variations.map((v: AbilityVariation) => ({
         ...v,
         effects: [
-          { property: 'moveSpeed', select: { id: ['limitanei'] }, effect: 'multiply', value: 0.75, type: 'ability' },
-          { property: 'attackSpeed', select: { id: ['limitanei'] }, effect: 'multiply', value: 1.25, type: 'ability' },
-          { property: 'rangedResistance', select: { id: ['limitanei'] }, effect: 'change', value: 30, type: 'ability' },
+          { property: 'moveSpeed', select: { id: ['limitanei'] }, effect: 'multiply', value: 0.75, type: 'ability', duration: 25 },
+          { property: 'attackSpeed', select: { id: ['limitanei'] }, effect: 'multiply', value: 1.25, type: 'ability', duration: 25 },
+          { property: 'rangedResistance', select: { id: ['limitanei'] }, effect: 'change', value: 30, type: 'ability', duration: 25 },
         ]
       }))
     })
   },
   {
     id: "ability-berserking",
-    reason: 'Raw value was +30 (wrong), correct value is +6.',
+    reason: 'Raw value was +30 (wrong), correct value is +6. Duration 30s (description).',
     after: (ability) => ({
       ...ability,
       variations: ability.variations.map(v => ({
         ...v,
         effects: [
-          { property: 'meleeAttack', select: { id: ["varangian-guard"] }, effect: 'change', value: 6, type: 'ability' },
-          { property: 'meleeArmor', select: { id: ["varangian-guard"] }, effect: 'change', value: -4, type: 'ability' },
-          { property: 'rangedArmor', select: { id: ["varangian-guard"] }, effect: 'change', value: -4, type: 'ability' },
+          { property: 'meleeAttack', select: { id: ["varangian-guard"] }, effect: 'change', value: 6, type: 'ability', duration: 30 },
+          { property: 'meleeArmor', select: { id: ["varangian-guard"] }, effect: 'change', value: -4, type: 'ability', duration: 30 },
+          { property: 'rangedArmor', select: { id: ["varangian-guard"] }, effect: 'change', value: -4, type: 'ability', duration: 30 },
         ]
       }))
     })
@@ -276,8 +293,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   },
   {
     id: "ability-triumph",
-    reason: "Duration is not yet considered.",
-    uiTooltip: "Duration is not yet considered.",
+    reason: "Patch.",
     after: (ability: Ability) => ({
       ...ability,
       variations: ability.variations.map((v: AbilityVariation) => ({
@@ -419,7 +435,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
 
   {
     id: "ability-arrow-volley",
-    reason: 'Available for Byzantines after building Foreign Engineering Company. Duration is not yet considered. wynguard-ranger added to select.id so the ability appears for that unit.',
+    reason: 'Available for Byzantines after building Foreign Engineering Company. wynguard-ranger added to select.id so the ability appears for that unit.',
     after: (abilities) => ({
       ...abilities,
       civs: [...abilities.civs, 'by'],
@@ -435,7 +451,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     }),
     foreignEngineering: true,
     foreignEngineeringUnits: ['longbowman'],
-    uiTooltip: 'Available only with Foreign Engineering Company. Duration is not yet considered.',
+    uiTooltip: 'Available only with Foreign Engineering Company.',
   },
 
   {
@@ -520,14 +536,21 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
 
   {
     id: "ability-royal-knight-charge-damage",
-    reason: "Duration is not yet considered.",
-    uiTooltip: "Duration is not yet considered."
-  },
-
-  {
-    id: "ability-deploy-pavise",
-    reason: "Duration is not yet considered.",
-    uiTooltip: "Duration is not yet considered."
+    reason: "jeanne-darc-knight gets +3 same as royal-knight (raw JSON only has royal-knight). Duration 5s (from description).",
+    after: (ability: Ability) => ({
+      ...ability,
+      effects: [
+        ...(ability.effects || []),
+        {
+          property: 'meleeAttack',
+          select: { id: ['jeanne-darc-knight'] },
+          effect: 'change',
+          value: 3,
+          type: 'ability',
+          duration: 5,
+        }
+      ]
+    })
   },
 
   {
@@ -560,22 +583,20 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
 
   {
     id: 'ability-glorious-charge',
-    reason: 'Raw effects empty. Models +50% move speed and −15% all damage taken. minAge corrected to 3. Duration (30s) not modelled.',
+    reason: 'Raw effects empty. Models +50% move speed and −15% all damage taken. minAge corrected to 3. Duration 30s.',
     update: {
       minAge: 3,
       effects: [
-        { property: 'moveSpeed', select: { class: [['military']] }, effect: 'multiply', value: 1.5, type: 'ability' },
-        { property: 'rangedResistance', select: { class: [['military']] }, effect: 'change', value: 15, type: 'ability' },
-        { property: 'meleeResistance', select: { class: [['military']] }, effect: 'change', value: 15, type: 'ability' },
+        { property: 'moveSpeed', select: { class: [['military']] }, effect: 'multiply', value: 1.5, type: 'ability', duration: 30 },
+        { property: 'rangedResistance', select: { class: [['military']] }, effect: 'change', value: 15, type: 'ability', duration: 30 },
+        { property: 'meleeResistance', select: { class: [['military']] }, effect: 'change', value: 15, type: 'ability', duration: 30 },
       ],
     },
-    uiTooltip: 'Duration not modelled.',
   },
 
   {
     id: 'ability-khan-debuff-arrow',
-    reason: '...',
-    uiTooltip: 'Duration not modelled.',
+    reason: 'Duration 10s annotated on synthetic effects.',
   },
 
   //______________________
@@ -586,15 +607,15 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
 
   {
     id: "ability-inspired-warriors",
-    reason: "Change active always to manual.",
+    reason: "Change active always to manual. Duration 60s.",
     after: (ability: Ability) => ({
       ...ability,
       variations: ability.variations.map((v: AbilityVariation) => ({
         ...v,
         effects: [
-          { property: 'meleeAttack', select: { id: ['melee'] }, effect: 'multiply', value: 1.15, type: 'ability' },
-          { property: 'rangedAttack', select: { id: ['ranged', 'siege'] }, effect: 'multiply', value: 1.15, type: 'ability' },
-          { property: 'siegeAttack', select: { id: ['siege'] }, effect: 'multiply', value: 1, type: 'ability' }
+          { property: 'meleeAttack', select: { id: ['melee'] }, effect: 'multiply', value: 1.15, type: 'ability', duration: 60 },
+          { property: 'rangedAttack', select: { id: ['ranged', 'siege'] }, effect: 'multiply', value: 1.15, type: 'ability', duration: 60 },
+          { property: 'siegeAttack', select: { id: ['siege'] }, effect: 'multiply', value: 1, type: 'ability', duration: 60 }
         ],
         active: 'manual'
       }))
@@ -630,27 +651,27 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
 
   {
     id: 'ability-five-mountain-ministries',
-    reason: 'Raw effects empty. Debuffs all enemy attackers: −50% damage (base + bonus). Duration 60s not modelled.',
+    reason: 'Raw effects empty. Debuffs all enemy attackers: −50% damage (base + bonus). Duration 60s.',
     after: (ability: Ability) => ({
       ...ability,
       effects: [
         {
           property: 'versusOpponentDamageDebuff',
-          select: { class: [['annihilation_condition']] },
+          select: { class: [['annihilation_condition']], excludeId: ['shinto-priest'] },
           effect: 'multiply',
           value: 0.5,
           type: 'ability',
+          duration: 60,
         },
       ],
       minAge: 3,
       variations: ability.variations.map((v: AbilityVariation) => ({ ...v, active: 'manual', age: Math.max(v.age ?? 1, 3) })),
     }),
-    uiTooltip: 'Duration not yet modelled.',
   },
 
   {
     id: 'ability-kabura-ya',
-    reason: 'Raw variation effect is change:0 (no-op). Corrected to multiply:1.1. active:manual bypasses unlockedBy suppression (getAbilitiesForUnit line 249 hides abilities with unlockedBy when active !== manual). Duration 10s not modelled.',
+    reason: 'Raw variation effect is change:0 (no-op). Corrected to multiply:1.1. active:manual bypasses unlockedBy suppression (getAbilitiesForUnit line 249 hides abilities with unlockedBy when active !== manual). Duration 10s.',
     after: (ability: Ability) => ({
       ...ability,
       active: 'manual',
@@ -666,24 +687,13 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
             effect: 'multiply',
             value: 1.1,
             type: 'ability',
+            duration: 10,
           },
         ],
       })),
     }),
-    uiTooltip: 'Duration 10s not modelled.',
   },
 
-  {
-    id: "ability-buddhist-conversion",
-    reason: "Add Tooltip.",
-    uiTooltip: "Duration not yet modelled.",
-  },
-
-  {
-    id: "ability-nehan",
-    reason: "Add Tooltip.",
-    uiTooltip: "Duration not yet modelled.",
-  },
 
   {
     id: "ability-katana-bannerman-aura",
@@ -749,6 +759,204 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     reason: 'Useless for this app.',
     after: (ability) => ({ ...ability, hidden: true })
   },
+
+  //_______________
+  //
+  // JEANNE D'ARC
+  //
+  //_______________
+
+  {
+    id: 'ability-valorous-inspiration',
+    reason: 'Per-unit AS corrections from in-game measurements (2026/04/25). No uniform model.',
+    after: (ability: Ability) => ({
+      ...ability,
+      minAge: 4,
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        active: 'manual',
+        effects: [
+          { property: 'attackSpeed', select: { id: ['spearman'] }, effect: 'multiply', value: 1.310 / 1.875, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['man-at-arms', 'jeannes-champion'] }, effect: 'multiply', value: 1.000 / 1.375, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['archer'], excludeId: ['jeanne-darc-hunter', 'jeanne-darc-mounted-archer'] }, effect: 'multiply', value: 1.310 / 1.625, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['handcannoneer'], excludeId: ['jeanne-darc-markswoman'] }, effect: 'multiply', value: 1.690 / 2.125, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['arbaletrier'] }, effect: 'multiply', value: 1.670 / 2.125, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['horseman', 'jeannes-rider'], excludeId: ['jeanne-darc-mounted-archer'] }, effect: 'multiply', value: 1.210 / 1.750, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['royal-knight'] }, effect: 'multiply', value: 1.150 / 1.500, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['counterweight-trebuchet'] }, effect: 'multiply', value: 8.660 / 11.375, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['mangonel'] }, effect: 'multiply', value: 5.210 / 6.875, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['springald'] }, effect: 'multiply', value: 2.320 / 3.125, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['cannon'] }, effect: 'multiply', value: 4.100 / 5.375, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['royal-culverin'] }, effect: 'multiply', value: 2.790 / 3.625, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['ribauldequin'] }, effect: 'multiply', value: 4.160 / 5.250, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['jeanne-darc-markswoman'] }, effect: 'multiply', value: 1.62 / 2.12, type: 'ability' },
+          { property: 'attackSpeed', select: { class: [['land_military']], excludeId: ['spearman', 'man-at-arms', 'jeannes-champion', 'archer', 'handcannoneer', 'arbaletrier', 'horseman', 'jeannes-rider', 'royal-knight', 'counterweight-trebuchet', 'mangonel', 'springald', 'cannon', 'royal-culverin', 'ribauldequin', 'jeanne-darc-peasant', 'jeanne-darc-woman-at-arms', 'jeanne-darc-hunter', 'jeanne-darc-knight', 'jeanne-darc-mounted-archer', 'jeanne-darc-blast-cannon', 'jeanne-darc-markswoman'] }, effect: 'multiply', value: 1 / 1.35, type: 'ability' },
+        ],
+      }))
+    }),
+    uiTooltip: 'Real Attackspeed bonus: ~+33% avg (24–45% spread).',
+  },
+
+  {
+    id: 'ability-construct-the-kingdom',
+    reason: 'Useless for this app.',
+    after: (ability) => ({ ...ability, hidden: true })
+  },
+
+  {
+    id: "ability-honorable-heart",
+    reason: 'Useless for this app.',
+    after: (ability) => ({ ...ability, hidden: true })
+  },
+
+  {
+    id: "ability-journey-of-a-hero",
+    reason: 'Useless for this app.',
+    after: (ability) => ({ ...ability, hidden: true })
+  },
+
+  {
+    id: "ability-talented-builder",
+    reason: 'Useless for this app.',
+    after: (ability) => ({ ...ability, hidden: true })
+  },
+
+  {
+    id: "ability-divine-restoration",
+    reason: 'Useless for this app.',
+    after: (ability) => ({ ...ability, hidden: true })
+  },
+
+  {
+    id: "ability-riders-ready",
+    reason: 'Useless for this app.',
+    after: (ability) => ({ ...ability, hidden: true })
+  },
+
+  {
+    id: "ability-to-arms-men",
+    reason: 'Useless for this app.',
+    after: (ability) => ({ ...ability, hidden: true })
+  },
+
+  {
+    id: 'ability-galvanize-the-righteous',
+    reason: 'Raw variation effects target wrong units (JD forms). Corrected to jeannes-champion + jeannes-rider with +1/1 armor and ×1.1 attack. Forced active:manual (was always).',
+    after: (ability: any) => ({
+      ...ability,
+      active: 'manual',
+      variations: ability.variations.map((v: any) => ({
+        ...v,
+        active: 'manual',
+        effects: [
+          { property: 'meleeArmor', select: { id: ['jeannes-champion', 'jeannes-rider'] }, effect: 'change', value: 1, type: 'ability' },
+          { property: 'rangedArmor', select: { id: ['jeannes-champion', 'jeannes-rider'] }, effect: 'change', value: 1, type: 'ability' },
+          { property: 'meleeAttack', select: { id: ['jeannes-champion', 'jeannes-rider'] }, effect: 'multiply', value: 1.1, type: 'ability' },
+        ]
+      }))
+    })
+  },
+
+  {
+    id: 'ability-consecrate',
+    reason: 'Raw effect is unknown. Patched to foodCostReduction ×0.75 targeting annihilation_condition, excluding all Jeanne forms.',
+    after: (ability: any) => {
+      const effect = {
+        property: 'foodCostReduction',
+        select: { id: ['annihilation_condition'], excludeId: JD_FORM_IDS },
+        effect: 'multiply',
+        value: 0.75,
+        type: 'passive',
+      };
+      return {
+        ...ability,
+        minAge: 2,
+        civs: [('je')],
+        effects: [effect],
+        variations: ability.variations.map((v: any) => ({ ...v, civs: [], effects: [] })),
+      };
+    },
+  },
+
+  {
+    id: 'ability-holy-wrath',
+    reason: 'Jeanne d\'Arc holy wrath: counter ability (max 4 stacks). Each stack adds armor-ignoring first-hit strike damage based on JD melee form level (Lv2/woman-at-arms: +20/stack, Lv3/knight: +30/stack, Lv4/blast-cannon: +50/stack). Computed in getChargeBonus via abilityCounters.',
+    after: (ability: any) => ({
+      ...ability,
+      minAge: 2,
+      civs: ['je'],
+      counterMax: 4,
+      counterDirection: 'additive',
+      counterStep: 30,
+      unitCounterStep: {
+        'jeanne-darc-woman-at-arms': 20,
+        'jeanne-darc-knight': 30,
+        'jeanne-darc-blast-cannon': 50,
+      },
+      counterTooltipLabel: 'Strike',
+      effects: [
+        {
+          property: 'unknown',
+          select: { id: ['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'] },
+          effect: 'multiply',
+          value: 1.0,
+          type: 'passive',
+        }
+      ],
+      variations: ability.variations.map((v: any) => ({ ...v, civs: ['je'], effects: [] })),
+    }),
+  },
+
+  {
+    id: 'ability-divine-arrow',
+    reason: 'Jeanne d\'Arc divine arrow: counter ability (max 4 stacks). Each stack adds armor-ignoring first-shot damage based on JD ranged form level (Lv2/hunter: +40/stack, Lv3/mounted-archer: +100/stack, Lv4/markswoman: +150/stack). Computed in getChargeBonus via abilityCounters. Range matches weapon max (7).',
+    after: (ability: any) => ({
+      ...ability,
+      minAge: 2,
+      civs: ['je'],
+      counterMax: 4,
+      counterDirection: 'additive',
+      counterStep: 40,
+      unitCounterStep: {
+        'jeanne-darc-hunter': 40,
+        'jeanne-darc-mounted-archer': 100,
+        'jeanne-darc-markswoman': 150,
+      },
+      counterTooltipLabel: 'Divine arrow',
+      effects: [
+        {
+          property: 'unknown',
+          select: { id: ['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'] },
+          effect: 'multiply',
+          value: 1.0,
+          type: 'passive',
+        }
+      ],
+      variations: ability.variations.map((v: any) => ({ ...v, civs: ['je'], effects: [] })),
+    }),
+  },
+
+  {
+    id: 'ability-strength-of-heaven',
+    reason: 'Raw variation effect is a dummy (property:unknown). Real effects per description: ×3 all damage, +300 HP, +4 armor on infantry/cavalry. JD forms excluded (ability blesses others, not Jeanne).',
+    update: {
+      effects: [
+        { property: 'meleeAttack', select: { class: [['infantry'], ['cavalry']], excludeId: JD_FORM_IDS }, effect: 'multiply', value: 3, type: 'ability' },
+        { property: 'rangedAttack', select: { class: [['infantry'], ['cavalry']], excludeId: JD_FORM_IDS }, effect: 'multiply', value: 3, type: 'ability' },
+        { property: 'siegeAttack', select: { class: [['infantry'], ['cavalry']], excludeId: JD_FORM_IDS }, effect: 'multiply', value: 3, type: 'ability' },
+        { property: 'bonusDamageMultiplier', select: { class: [['infantry'], ['cavalry']], excludeId: JD_FORM_IDS }, effect: 'multiply', value: 3, type: 'ability' },
+        { property: 'hitpoints', select: { class: [['infantry'], ['cavalry']], excludeId: JD_FORM_IDS }, effect: 'change', value: 300, type: 'ability' },
+        { property: 'meleeArmor', select: { class: [['infantry'], ['cavalry']], excludeId: JD_FORM_IDS }, effect: 'change', value: 4, type: 'ability' },
+        { property: 'rangedArmor', select: { class: [['infantry'], ['cavalry']], excludeId: JD_FORM_IDS }, effect: 'change', value: 4, type: 'ability' },
+      ],
+    },
+    after: (ability: Ability) => ({
+      ...ability,
+      minAge: 4,
+      variations: ability.variations.map(v => ({ ...v, effects: [] })),
+    }),
+  },
+
   //___________
   //
   // OTTOMANS
@@ -814,13 +1022,14 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
 
   {
     id: "ability-static-deployment",
-    reason: 'Available for Byzantines.',
+    reason: 'Available for Byzantines. Duration 10s (description).',
     after: (abilities) => ({
       ...abilities,
       civs: [...abilities.civs, 'by'],
       variations: abilities.variations.map(v => ({
         ...v,
         civs: [...(v.civs || []), "by"],
+        effects: (v.effects || []).map(e => ({ ...e, duration: 10 })),
       }))
     }),
   },
@@ -848,7 +1057,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     }),
     foreignEngineering: true,
     foreignEngineeringUnits: ['horse-archer'],
-    uiTooltip: 'Available only with Foreign Engineering Company. Duration is not yet considered.',
+    uiTooltip: 'Available only with Foreign Engineering Company.',
   },
 
 ];
@@ -1224,9 +1433,9 @@ function createKharashAura(): Ability {
 
 function createKhanDebuffArrow(): Ability {
   const effects = [
-    { property: 'meleeAttack', select: { class: [['annihilation_condition']], excludeId: ['battering-ram', 'trade-ship', 'fishing-boat', 'trader'] }, effect: 'multiply', value: 1.1, type: 'ability' },
-    { property: 'rangedAttack', select: { class: [['annihilation_condition']], excludeId: ['battering-ram', 'trade-ship', 'fishing-boat', 'trader'] }, effect: 'multiply', value: 1.1, type: 'ability' },
-    { property: 'siegeAttack', select: { class: [['annihilation_condition']], excludeId: ['battering-ram', 'trade-ship', 'fishing-boat', 'trader'] }, effect: 'multiply', value: 1.1, type: 'ability' },
+    { property: 'meleeAttack', select: { class: [['annihilation_condition']], excludeId: ['battering-ram', 'trade-ship', 'fishing-boat', 'trader'] }, effect: 'multiply', value: 1.1, type: 'ability', duration: 10 },
+    { property: 'rangedAttack', select: { class: [['annihilation_condition']], excludeId: ['battering-ram', 'trade-ship', 'fishing-boat', 'trader'] }, effect: 'multiply', value: 1.1, type: 'ability', duration: 10 },
+    { property: 'siegeAttack', select: { class: [['annihilation_condition']], excludeId: ['battering-ram', 'trade-ship', 'fishing-boat', 'trader'] }, effect: 'multiply', value: 1.1, type: 'ability', duration: 10 },
   ];
   return {
     id: 'ability-khan-debuff-arrow',
@@ -1434,9 +1643,9 @@ function createHouseUnified(): Ability {
 
 function createBuddhistConversion(): Ability {
   const effects = [
-    { property: 'meleeAttack', select: { class: [['land_military']] }, effect: 'multiply', value: 1.2, type: 'ability' },
-    { property: 'rangedAttack', select: { class: [['land_military']] }, effect: 'multiply', value: 1.2, type: 'ability' },
-    { property: 'siegeAttack', select: { class: [['land_military']] }, effect: 'multiply', value: 1.2, type: 'ability' },
+    { property: 'meleeAttack', select: { class: [['land_military']], excludeId: ['shinto-priest'] }, effect: 'multiply', value: 1.2, type: 'ability', duration: 20 },
+    { property: 'rangedAttack', select: { class: [['land_military']], excludeId: ['shinto-priest'] }, effect: 'multiply', value: 1.2, type: 'ability', duration: 20 },
+    { property: 'siegeAttack', select: { class: [['land_military']], excludeId: ['shinto-priest'] }, effect: 'multiply', value: 1.2, type: 'ability', duration: 20 },
   ];
   return {
     id: 'ability-buddhist-conversion',
@@ -1484,7 +1693,7 @@ function createNehan(): Ability {
     description: "When casting Buddhist Conversion, nearby allied units gain +25% movement speed for 20 seconds.",
     unique: false,
     effects: [
-      { property: 'moveSpeed', select: { class: [['land_military']] }, effect: 'multiply', value: 1.25, type: 'ability' },
+      { property: 'moveSpeed', select: { class: [['land_military']], excludeId: ['shinto-priest'] }, effect: 'multiply', value: 1.25, type: 'ability', duration: 20 },
     ],
     variations: [{
       id: 'ability-nehan-v',

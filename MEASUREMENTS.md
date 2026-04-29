@@ -139,6 +139,28 @@ Villager         | 3.380  | 2.600  | 2.790    | +21.1%  |
 **Average effective bonus:** +23.8% Attack Speed (vs. +30% announced); +22.8% excluding siege/villagers.
 **Conclusion:** Average gap of ~6.2 percentage points, with a spread of 17–29%. There is no uniform model; unit-specific corrections are required.
 
+## [TECH] Valorous Inspiration — JD — 2026/04/24
+
+**Description:** +35% attack speed
+
+Unit               | Base    | Theory | Practice | Eff. %  |
+-------------------|---------|--------|----------|---------|
+spearman           | 1.875   | 1.389  | 1.310    | +43.1%  |
+man-at-arms        | 1.375   | 1.019  | 1.000    | +37.5%  |
+Jeanne's Champion  | 1.375   | 1.019  | 1.000    | +37.5%  |
+archer             | 1.625   | 1.204  | 1.310    | +24.0%  |
+handcannoneer      | 2.125   | 1.574  | 1.690    | +25.7%  |
+arbalétrier        | 2.125   | 1.574  | 1.670    | +27.2%  |
+Horseman           | 1.750   | 1.296  | 1.210    | +44.6%  |
+Royal Knight       | 1.500   | 1.111  | 1.150    | +30.4%  |
+Jeanne's Rider     | 1.750   | 1.296  | 1.210    | +44.6%  |
+Trebuchet          | 11.375  | 8.426  | 8.660    | +31.3%  |
+Mangonel           | 6.875   | 5.093  | 5.210    | +32.0%  |
+Springald          | 3.125   | 2.315  | 2.320    | +34.7%  |
+Canon              | 5.375   | 3.981  | 4.100    | +31.1%  |
+Royal Culverin     | 3.625   | 2.685  | 2.790    | +29.9%  |
+Ribauldequin       | 5.250   | 3.889  | 4.160    | +26.2%  |
+
 <!-- TEMPLATE FOR NEXT EXPERIMENT
 
 **Description:** +50% + 20% attack speed

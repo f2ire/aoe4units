@@ -89,6 +89,7 @@ const combatProperties = [
   'burst',            // Number of projectiles
   'costReduction',    // Unit production cost multiplier
   'stoneCostReduction', // Stone-only cost multiplier
+  'foodCostReduction',  // Food-only cost multiplier
   'rangedResistance',    // Ranged damage resistance (%)
   'meleeResistance',     // Melee damage resistance (%, positive = reduction, negative = vulnerability)
   'healingRate',         // HP healed per hit the unit lands
@@ -317,12 +318,15 @@ export interface UnitStats {
   bonusDamage?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   costMultiplier?: number; // Production cost multiplier (e.g. 0.8 = -20%)
   stoneCostMultiplier?: number; // Stone-only cost multiplier (e.g. 0.8 = -20% stone)
+  foodCostMultiplier?: number;  // Food-only cost multiplier (e.g. 0.75 = -25% food)
   rangedResistance?: number;   // Ranged damage resistance percentage (0-100), e.g. 30 = 30% reduction
   meleeResistance?: number;    // Melee damage resistance (positive = reduction, negative = vulnerability), e.g. 15 = −15%, −50 = +50% taken
   healingRate?: number;        // HP healed per hit the unit lands (e.g. Keshik: 3 HP/hit)
   armorPenetration?: number;   // Enemy armor reduced by this amount on each hit (clamped to 0)
+  siegeAttack?: number;        // Siege/gunpowder weapon damage — tracked separately from rangedAttack to prevent stacking when both effects target the same unit
   rangedAttackMultiplier?: number; // Product of all rangedAttack multiply effects (tracked separately to correctly scale secondary weapons)
   chargeMultiplier?: number;   // First-hit charge bonus = primaryMeleeDamage × chargeMultiplier (requires charge-attack active)
+  postChargeMeleeBonus?: number; // Melee attack bonus active only from hit 2 onward (after charge fires). Excluded from hit 1.
 }
 
 export function applyTechnologyEffects(
@@ -421,7 +425,7 @@ export function applyTechnologyEffects(
       if (!combatProperties.includes(property)) continue;
 
       // Handle special properties
-      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'costReduction' || property === 'stoneCostReduction' || property === 'rangedResistance' || property === 'meleeResistance' || property === 'healingRate' || property === 'chargeMultiplier' || property === 'bonusDamageMultiplier' || property === 'armorPenetration') {
+      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'costReduction' || property === 'stoneCostReduction' || property === 'foodCostReduction' || property === 'rangedResistance' || property === 'meleeResistance' || property === 'healingRate' || property === 'chargeMultiplier' || property === 'bonusDamageMultiplier' || property === 'armorPenetration') {
         specialEffects.push({
           property,
           effectType: effect.effect as 'change' | 'multiply',
@@ -464,8 +468,7 @@ export function applyTechnologyEffects(
           break;
         case 'siegeAttack':
         case 'gunpowderAttack':
-          // Siege/gunpowder weapons store their damage in rangedAttack (same slot)
-          statKey = 'rangedAttack';
+          statKey = 'siegeAttack';
           break;
         default:
           continue;
@@ -587,6 +590,18 @@ export function applyTechnologyEffects(
         modifiedStats.stoneCostMultiplier *= effect.value;
       } else if (effect.effectType === 'change') {
         modifiedStats.stoneCostMultiplier += effect.value;
+      }
+    }
+  }
+
+  // Apply foodCostReduction
+  for (const effect of specialEffects) {
+    if (effect.property === 'foodCostReduction') {
+      if (modifiedStats.foodCostMultiplier == null) modifiedStats.foodCostMultiplier = 1.0;
+      if (effect.effectType === 'multiply') {
+        modifiedStats.foodCostMultiplier *= effect.value;
+      } else if (effect.effectType === 'change') {
+        modifiedStats.foodCostMultiplier += effect.value;
       }
     }
   }

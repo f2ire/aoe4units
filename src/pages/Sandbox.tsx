@@ -11,9 +11,11 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { motion } from "framer-motion";
 import { useUnitSlot } from "@/hooks/useUnitSlot";
+import { JeanneFormSelector, isJeanneUnit } from "@/components/JeanneFormSelector";
 
 
 const categoryNames: Record<string, string> = {
+  jeanne: "Jeanne d'Arc",
   melee_infantry: 'Melee Infantry',
   ranged: 'Ranged Units',
   cavalry: 'Cavalry',
@@ -25,6 +27,7 @@ const categoryNames: Record<string, string> = {
 };
 
 const categoryIcons: Record<string, string> = {
+  jeanne: 'https://data.aoe4world.com/images/units/jeanne-darc-peasant-1.png',
   melee_infantry: 'https://data.aoe4world.com/images/buildings/barracks.png',
   ranged: 'https://data.aoe4world.com/images/buildings/archery-range.png',
   cavalry: 'https://data.aoe4world.com/images/buildings/stable.png',
@@ -35,7 +38,7 @@ const categoryIcons: Record<string, string> = {
   mercenary: 'https://data.aoe4world.com/images/buildings/barracks.png',
 };
 
-const categoryOrder = ['melee_infantry', 'ranged', 'cavalry', 'siege', 'mercenary', 'monk', 'ship', 'other'];
+const categoryOrder = ['jeanne', 'melee_infantry', 'ranged', 'cavalry', 'siege', 'mercenary', 'monk', 'ship', 'other'];
 
 function getMercenarySubCategory(unit: { classes: string[] }): string {
   const cls = unit.classes.map(c => c.toLowerCase());
@@ -56,15 +59,43 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
   // Get the base ID for variations
   const baseId = ('baseId' in unitData) ? unitData.baseId : unitData.id;
   const unitClasses = unitData.classes || [];
+  const isKnight = unitClasses.some(c => c.toLowerCase() === 'knight');
 
-  // Cataphract: ability-trample behaves like a charge — +12 bonus on first hit only
+  const holyWrathStacks = abilityCounters?.get('ability-holy-wrath') ?? 0;
+
+  let strikeBonus = 0;
+  if (holyWrathStacks > 0) {
+    const perStack =
+      baseId === 'jeanne-darc-woman-at-arms' ? 20 :
+        baseId === 'jeanne-darc-knight' ? 30 :
+          baseId === 'jeanne-darc-blast-cannon' ? 50 : 0;
+    if (perStack > 0) strikeBonus = holyWrathStacks * perStack;
+  }
+
+  const divineArrowStacks = abilityCounters?.get('ability-divine-arrow') ?? 0;
+  let divineArrowBonus = 0;
+  if (divineArrowStacks > 0) {
+    const perStack =
+      baseId === 'jeanne-darc-hunter' ? 40 :
+        baseId === 'jeanne-darc-mounted-archer' ? 100 :
+          baseId === 'jeanne-darc-markswoman' ? 150 : 0;
+    if (perStack > 0) divineArrowBonus = divineArrowStacks * perStack;
+  }
+
+  // Way to manage charge + special charge
+  if (baseId === 'jeanne-darc-woman-at-arms' || baseId === 'jeanne-darc-blast-cannon') return strikeBonus;
+  if (baseId === 'jeanne-darc-knight' && activeAbilities.has('charge-attack')) return strikeBonus + 8;
+  if (baseId === 'jeanne-darc-knight' && !activeAbilities.has('charge-attack')) return strikeBonus;
+  if (baseId === 'jeanne-darc-hunter' || baseId === 'jeanne-darc-mounted-archer' || baseId === 'jeanne-darc-markswoman') return divineArrowBonus;
+
+  // ________________________________
+  //
+  // Special ability used like charge 
+  // ________________________________
+
   if (activeAbilities.has('ability-trample') && baseId === 'cataphract') return 12;
-
-  // Kipchak Archer: bleed — +12 base bonus damage once per combat (always active)
-  // Incendiary Arrows adds +5.2 to the bleed value
   if (baseId === 'kipchak-archer') return 12 + (activeTechnologies.has('incendiary-arrows') ? 7.2 : 0);
 
-  // Earl's Guard: dagger throw — ranged first-hit bonus, no melee tech scaling (only throwing-dagger-drills and house-unified apply)
   if (activeAbilities.has('ability-dagger-throw') && baseId === 'earls-guard') {
     const hasDrills = activeTechnologies.has('throwing-dagger-drills');
     const castleBonus = abilityCounters?.get('ability-house-unified') ?? 0;
@@ -73,10 +104,19 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
     const burstCount = hasDrills ? 2 : 1;
     return daggerBase * burstCount;
   }
+  // ________________________________
+  //
+  // Remove charge when inactive
+  // ________________________________
 
   if (!activeAbilities.has('charge-attack')) return 0;
 
-  // Demilancer: knight class but unique charge values per age
+  // _________________________________
+  //
+  // Set up special unit charge damage 
+  // _________________________________
+
+
   if (baseId === 'demilancer') {
     switch (age) {
       case 2: return 4;
@@ -86,39 +126,63 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
     }
   }
 
-  const isKnight = unitClasses.some(c => c.toLowerCase() === 'knight');
-  const isGhulam = baseId === 'ghulam' || unitClasses.some(c => c.toLowerCase() === 'merc_ghulam');
-  const isFirelancer = baseId === 'fire-lancer';
-
-  // Charge bonus based on age
-  if (isKnight) {
-    // TODO: To change more precisely — camel-lancer charge damage may differ from standard knight
+  if (baseId === 'torguud') {
     switch (age) {
-      case 2: return 10; // Early
-      case 3: return 12; // Regular
-      case 4: return 14; // Elite
+      case 2: return 5;
+      case 3: return 7;
+      case 4: return 9;
       default: return 0;
     }
   }
 
-  // Bonus for Ghulam (no Early variant)
-  if (isGhulam) {
+  if (baseId === 'batu-khan') {
     switch (age) {
-      case 3: return 5;  // Regular
-      case 4: return 6;  // Elite
+      case 2: return 10;
+      case 3: return 12;
+      case 4: return 12;
       default: return 0;
     }
   }
 
-  if (isFirelancer) {
+  if (baseId === 'keshik') {
+    switch (age) {
+      case 2: return 8;
+      case 3: return 10;
+      case 4: return 12;
+      default: return 0;
+    }
+  }
+  if (baseId === 'ghulam' || unitClasses.some(c => c.toLowerCase() === 'merc_ghulam')) {
+    switch (age) {
+      case 3: return 5;
+      case 4: return 6;
+      default: return 0;
+    }
+  }
+
+  if (baseId === 'fire-lancer') {
     return 4;
   }
+
+
 
   // chargeMultiplier: bonus = % of unit's primary melee damage (e.g. Burgrave Palace: ×0.5)
   if (chargeMultiplier && chargeMultiplier > 0) {
     const primaryWeapon = getPrimaryWeapon(unitData as UnifiedVariation);
     return (primaryWeapon?.damage ?? 0) * chargeMultiplier;
   }
+
+  // If basic knight
+
+  if (isKnight) {
+    switch (age) {
+      case 2: return 10;
+      case 3: return 12;
+      case 4: return 14;
+      default: return 0;
+    }
+  }
+
 
   return 0;
 };
@@ -134,6 +198,7 @@ const Sandbox = () => {
   const [isVersus, setIsVersus] = useState<boolean>(false);
   const [atEqualCost, setAtEqualCost] = useState<boolean>(false);
   const [allowKiting, setAllowKiting] = useState<boolean>(false);
+  const [showDurationEffect, setShowDurationEffect] = useState<boolean>(false);
   const [startDistancePreset, setStartDistancePreset] = useState<string>("medium");
   const [customDistance, setCustomDistance] = useState<number>(5);
   const startDistance = startDistancePreset === "melee" ? 0
@@ -141,54 +206,58 @@ const Sandbox = () => {
       : startDistancePreset === "long" ? 9
         : Math.max(0, Math.min(30, customDistance));
 
-  const ally = useUnitSlot();
-  const enemy = useUnitSlot();
+  const civ1 = useUnitSlot();
+  const civ2 = useUnitSlot();
 
   const {
     unit: unit1, setUnit: setUnit1,
-    selectedCiv: selectedCivAlly, setSelectedCiv: setSelectedCivAlly,
-    selectedAge: selectedAgeAlly, setSelectedAge: setSelectedAgeAlly,
-    variation: variationAlly,
-    activeTechnologies: activeTechnologiesAlly,
-    activeAbilities: activeAbilitiesAlly,
-    openCategories: openCategoriesAlly, toggleCategory: toggleCategoryAlly,
-    filteredUnits: filteredUnitsAlly,
-    categorizedUnits: categorizedUnitsAlly,
-    techs: techsAlly,
-    abilities: abilitiesAlly,
-    modifiedStats: modifiedAllyStats,
-    toggleTechnology: toggleTechnologyAlly,
-    toggleAbility: toggleAbilityAlly,
-    incrementAbility: incrementAbilityAlly,
-    decrementAbility: decrementAbilityAlly,
-    abilityCounters: abilityCountersAlly,
-    lockedAbilities: lockedAbilitiesAlly,
-    lockedTechnologies: lockedTechnologiesAlly,
-    secondaryWeapons: secondaryWeaponsAlly,
-  } = ally;
+    selectedCiv: selectedCiv1, setSelectedCiv: setSelectedCiv1,
+    selectedAge: selectedAge1, setSelectedAge: setSelectedAge1,
+    variation: variation1,
+    activeTechnologies: activeTechnologies1,
+    activeAbilities: activeAbilities1,
+    openCategories: openCategories1, toggleCategory: toggleCategory1,
+    filteredUnits: filteredUnits1,
+    categorizedUnits: categorizedUnits1,
+    techs: techs1,
+    abilities: abilities1,
+    modifiedStats: modifiedStats1,
+    modifiedStatsNoTimer: modifiedStats1NoTimer,
+    activeTimedDuration: timedDuration1,
+    toggleTechnology: toggleTechnology1,
+    toggleAbility: toggleAbility1,
+    incrementAbility: incrementAbility1,
+    decrementAbility: decrementAbility1,
+    abilityCounters: abilityCounters1,
+    lockedAbilities: lockedAbilities1,
+    lockedTechnologies: lockedTechnologies1,
+    secondaryWeapons: secondaryWeapons1,
+  } = civ1;
 
   const {
     unit: unit2, setUnit: setUnit2,
-    selectedCiv: selectedCivEnemy, setSelectedCiv: setSelectedCivEnemy,
-    selectedAge: selectedAgeEnemy, setSelectedAge: setSelectedAgeEnemy,
-    variation: variationEnemy,
-    activeTechnologies: activeTechnologiesEnemy,
-    activeAbilities: activeAbilitiesEnemy,
-    openCategories: openCategoriesEnemy, toggleCategory: toggleCategoryEnemy,
-    filteredUnits: filteredUnitsEnemy,
-    categorizedUnits: categorizedUnitsEnemy,
-    techs: techsEnemy,
-    abilities: abilitiesEnemy,
-    modifiedStats: modifiedEnemyStats,
-    toggleTechnology: toggleTechnologyEnemy,
-    toggleAbility: toggleAbilityEnemy,
-    incrementAbility: incrementAbilityEnemy,
-    decrementAbility: decrementAbilityEnemy,
-    abilityCounters: abilityCountersEnemy,
-    lockedAbilities: lockedAbilitiesEnemy,
-    lockedTechnologies: lockedTechnologiesEnemy,
-    secondaryWeapons: secondaryWeaponsEnemy,
-  } = enemy;
+    selectedCiv: selectedCiv2, setSelectedCiv: setSelectedCiv2,
+    selectedAge: selectedAge2, setSelectedAge: setSelectedAge2,
+    variation: variation2,
+    activeTechnologies: activeTechnologies2,
+    activeAbilities: activeAbilities2,
+    openCategories: openCategories2, toggleCategory: toggleCategory2,
+    filteredUnits: filteredUnits2,
+    categorizedUnits: categorizedUnits2,
+    techs: techs2,
+    abilities: abilities2,
+    modifiedStats: modifiedStats2,
+    modifiedStatsNoTimer: modifiedStats2NoTimer,
+    activeTimedDuration: timedDuration2,
+    toggleTechnology: toggleTechnology2,
+    toggleAbility: toggleAbility2,
+    incrementAbility: incrementAbility2,
+    decrementAbility: decrementAbility2,
+    abilityCounters: abilityCounters2,
+    lockedAbilities: lockedAbilities2,
+    lockedTechnologies: lockedTechnologies2,
+    secondaryWeapons: secondaryWeapons2,
+  } = civ2;
 
   // Filter bonusDamage entries by weapon type — prevents ranged bonuses (e.g. Howdahs) from
   // applying to melee weapons (e.g. Tusks) and vice-versa.
@@ -198,440 +267,581 @@ const Sandbox = () => {
       : bonusDamage.filter((b: any) => b.property !== 'meleeAttack'); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   // Build variations with applied technologies
-  const modifiedVariationAlly = variationAlly ? (() => {
-    const debuffMultiplier = unit2 && activeAbilitiesEnemy.size > 0
-      ? getVersusDebuffMultiplier(variationAlly.classes || [], Array.from(activeAbilitiesEnemy))
+  const modifiedVariation1 = variation1 ? (() => {
+    const debuffMultiplier = unit2 && activeAbilities2.size > 0
+      ? getVersusDebuffMultiplier(variation1.classes || [], Array.from(activeAbilities2))
       : 1.0;
 
     return {
-      ...variationAlly,
-      hitpoints: modifiedAllyStats.hitpoints,
-      weapons: variationAlly.weapons.map(weapon => ({
+      ...variation1,
+      hitpoints: modifiedStats1.hitpoints,
+      weapons: variation1.weapons.map(weapon => ({
         ...weapon,
-        damage: (weapon.type === 'melee' ? modifiedAllyStats.meleeAttack : modifiedAllyStats.rangedAttack) * debuffMultiplier,
-        speed: modifiedAllyStats.attackSpeed,
+        damage: (weapon.type === 'melee' ? modifiedStats1.meleeAttack : weapon.type === 'siege' ? (modifiedStats1.siegeAttack ?? modifiedStats1.rangedAttack) : modifiedStats1.rangedAttack) * debuffMultiplier,
+        speed: modifiedStats1.attackSpeed,
         range: weapon.range ? {
           ...weapon.range,
-          max: modifiedAllyStats.maxRange || weapon.range.max
+          max: modifiedStats1.maxRange || weapon.range.max
         } : undefined,
-        modifiers: filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], weapon.type),
-        burst: modifiedAllyStats.burst ? { count: modifiedAllyStats.burst } : weapon.burst
+        modifiers: filterBonusForWeapon(modifiedStats1.bonusDamage || [], weapon.type),
+        burst: modifiedStats1.burst ? { count: modifiedStats1.burst } : weapon.burst
       })),
       armor: [
-        { type: 'melee', value: modifiedAllyStats.meleeArmor },
-        { type: 'ranged', value: modifiedAllyStats.rangedArmor }
+        { type: 'melee', value: modifiedStats1.meleeArmor },
+        { type: 'ranged', value: modifiedStats1.rangedArmor }
       ],
       resistance: [
-        ...(variationAlly.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee'),
-        ...((modifiedAllyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedAllyStats.rangedResistance! }] : []),
-        ...((modifiedAllyStats.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: modifiedAllyStats.meleeResistance! }] : []),
+        ...(variation1.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee'),
+        ...((modifiedStats1.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedStats1.rangedResistance! }] : []),
+        ...((modifiedStats1.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: modifiedStats1.meleeResistance! }] : []),
       ],
-      costs: (modifiedAllyStats.costMultiplier != null && modifiedAllyStats.costMultiplier !== 1.0) || (modifiedAllyStats.stoneCostMultiplier != null && modifiedAllyStats.stoneCostMultiplier !== 1.0) ? {
-        ...variationAlly.costs,
-        food: Math.round((variationAlly.costs.food || 0) * (modifiedAllyStats.costMultiplier ?? 1)),
-        wood: Math.round((variationAlly.costs.wood || 0) * (modifiedAllyStats.costMultiplier ?? 1)),
-        gold: Math.round((variationAlly.costs.gold || 0) * (modifiedAllyStats.costMultiplier ?? 1)),
-        stone: Math.round((variationAlly.costs.stone || 0) * (modifiedAllyStats.costMultiplier ?? 1) * (modifiedAllyStats.stoneCostMultiplier ?? 1)),
-        oliveoil: Math.round((variationAlly.costs.oliveoil || 0) * (modifiedAllyStats.costMultiplier ?? 1)),
-      } : variationAlly.costs,
-      movement: variationAlly.movement ? {
-        ...variationAlly.movement,
-        speed: modifiedAllyStats.moveSpeed
+      costs: (modifiedStats1.costMultiplier != null && modifiedStats1.costMultiplier !== 1.0) || (modifiedStats1.stoneCostMultiplier != null && modifiedStats1.stoneCostMultiplier !== 1.0) || (modifiedStats1.foodCostMultiplier != null && modifiedStats1.foodCostMultiplier !== 1.0) ? {
+        ...variation1.costs,
+        food: Math.round((variation1.costs.food || 0) * (modifiedStats1.costMultiplier ?? 1) * (modifiedStats1.foodCostMultiplier ?? 1)),
+        wood: Math.round((variation1.costs.wood || 0) * (modifiedStats1.costMultiplier ?? 1)),
+        gold: Math.round((variation1.costs.gold || 0) * (modifiedStats1.costMultiplier ?? 1)),
+        stone: Math.round((variation1.costs.stone || 0) * (modifiedStats1.costMultiplier ?? 1) * (modifiedStats1.stoneCostMultiplier ?? 1)),
+        oliveoil: Math.round((variation1.costs.oliveoil || 0) * (modifiedStats1.costMultiplier ?? 1)),
+      } : variation1.costs,
+      movement: variation1.movement ? {
+        ...variation1.movement,
+        speed: modifiedStats1.moveSpeed
       } : undefined,
-      healingRate: modifiedAllyStats.healingRate ?? 0,
-      armorPenetration: modifiedAllyStats.armorPenetration ?? 0,
-      firstHitBlocked: activeAbilitiesAlly.has('ability-deflective-armor'),
-      chargeBonusBurst: getChargeBonusBurst(variationAlly, activeTechnologiesAlly),
-      chargeArmorType: variationAlly.baseId === 'earls-guard' ? 'ranged' as const : undefined,
+      healingRate: modifiedStats1.healingRate ?? 0,
+      armorPenetration: modifiedStats1.armorPenetration ?? 0,
+      postChargeMeleeBonus: modifiedStats1.postChargeMeleeBonus ?? 0,
+      firstHitBlocked: activeAbilities1.has('ability-deflective-armor'),
+      chargeBonusBurst: getChargeBonusBurst(variation1, activeTechnologies1),
+      chargeArmorType: variation1.baseId === 'earls-guard' ? 'ranged' as const :
+        (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(variation1.baseId) && (abilityCounters1?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
+        (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(variation1.baseId) && (abilityCounters1?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const : undefined,
       secondaryWeapons: (() => {
-        const primaryWeaponAlly = getPrimaryWeapon(variationAlly);
-        const primaryBaseDamage = primaryWeaponAlly?.damage || 0;
-        const meleeAttackDelta = modifiedAllyStats.meleeAttack - primaryBaseDamage;
-        const isPrimaryRangedAlly = primaryWeaponAlly?.type === 'ranged' || primaryWeaponAlly?.type === 'siege';
-        const rangedBaseAlly = isPrimaryRangedAlly ? primaryBaseDamage : (secondaryWeaponsAlly.find((sw: any) => sw.type === 'ranged' || sw.type === 'siege')?.damage || 0); // eslint-disable-line @typescript-eslint/no-explicit-any
-        const rangedMultiplierAlly = modifiedAllyStats.rangedAttackMultiplier ?? 1;
-        const rangedFlatDeltaAlly = modifiedAllyStats.rangedAttack / rangedMultiplierAlly - rangedBaseAlly;
-        return secondaryWeaponsAlly.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+        const primaryWeapon1 = getPrimaryWeapon(variation1);
+        const primaryBaseDamage = primaryWeapon1?.damage || 0;
+        const meleeAttackDelta = modifiedStats1.meleeAttack - primaryBaseDamage;
+        const isPrimaryRanged1 = primaryWeapon1?.type === 'ranged' || primaryWeapon1?.type === 'siege';
+        const rangedBase1 = isPrimaryRanged1 ? primaryBaseDamage : (secondaryWeapons1.find((sw: any) => sw.type === 'ranged' || sw.type === 'siege')?.damage || 0); // eslint-disable-line @typescript-eslint/no-explicit-any
+        const rangedMultiplier1 = modifiedStats1.rangedAttackMultiplier ?? 1;
+        const rangedFlatDelta1 = modifiedStats1.rangedAttack / rangedMultiplier1 - rangedBase1;
+        return secondaryWeapons1.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
           ...w,
           damage: (() => {
             const raw = w.type === 'ranged' || w.type === 'siege'
               ? w.damageMultiplier != null
-                ? (rangedBaseAlly * w.damageMultiplier + rangedFlatDeltaAlly) * rangedMultiplierAlly * debuffMultiplier
-                : modifiedAllyStats.rangedAttack * debuffMultiplier
+                ? (rangedBase1 * w.damageMultiplier + rangedFlatDelta1) * rangedMultiplier1 * debuffMultiplier
+                : modifiedStats1.rangedAttack * debuffMultiplier
               : (w.damage + meleeAttackDelta) * debuffMultiplier;
             return w.maxDamage != null ? Math.min(raw, w.maxDamage) : raw;
           })(),
           modifiers: (w.type === 'ranged' || w.type === 'siege')
-            ? filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], w.type).filter((m: any) => !m.chargeBonusLabel) // eslint-disable-line @typescript-eslint/no-explicit-any
-            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], 'melee').filter((b: any) => !b.fromWeapon)], // eslint-disable-line @typescript-eslint/no-explicit-any
+            ? filterBonusForWeapon(modifiedStats1.bonusDamage || [], w.type).filter((m: any) => !m.chargeBonusLabel) // eslint-disable-line @typescript-eslint/no-explicit-any
+            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedStats1.bonusDamage || [], 'melee').filter((b: any) => !b.fromWeapon)], // eslint-disable-line @typescript-eslint/no-explicit-any
         }));
       })(),
     };
   })() : undefined;
 
-  const modifiedVariationEnemy = variationEnemy ? (() => {
-    const debuffMultiplier = unit1 && activeAbilitiesAlly.size > 0
-      ? getVersusDebuffMultiplier(variationEnemy.classes || [], Array.from(activeAbilitiesAlly))
+  const modifiedVariation2 = variation2 ? (() => {
+    const debuffMultiplier = unit1 && activeAbilities1.size > 0
+      ? getVersusDebuffMultiplier(variation2.classes || [], Array.from(activeAbilities1))
       : 1.0;
 
     return {
-      ...variationEnemy,
-      hitpoints: modifiedEnemyStats.hitpoints,
-      weapons: variationEnemy.weapons.map(weapon => ({
+      ...variation2,
+      hitpoints: modifiedStats2.hitpoints,
+      weapons: variation2.weapons.map(weapon => ({
         ...weapon,
-        damage: (weapon.type === 'melee' ? modifiedEnemyStats.meleeAttack : modifiedEnemyStats.rangedAttack) * debuffMultiplier,
-        speed: modifiedEnemyStats.attackSpeed,
+        damage: (weapon.type === 'melee' ? modifiedStats2.meleeAttack : weapon.type === 'siege' ? (modifiedStats2.siegeAttack ?? modifiedStats2.rangedAttack) : modifiedStats2.rangedAttack) * debuffMultiplier,
+        speed: modifiedStats2.attackSpeed,
         range: weapon.range ? {
           ...weapon.range,
-          max: modifiedEnemyStats.maxRange || weapon.range.max
+          max: modifiedStats2.maxRange || weapon.range.max
         } : undefined,
-        modifiers: filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], weapon.type),
-        burst: modifiedEnemyStats.burst ? { count: modifiedEnemyStats.burst } : weapon.burst
+        modifiers: filterBonusForWeapon(modifiedStats2.bonusDamage || [], weapon.type),
+        burst: modifiedStats2.burst ? { count: modifiedStats2.burst } : weapon.burst
       })),
       armor: [
-        { type: 'melee', value: modifiedEnemyStats.meleeArmor },
-        { type: 'ranged', value: modifiedEnemyStats.rangedArmor }
+        { type: 'melee', value: modifiedStats2.meleeArmor },
+        { type: 'ranged', value: modifiedStats2.rangedArmor }
       ],
       resistance: [
-        ...(variationEnemy.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee'),
-        ...((modifiedEnemyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedEnemyStats.rangedResistance! }] : []),
-        ...((modifiedEnemyStats.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: modifiedEnemyStats.meleeResistance! }] : []),
+        ...(variation2.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee'),
+        ...((modifiedStats2.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedStats2.rangedResistance! }] : []),
+        ...((modifiedStats2.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: modifiedStats2.meleeResistance! }] : []),
       ],
-      costs: (modifiedEnemyStats.costMultiplier != null && modifiedEnemyStats.costMultiplier !== 1.0) || (modifiedEnemyStats.stoneCostMultiplier != null && modifiedEnemyStats.stoneCostMultiplier !== 1.0) ? {
-        ...variationEnemy.costs,
-        food: Math.round((variationEnemy.costs.food || 0) * (modifiedEnemyStats.costMultiplier ?? 1)),
-        wood: Math.round((variationEnemy.costs.wood || 0) * (modifiedEnemyStats.costMultiplier ?? 1)),
-        gold: Math.round((variationEnemy.costs.gold || 0) * (modifiedEnemyStats.costMultiplier ?? 1)),
-        stone: Math.round((variationEnemy.costs.stone || 0) * (modifiedEnemyStats.costMultiplier ?? 1) * (modifiedEnemyStats.stoneCostMultiplier ?? 1)),
-        oliveoil: Math.round((variationEnemy.costs.oliveoil || 0) * (modifiedEnemyStats.costMultiplier ?? 1)),
-      } : variationEnemy.costs,
-      movement: variationEnemy.movement ? {
-        ...variationEnemy.movement,
-        speed: modifiedEnemyStats.moveSpeed
+      costs: (modifiedStats2.costMultiplier != null && modifiedStats2.costMultiplier !== 1.0) || (modifiedStats2.stoneCostMultiplier != null && modifiedStats2.stoneCostMultiplier !== 1.0) || (modifiedStats2.foodCostMultiplier != null && modifiedStats2.foodCostMultiplier !== 1.0) ? {
+        ...variation2.costs,
+        food: Math.round((variation2.costs.food || 0) * (modifiedStats2.costMultiplier ?? 1) * (modifiedStats2.foodCostMultiplier ?? 1)),
+        wood: Math.round((variation2.costs.wood || 0) * (modifiedStats2.costMultiplier ?? 1)),
+        gold: Math.round((variation2.costs.gold || 0) * (modifiedStats2.costMultiplier ?? 1)),
+        stone: Math.round((variation2.costs.stone || 0) * (modifiedStats2.costMultiplier ?? 1) * (modifiedStats2.stoneCostMultiplier ?? 1)),
+        oliveoil: Math.round((variation2.costs.oliveoil || 0) * (modifiedStats2.costMultiplier ?? 1)),
+      } : variation2.costs,
+      movement: variation2.movement ? {
+        ...variation2.movement,
+        speed: modifiedStats2.moveSpeed
       } : undefined,
-      healingRate: modifiedEnemyStats.healingRate ?? 0,
-      armorPenetration: modifiedEnemyStats.armorPenetration ?? 0,
-      firstHitBlocked: activeAbilitiesEnemy.has('ability-deflective-armor'),
-      chargeBonusBurst: getChargeBonusBurst(variationEnemy, activeTechnologiesEnemy),
-      chargeArmorType: variationEnemy.baseId === 'earls-guard' ? 'ranged' as const : undefined,
+      healingRate: modifiedStats2.healingRate ?? 0,
+      armorPenetration: modifiedStats2.armorPenetration ?? 0,
+      postChargeMeleeBonus: modifiedStats2.postChargeMeleeBonus ?? 0,
+      firstHitBlocked: activeAbilities2.has('ability-deflective-armor'),
+      chargeBonusBurst: getChargeBonusBurst(variation2, activeTechnologies2),
+      chargeArmorType: variation2.baseId === 'earls-guard' ? 'ranged' as const :
+        (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(variation2.baseId) && (abilityCounters2?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
+        (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(variation2.baseId) && (abilityCounters2?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const : undefined,
       secondaryWeapons: (() => {
-        const primaryWeaponEnemy = getPrimaryWeapon(variationEnemy);
-        const primaryBaseDamage = primaryWeaponEnemy?.damage || 0;
-        const meleeAttackDelta = modifiedEnemyStats.meleeAttack - primaryBaseDamage;
-        const isPrimaryRangedEnemy = primaryWeaponEnemy?.type === 'ranged' || primaryWeaponEnemy?.type === 'siege';
-        const rangedBaseEnemy = isPrimaryRangedEnemy ? primaryBaseDamage : (secondaryWeaponsEnemy.find((sw: any) => sw.type === 'ranged' || sw.type === 'siege')?.damage || 0); // eslint-disable-line @typescript-eslint/no-explicit-any
-        const rangedMultiplierEnemy = modifiedEnemyStats.rangedAttackMultiplier ?? 1;
-        const rangedFlatDeltaEnemy = modifiedEnemyStats.rangedAttack / rangedMultiplierEnemy - rangedBaseEnemy;
-        return secondaryWeaponsEnemy.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+        const primaryWeapon2 = getPrimaryWeapon(variation2);
+        const primaryBaseDamage = primaryWeapon2?.damage || 0;
+        const meleeAttackDelta = modifiedStats2.meleeAttack - primaryBaseDamage;
+        const isPrimaryRanged2 = primaryWeapon2?.type === 'ranged' || primaryWeapon2?.type === 'siege';
+        const rangedBase2 = isPrimaryRanged2 ? primaryBaseDamage : (secondaryWeapons2.find((sw: any) => sw.type === 'ranged' || sw.type === 'siege')?.damage || 0); // eslint-disable-line @typescript-eslint/no-explicit-any
+        const rangedMultiplier2 = modifiedStats2.rangedAttackMultiplier ?? 1;
+        const rangedFlatDelta2 = modifiedStats2.rangedAttack / rangedMultiplier2 - rangedBase2;
+        return secondaryWeapons2.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
           ...w,
           damage: (() => {
             const raw = w.type === 'ranged' || w.type === 'siege'
               ? w.damageMultiplier != null
-                ? (rangedBaseEnemy * w.damageMultiplier + rangedFlatDeltaEnemy) * rangedMultiplierEnemy * debuffMultiplier
-                : modifiedEnemyStats.rangedAttack * debuffMultiplier
+                ? (rangedBase2 * w.damageMultiplier + rangedFlatDelta2) * rangedMultiplier2 * debuffMultiplier
+                : modifiedStats2.rangedAttack * debuffMultiplier
               : (w.damage + meleeAttackDelta) * debuffMultiplier;
             return w.maxDamage != null ? Math.min(raw, w.maxDamage) : raw;
           })(),
           modifiers: (w.type === 'ranged' || w.type === 'siege')
-            ? filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], w.type)
-            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], 'melee').filter((b: any) => !b.fromWeapon)], // eslint-disable-line @typescript-eslint/no-explicit-any
+            ? filterBonusForWeapon(modifiedStats2.bonusDamage || [], w.type)
+            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedStats2.bonusDamage || [], 'melee').filter((b: any) => !b.fromWeapon)], // eslint-disable-line @typescript-eslint/no-explicit-any
         }));
       })(),
     };
   })() : undefined;
 
   // Compute stats for comparison
-  const allyData = modifiedVariationAlly || unit1;
-  const enemyData = modifiedVariationEnemy || unit2;
+  const data1 = modifiedVariation1 || unit1;
+  const data2 = modifiedVariation2 || unit2;
 
-  const modifiedUnit1 = unit1 && !variationAlly ? (() => {
-    // Compute the versus debuff from enemy abilities
-    const debuffMultiplier = unit2 && activeAbilitiesEnemy.size > 0
-      ? getVersusDebuffMultiplier(unit1.classes || [], Array.from(activeAbilitiesEnemy))
+  const modifiedUnit1 = unit1 && !variation1 ? (() => {
+    // Compute the versus debuff from civ2 abilities
+    const debuffMultiplier = unit2 && activeAbilities2.size > 0
+      ? getVersusDebuffMultiplier(unit1.classes || [], Array.from(activeAbilities2))
       : 1.0;
 
     return {
       ...unit1,
-      hitpoints: modifiedAllyStats.hitpoints,
+      hitpoints: modifiedStats1.hitpoints,
       weapons: unit1.weapons.map(weapon => ({
         ...weapon,
-        damage: (weapon.type === 'melee' ? modifiedAllyStats.meleeAttack : modifiedAllyStats.rangedAttack) * debuffMultiplier,
-        speed: modifiedAllyStats.attackSpeed,
+        damage: (weapon.type === 'melee' ? modifiedStats1.meleeAttack : weapon.type === 'siege' ? (modifiedStats1.siegeAttack ?? modifiedStats1.rangedAttack) : modifiedStats1.rangedAttack) * debuffMultiplier,
+        speed: modifiedStats1.attackSpeed,
         range: weapon.range ? {
           ...weapon.range,
-          max: modifiedAllyStats.maxRange || weapon.range.max
+          max: modifiedStats1.maxRange || weapon.range.max
         } : undefined,
-        modifiers: filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], weapon.type),
-        burst: modifiedAllyStats.burst ? { count: modifiedAllyStats.burst } : weapon.burst
+        modifiers: filterBonusForWeapon(modifiedStats1.bonusDamage || [], weapon.type),
+        burst: modifiedStats1.burst ? { count: modifiedStats1.burst } : weapon.burst
       })),
       armor: [
-        { type: 'melee', value: modifiedAllyStats.meleeArmor },
-        { type: 'ranged', value: modifiedAllyStats.rangedArmor }
+        { type: 'melee', value: modifiedStats1.meleeArmor },
+        { type: 'ranged', value: modifiedStats1.rangedArmor }
       ],
       resistance: [
         ...(unit1.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee'),
-        ...((modifiedAllyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedAllyStats.rangedResistance! }] : []),
-        ...((modifiedAllyStats.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: modifiedAllyStats.meleeResistance! }] : []),
+        ...((modifiedStats1.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedStats1.rangedResistance! }] : []),
+        ...((modifiedStats1.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: modifiedStats1.meleeResistance! }] : []),
       ],
       movement: unit1.movement ? {
         ...unit1.movement,
-        speed: modifiedAllyStats.moveSpeed
+        speed: modifiedStats1.moveSpeed
       } : undefined,
-      healingRate: modifiedAllyStats.healingRate ?? 0,
-      armorPenetration: modifiedAllyStats.armorPenetration ?? 0,
-      firstHitBlocked: activeAbilitiesAlly.has('ability-deflective-armor'),
-      chargeBonusBurst: getChargeBonusBurst(unit1, activeTechnologiesAlly),
-      chargeArmorType: unit1.id === 'earls-guard' ? 'ranged' as const : undefined,
+      healingRate: modifiedStats1.healingRate ?? 0,
+      armorPenetration: modifiedStats1.armorPenetration ?? 0,
+      postChargeMeleeBonus: modifiedStats1.postChargeMeleeBonus ?? 0,
+      firstHitBlocked: activeAbilities1.has('ability-deflective-armor'),
+      chargeBonusBurst: getChargeBonusBurst(unit1, activeTechnologies1),
+      chargeArmorType: unit1.id === 'earls-guard' ? 'ranged' as const :
+        (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(unit1.id) && (abilityCounters1?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
+        (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(unit1.id) && (abilityCounters1?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const : undefined,
       secondaryWeapons: (() => {
         const primaryWeaponU1 = getPrimaryWeapon(unit1);
         const primaryBaseDamage = primaryWeaponU1?.damage || 0;
-        const meleeAttackDelta = modifiedAllyStats.meleeAttack - primaryBaseDamage;
+        const meleeAttackDelta = modifiedStats1.meleeAttack - primaryBaseDamage;
         const isPrimaryRangedU1 = primaryWeaponU1?.type === 'ranged' || primaryWeaponU1?.type === 'siege';
-        const rangedBaseU1 = isPrimaryRangedU1 ? primaryBaseDamage : (secondaryWeaponsAlly.find((sw: any) => sw.type === 'ranged' || sw.type === 'siege')?.damage || 0); // eslint-disable-line @typescript-eslint/no-explicit-any
-        const rangedMultiplierU1 = modifiedAllyStats.rangedAttackMultiplier ?? 1;
-        const rangedFlatDeltaU1 = modifiedAllyStats.rangedAttack / rangedMultiplierU1 - rangedBaseU1;
-        return secondaryWeaponsAlly.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+        const rangedBaseU1 = isPrimaryRangedU1 ? primaryBaseDamage : (secondaryWeapons1.find((sw: any) => sw.type === 'ranged' || sw.type === 'siege')?.damage || 0); // eslint-disable-line @typescript-eslint/no-explicit-any
+        const rangedMultiplierU1 = modifiedStats1.rangedAttackMultiplier ?? 1;
+        const rangedFlatDeltaU1 = modifiedStats1.rangedAttack / rangedMultiplierU1 - rangedBaseU1;
+        return secondaryWeapons1.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
           ...w,
           damage: (() => {
             const raw = w.type === 'ranged' || w.type === 'siege'
               ? w.damageMultiplier != null
                 ? (rangedBaseU1 * w.damageMultiplier + rangedFlatDeltaU1) * rangedMultiplierU1 * debuffMultiplier
-                : modifiedAllyStats.rangedAttack * debuffMultiplier
+                : modifiedStats1.rangedAttack * debuffMultiplier
               : (w.damage + meleeAttackDelta) * debuffMultiplier;
             return w.maxDamage != null ? Math.min(raw, w.maxDamage) : raw;
           })(),
           modifiers: (w.type === 'ranged' || w.type === 'siege')
-            ? filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], w.type).filter((m: any) => !m.chargeBonusLabel) // eslint-disable-line @typescript-eslint/no-explicit-any
-            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedAllyStats.bonusDamage || [], 'melee').filter((b: any) => !b.fromWeapon)], // eslint-disable-line @typescript-eslint/no-explicit-any
+            ? filterBonusForWeapon(modifiedStats1.bonusDamage || [], w.type).filter((m: any) => !m.chargeBonusLabel) // eslint-disable-line @typescript-eslint/no-explicit-any
+            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedStats1.bonusDamage || [], 'melee').filter((b: any) => !b.fromWeapon)], // eslint-disable-line @typescript-eslint/no-explicit-any
         }));
       })(),
     };
   })() : undefined;
 
-  const modifiedUnit2 = unit2 && !variationEnemy ? (() => {
-    // Compute the versus debuff from ally abilities
-    const debuffMultiplier = unit1 && activeAbilitiesAlly.size > 0
-      ? getVersusDebuffMultiplier(unit2.classes || [], Array.from(activeAbilitiesAlly))
+  const modifiedUnit2 = unit2 && !variation2 ? (() => {
+    // Compute the versus debuff from civ1 abilities
+    const debuffMultiplier = unit1 && activeAbilities1.size > 0
+      ? getVersusDebuffMultiplier(unit2.classes || [], Array.from(activeAbilities1))
       : 1.0;
 
     return {
       ...unit2,
-      hitpoints: modifiedEnemyStats.hitpoints,
+      hitpoints: modifiedStats2.hitpoints,
       weapons: unit2.weapons.map(weapon => ({
         ...weapon,
-        damage: (weapon.type === 'melee' ? modifiedEnemyStats.meleeAttack : modifiedEnemyStats.rangedAttack) * debuffMultiplier,
-        speed: modifiedEnemyStats.attackSpeed,
+        damage: (weapon.type === 'melee' ? modifiedStats2.meleeAttack : weapon.type === 'siege' ? (modifiedStats2.siegeAttack ?? modifiedStats2.rangedAttack) : modifiedStats2.rangedAttack) * debuffMultiplier,
+        speed: modifiedStats2.attackSpeed,
         range: weapon.range ? {
           ...weapon.range,
-          max: modifiedEnemyStats.maxRange || weapon.range.max
+          max: modifiedStats2.maxRange || weapon.range.max
         } : undefined,
-        modifiers: filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], weapon.type),
-        burst: modifiedEnemyStats.burst ? { count: modifiedEnemyStats.burst } : weapon.burst
+        modifiers: filterBonusForWeapon(modifiedStats2.bonusDamage || [], weapon.type),
+        burst: modifiedStats2.burst ? { count: modifiedStats2.burst } : weapon.burst
       })),
       armor: [
-        { type: 'melee', value: modifiedEnemyStats.meleeArmor },
-        { type: 'ranged', value: modifiedEnemyStats.rangedArmor }
+        { type: 'melee', value: modifiedStats2.meleeArmor },
+        { type: 'ranged', value: modifiedStats2.rangedArmor }
       ],
       resistance: [
         ...(unit2.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee'),
-        ...((modifiedEnemyStats.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedEnemyStats.rangedResistance! }] : []),
-        ...((modifiedEnemyStats.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: modifiedEnemyStats.meleeResistance! }] : []),
+        ...((modifiedStats2.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedStats2.rangedResistance! }] : []),
+        ...((modifiedStats2.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: modifiedStats2.meleeResistance! }] : []),
       ],
       movement: unit2.movement ? {
         ...unit2.movement,
-        speed: modifiedEnemyStats.moveSpeed
+        speed: modifiedStats2.moveSpeed
       } : undefined,
-      healingRate: modifiedEnemyStats.healingRate ?? 0,
-      armorPenetration: modifiedEnemyStats.armorPenetration ?? 0,
-      firstHitBlocked: activeAbilitiesEnemy.has('ability-deflective-armor'),
-      chargeBonusBurst: getChargeBonusBurst(unit2, activeTechnologiesEnemy),
-      chargeArmorType: unit2.id === 'earls-guard' ? 'ranged' as const : undefined,
+      healingRate: modifiedStats2.healingRate ?? 0,
+      armorPenetration: modifiedStats2.armorPenetration ?? 0,
+      postChargeMeleeBonus: modifiedStats2.postChargeMeleeBonus ?? 0,
+      firstHitBlocked: activeAbilities2.has('ability-deflective-armor'),
+      chargeBonusBurst: getChargeBonusBurst(unit2, activeTechnologies2),
+      chargeArmorType: unit2.id === 'earls-guard' ? 'ranged' as const :
+        (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(unit2.id) && (abilityCounters2?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
+        (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(unit2.id) && (abilityCounters2?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const : undefined,
       secondaryWeapons: (() => {
         const primaryWeaponU2 = getPrimaryWeapon(unit2);
         const primaryBaseDamage = primaryWeaponU2?.damage || 0;
-        const meleeAttackDelta = modifiedEnemyStats.meleeAttack - primaryBaseDamage;
+        const meleeAttackDelta = modifiedStats2.meleeAttack - primaryBaseDamage;
         const isPrimaryRangedU2 = primaryWeaponU2?.type === 'ranged' || primaryWeaponU2?.type === 'siege';
-        const rangedBaseU2 = isPrimaryRangedU2 ? primaryBaseDamage : (secondaryWeaponsEnemy.find((sw: any) => sw.type === 'ranged' || sw.type === 'siege')?.damage || 0); // eslint-disable-line @typescript-eslint/no-explicit-any
-        const rangedMultiplierU2 = modifiedEnemyStats.rangedAttackMultiplier ?? 1;
-        const rangedFlatDeltaU2 = modifiedEnemyStats.rangedAttack / rangedMultiplierU2 - rangedBaseU2;
-        return secondaryWeaponsEnemy.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+        const rangedBaseU2 = isPrimaryRangedU2 ? primaryBaseDamage : (secondaryWeapons2.find((sw: any) => sw.type === 'ranged' || sw.type === 'siege')?.damage || 0); // eslint-disable-line @typescript-eslint/no-explicit-any
+        const rangedMultiplierU2 = modifiedStats2.rangedAttackMultiplier ?? 1;
+        const rangedFlatDeltaU2 = modifiedStats2.rangedAttack / rangedMultiplierU2 - rangedBaseU2;
+        return secondaryWeapons2.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
           ...w,
           damage: (() => {
             const raw = w.type === 'ranged' || w.type === 'siege'
               ? w.damageMultiplier != null
                 ? (rangedBaseU2 * w.damageMultiplier + rangedFlatDeltaU2) * rangedMultiplierU2 * debuffMultiplier
-                : modifiedEnemyStats.rangedAttack * debuffMultiplier
+                : modifiedStats2.rangedAttack * debuffMultiplier
               : (w.damage + meleeAttackDelta) * debuffMultiplier;
             return w.maxDamage != null ? Math.min(raw, w.maxDamage) : raw;
           })(),
           modifiers: (w.type === 'ranged' || w.type === 'siege')
-            ? filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], w.type)
-            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedEnemyStats.bonusDamage || [], 'melee').filter((b: any) => !b.fromWeapon)], // eslint-disable-line @typescript-eslint/no-explicit-any
+            ? filterBonusForWeapon(modifiedStats2.bonusDamage || [], w.type)
+            : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedStats2.bonusDamage || [], 'melee').filter((b: any) => !b.fromWeapon)], // eslint-disable-line @typescript-eslint/no-explicit-any
         }));
       })(),
     };
   })() : undefined;
 
+  // noTimer variations: same structure as originals but with duration-tagged ability effects excluded.
+  // Only built when showDurationEffect is ON and a timed ability is active on that side.
+  const modifiedVariation1NoTimer = (showDurationEffect && timedDuration1 && modifiedVariation1 && variation1) ? (() => {
+    const s = modifiedStats1NoTimer;
+    const debuffMult = unit2 && activeAbilities2.size > 0 ? getVersusDebuffMultiplier(variation1.classes || [], Array.from(activeAbilities2)) : 1.0;
+    return {
+      ...modifiedVariation1,
+      hitpoints: s.hitpoints,
+      weapons: variation1.weapons.map(w => ({
+        ...w,
+        damage: (w.type === 'melee' ? s.meleeAttack : w.type === 'siege' ? (s.siegeAttack ?? s.rangedAttack) : s.rangedAttack) * debuffMult,
+        speed: s.attackSpeed,
+        range: w.range ? { ...w.range, max: s.maxRange || w.range.max } : undefined,
+        modifiers: filterBonusForWeapon(s.bonusDamage || [], w.type),
+        burst: s.burst ? { count: s.burst } : w.burst,
+      })),
+      armor: [{ type: 'melee', value: s.meleeArmor }, { type: 'ranged', value: s.rangedArmor }],
+      resistance: [
+        ...(variation1.resistance || []).filter((r: any) => r.type !== 'ranged' && r.type !== 'melee'), // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...((s.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: s.rangedResistance! }] : []),
+        ...((s.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: s.meleeResistance! }] : []),
+      ],
+      movement: modifiedVariation1.movement ? { ...modifiedVariation1.movement, speed: s.moveSpeed } : undefined,
+      healingRate: s.healingRate ?? 0,
+      armorPenetration: s.armorPenetration ?? 0,
+    };
+  })() : undefined;
+
+  const modifiedVariation2NoTimer = (showDurationEffect && timedDuration2 && modifiedVariation2 && variation2) ? (() => {
+    const s = modifiedStats2NoTimer;
+    const debuffMult = unit1 && activeAbilities1.size > 0 ? getVersusDebuffMultiplier(variation2.classes || [], Array.from(activeAbilities1)) : 1.0;
+    return {
+      ...modifiedVariation2,
+      hitpoints: s.hitpoints,
+      weapons: variation2.weapons.map(w => ({
+        ...w,
+        damage: (w.type === 'melee' ? s.meleeAttack : w.type === 'siege' ? (s.siegeAttack ?? s.rangedAttack) : s.rangedAttack) * debuffMult,
+        speed: s.attackSpeed,
+        range: w.range ? { ...w.range, max: s.maxRange || w.range.max } : undefined,
+        modifiers: filterBonusForWeapon(s.bonusDamage || [], w.type),
+        burst: s.burst ? { count: s.burst } : w.burst,
+      })),
+      armor: [{ type: 'melee', value: s.meleeArmor }, { type: 'ranged', value: s.rangedArmor }],
+      resistance: [
+        ...(variation2.resistance || []).filter((r: any) => r.type !== 'ranged' && r.type !== 'melee'), // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...((s.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: s.rangedResistance! }] : []),
+        ...((s.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: s.meleeResistance! }] : []),
+      ],
+      movement: modifiedVariation2.movement ? { ...modifiedVariation2.movement, speed: s.moveSpeed } : undefined,
+      healingRate: s.healingRate ?? 0,
+      armorPenetration: s.armorPenetration ?? 0,
+    };
+  })() : undefined;
+
+  const modifiedUnit1NoTimer = (showDurationEffect && timedDuration1 && unit1 && !variation1) ? (() => {
+    const s = modifiedStats1NoTimer;
+    const debuffMult = unit2 && activeAbilities2.size > 0 ? getVersusDebuffMultiplier(unit1.classes || [], Array.from(activeAbilities2)) : 1.0;
+    return {
+      ...modifiedUnit1!,
+      hitpoints: s.hitpoints,
+      weapons: unit1.weapons.map(w => ({
+        ...w,
+        damage: (w.type === 'melee' ? s.meleeAttack : w.type === 'siege' ? (s.siegeAttack ?? s.rangedAttack) : s.rangedAttack) * debuffMult,
+        speed: s.attackSpeed,
+        range: w.range ? { ...w.range, max: s.maxRange || w.range.max } : undefined,
+        modifiers: filterBonusForWeapon(s.bonusDamage || [], w.type),
+        burst: s.burst ? { count: s.burst } : w.burst,
+      })),
+      armor: [{ type: 'melee', value: s.meleeArmor }, { type: 'ranged', value: s.rangedArmor }],
+      resistance: [
+        ...(unit1.resistance || []).filter((r: any) => r.type !== 'ranged' && r.type !== 'melee'), // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...((s.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: s.rangedResistance! }] : []),
+        ...((s.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: s.meleeResistance! }] : []),
+      ],
+      movement: unit1.movement ? { ...unit1.movement, speed: s.moveSpeed } : undefined,
+      healingRate: s.healingRate ?? 0,
+      armorPenetration: s.armorPenetration ?? 0,
+    };
+  })() : undefined;
+
+  const modifiedUnit2NoTimer = (showDurationEffect && timedDuration2 && unit2 && !variation2) ? (() => {
+    const s = modifiedStats2NoTimer;
+    const debuffMult = unit1 && activeAbilities1.size > 0 ? getVersusDebuffMultiplier(unit2.classes || [], Array.from(activeAbilities1)) : 1.0;
+    return {
+      ...modifiedUnit2!,
+      hitpoints: s.hitpoints,
+      weapons: unit2.weapons.map(w => ({
+        ...w,
+        damage: (w.type === 'melee' ? s.meleeAttack : w.type === 'siege' ? (s.siegeAttack ?? s.rangedAttack) : s.rangedAttack) * debuffMult,
+        speed: s.attackSpeed,
+        range: w.range ? { ...w.range, max: s.maxRange || w.range.max } : undefined,
+        modifiers: filterBonusForWeapon(s.bonusDamage || [], w.type),
+        burst: s.burst ? { count: s.burst } : w.burst,
+      })),
+      armor: [{ type: 'melee', value: s.meleeArmor }, { type: 'ranged', value: s.rangedArmor }],
+      resistance: [
+        ...(unit2.resistance || []).filter((r: any) => r.type !== 'ranged' && r.type !== 'melee'), // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...((s.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: s.rangedResistance! }] : []),
+        ...((s.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: s.meleeResistance! }] : []),
+      ],
+      movement: unit2.movement ? { ...unit2.movement, speed: s.moveSpeed } : undefined,
+      healingRate: s.healingRate ?? 0,
+      armorPenetration: s.armorPenetration ?? 0,
+    };
+  })() : undefined;
+
   // Final stats with costs
-  const allyStats = allyData ? {
-    hp: modifiedAllyStats.hitpoints,
+  const stats1 = data1 ? {
+    hp: modifiedStats1.hitpoints,
     attack: (() => {
-      const baseAttack = Math.max(modifiedAllyStats.meleeAttack, modifiedAllyStats.rangedAttack);
-      // In versus mode, apply the enemy abilities debuff to the ally's damage
-      if (unit1 && unit2 && activeAbilitiesEnemy.size > 0) {
+      const baseAttack = Math.max(modifiedStats1.meleeAttack, modifiedStats1.rangedAttack);
+      // In versus mode, apply the civ2 abilities debuff to the civ1's damage
+      if (unit1 && unit2 && activeAbilities2.size > 0) {
         const debuffMultiplier = getVersusDebuffMultiplier(
           unit1.classes || [],
-          Array.from(activeAbilitiesEnemy)
+          Array.from(activeAbilities2)
         );
         return baseAttack * debuffMultiplier;
       }
       return baseAttack;
     })(),
-    meleeArmor: modifiedAllyStats.meleeArmor,
-    rangedArmor: modifiedAllyStats.rangedArmor,
-    speed: modifiedAllyStats.moveSpeed,
-    attackSpeed: modifiedAllyStats.attackSpeed || 0,
-    maxRange: modifiedAllyStats.maxRange || 0,
-    bonusDamage: modifiedAllyStats.bonusDamage || [],
-    chargeBonus: getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly, activeTechnologiesAlly, modifiedAllyStats.chargeMultiplier, modifiedAllyStats.meleeAttack, abilityCountersAlly, modifiedAllyStats.rangedAttack),
-    cost: variationAlly ? getTotalCost(variationAlly) : (unit1 ? getTotalCost(unit1) : 0),
-    costs: variationAlly ? variationAlly.costs : (unit1 ? unit1.costs : undefined),
-    population: 'costs' in (variationAlly || unit1 || {}) ? (variationAlly || unit1 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
-    productionTime: 'costs' in (variationAlly || unit1 || {}) ? (variationAlly || unit1 as any)?.costs?.time : undefined // eslint-disable-line @typescript-eslint/no-explicit-any
+    meleeArmor: modifiedStats1.meleeArmor,
+    rangedArmor: modifiedStats1.rangedArmor,
+    speed: modifiedStats1.moveSpeed,
+    attackSpeed: modifiedStats1.attackSpeed || 0,
+    maxRange: modifiedStats1.maxRange || 0,
+    bonusDamage: modifiedStats1.bonusDamage || [],
+    chargeBonus: getChargeBonus(data1, activeAbilities1, selectedAge1, activeTechnologies1, modifiedStats1.chargeMultiplier, modifiedStats1.meleeAttack, abilityCounters1, modifiedStats1.rangedAttack),
+    cost: variation1 ? getTotalCost(variation1) : (unit1 ? getTotalCost(unit1) : 0),
+    costs: variation1 ? variation1.costs : (unit1 ? unit1.costs : undefined),
+    population: 'costs' in (variation1 || unit1 || {}) ? (variation1 || unit1 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
+    productionTime: 'costs' in (variation1 || unit1 || {}) ? (variation1 || unit1 as any)?.costs?.time : undefined // eslint-disable-line @typescript-eslint/no-explicit-any
   } : null;
 
-  const enemyStats = enemyData ? {
-    hp: modifiedEnemyStats.hitpoints,
+  const stats2 = data2 ? {
+    hp: modifiedStats2.hitpoints,
     attack: (() => {
-      const baseAttack = Math.max(modifiedEnemyStats.meleeAttack, modifiedEnemyStats.rangedAttack);
-      // In versus mode, apply the ally abilities debuff to the enemy's damage
-      if (unit1 && unit2 && activeAbilitiesAlly.size > 0) {
+      const baseAttack = Math.max(modifiedStats2.meleeAttack, modifiedStats2.rangedAttack);
+      // In versus mode, apply the civ1 abilities debuff to the civ2's damage
+      if (unit1 && unit2 && activeAbilities1.size > 0) {
         const debuffMultiplier = getVersusDebuffMultiplier(
           unit2.classes || [],
-          Array.from(activeAbilitiesAlly)
+          Array.from(activeAbilities1)
         );
         return baseAttack * debuffMultiplier;
       }
       return baseAttack;
     })(),
-    meleeArmor: modifiedEnemyStats.meleeArmor,
-    rangedArmor: modifiedEnemyStats.rangedArmor,
-    speed: modifiedEnemyStats.moveSpeed,
-    attackSpeed: modifiedEnemyStats.attackSpeed || 0,
-    maxRange: modifiedEnemyStats.maxRange || 0,
-    bonusDamage: modifiedEnemyStats.bonusDamage || [],
-    chargeBonus: getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy, activeTechnologiesEnemy, modifiedEnemyStats.chargeMultiplier, modifiedEnemyStats.meleeAttack, abilityCountersEnemy, modifiedEnemyStats.rangedAttack),
-    cost: variationEnemy ? getTotalCost(variationEnemy) : (unit2 ? getTotalCost(unit2) : 0),
-    costs: variationEnemy ? variationEnemy.costs : (unit2 ? unit2.costs : undefined),
-    population: 'costs' in (variationEnemy || unit2 || {}) ? (variationEnemy || unit2 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
-    productionTime: 'costs' in (variationEnemy || unit2 || {}) ? (variationEnemy || unit2 as any)?.costs?.time : undefined // eslint-disable-line @typescript-eslint/no-explicit-any
+    meleeArmor: modifiedStats2.meleeArmor,
+    rangedArmor: modifiedStats2.rangedArmor,
+    speed: modifiedStats2.moveSpeed,
+    attackSpeed: modifiedStats2.attackSpeed || 0,
+    maxRange: modifiedStats2.maxRange || 0,
+    bonusDamage: modifiedStats2.bonusDamage || [],
+    chargeBonus: getChargeBonus(data2, activeAbilities2, selectedAge2, activeTechnologies2, modifiedStats2.chargeMultiplier, modifiedStats2.meleeAttack, abilityCounters2, modifiedStats2.rangedAttack),
+    cost: variation2 ? getTotalCost(variation2) : (unit2 ? getTotalCost(unit2) : 0),
+    costs: variation2 ? variation2.costs : (unit2 ? unit2.costs : undefined),
+    population: 'costs' in (variation2 || unit2 || {}) ? (variation2 || unit2 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
+    productionTime: 'costs' in (variation2 || unit2 || {}) ? (variation2 || unit2 as any)?.costs?.time : undefined // eslint-disable-line @typescript-eslint/no-explicit-any
   } : null;
 
   // Build aligned bonus lists for each unit
   // 1. First the shared bonuses (same target)
   // 2. Then the unique bonuses for each side
-  const allyBonuses = allyStats?.bonusDamage || [];
-  const enemyBonuses = enemyStats?.bonusDamage || [];
+  const bonuses1 = stats1?.bonusDamage || [];
+  const bonuses2 = stats2?.bonusDamage || [];
 
   const matchedTargets = new Set<string>();
-  const alignedAllyBonuses: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
-  const alignedEnemyBonuses: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const alignedBonuses1: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const alignedBonuses2: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-  // Phase 0: Add the charge bonus on the first line ONLY if at least one unit has it
-  const allyHasChargeBonus = allyStats?.chargeBonus && allyStats.chargeBonus > 0;
-  const enemyHasChargeBonus = enemyStats?.chargeBonus && enemyStats.chargeBonus > 0;
+  // Phase 0: Add strike (holy wrath) and charge bonuses as separate rows
+  const baseId1 = variation1?.baseId || unit1?.id;
+  const baseId2 = variation2?.baseId || unit2?.id;
 
-  let allyChargeLineIndex = -1;
-  let enemyChargeLineIndex = -1;
-
-  if (allyHasChargeBonus || enemyHasChargeBonus) {
-    if (allyHasChargeBonus) {
-      const allyBaseId = variationAlly?.baseId || unit1?.id;
-      alignedAllyBonuses.push({
-        isChargeBonus: true,
-        value: allyStats?.chargeBonus,
-        chargeBonusLabel: allyBaseId === 'kipchak-archer' ? 'Bleed' : allyBaseId === 'earls-guard' ? 'Dagger' : 'Charge',
-        chargeBonusBurst: getChargeBonusBurst(allyData, activeTechnologiesAlly),
-      });
-      allyChargeLineIndex = 0;
-    } else {
-      alignedAllyBonuses.push({ hidden: true });
+  const computeStrikeBonus = (baseId: string, abilityCounters: Map<string, number> | undefined, activeAbilities: Set<string>) => {
+    if (activeAbilities.has('charge-attack')) {
+      const stacks = abilityCounters?.get('ability-holy-wrath') ?? 0;
+      const perStack = baseId === 'jeanne-darc-woman-at-arms' ? 20 : baseId === 'jeanne-darc-knight' ? 30 : baseId === 'jeanne-darc-blast-cannon' ? 50 : 0;
+      if (stacks > 0 && perStack > 0) return stacks * perStack;
     }
+    const arrowStacks = abilityCounters?.get('ability-divine-arrow') ?? 0;
+    const arrowPerStack = baseId === 'jeanne-darc-hunter' ? 40 : baseId === 'jeanne-darc-mounted-archer' ? 100 : baseId === 'jeanne-darc-markswoman' ? 150 : 0;
+    return arrowStacks * arrowPerStack;
+  };
 
-    if (enemyHasChargeBonus) {
-      const enemyBaseId = variationEnemy?.baseId || unit2?.id;
-      alignedEnemyBonuses.push({
-        isChargeBonus: true,
-        value: enemyStats?.chargeBonus,
-        chargeBonusLabel: enemyBaseId === 'kipchak-archer' ? 'Bleed' : enemyBaseId === 'earls-guard' ? 'Dagger' : 'Charge',
-        chargeBonusBurst: getChargeBonusBurst(enemyData, activeTechnologiesEnemy),
-      });
-      enemyChargeLineIndex = 0;
-    } else {
-      alignedEnemyBonuses.push({ hidden: true });
-    }
+  const strikeBonus1 = data1 ? computeStrikeBonus(baseId1, abilityCounters1, activeAbilities1) : 0;
+  const strikeBonus2 = data2 ? computeStrikeBonus(baseId2, abilityCounters2, activeAbilities2) : 0;
+  const chargeOnly1 = Math.max(0, (stats1?.chargeBonus ?? 0) - strikeBonus1);
+  const chargeOnly2 = Math.max(0, (stats2?.chargeBonus ?? 0) - strikeBonus2);
+
+  const hasStrike1 = strikeBonus1 > 0;
+  const hasChargeOnly1 = chargeOnly1 > 0;
+  const hasStrike2 = strikeBonus2 > 0;
+  const hasChargeOnly2 = chargeOnly2 > 0;
+
+  let chargeLineIndex1 = -1;
+  let chargeLineIndex2 = -1;
+
+  const JD_RANGED_FORM_IDS = ['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'];
+  const strikeLabel1 = JD_RANGED_FORM_IDS.includes(baseId1) ? 'Divine arrow' : 'Strike';
+  const strikeLabel2 = JD_RANGED_FORM_IDS.includes(baseId2) ? 'Divine arrow' : 'Strike';
+
+  // Strike row (holy wrath / divine arrow) — only pushed if at least one side has it
+  if (hasStrike1 || hasStrike2) {
+    alignedBonuses1.push(hasStrike1
+      ? { isChargeBonus: true, value: strikeBonus1, chargeBonusLabel: strikeLabel1, chargeBonusBurst: 1 }
+      : { hidden: true });
+    alignedBonuses2.push(hasStrike2
+      ? { isChargeBonus: true, value: strikeBonus2, chargeBonusLabel: strikeLabel2, chargeBonusBurst: 1 }
+      : { hidden: true });
+  }
+
+  // Charge row — only pushed if at least one side has it
+  if (hasChargeOnly1 || hasChargeOnly2) {
+    const chargeLabel1 = baseId1 === 'kipchak-archer' ? 'Bleed' : baseId1 === 'earls-guard' ? 'Dagger' : 'Charge';
+    const chargeLabel2 = baseId2 === 'kipchak-archer' ? 'Bleed' : baseId2 === 'earls-guard' ? 'Dagger' : 'Charge';
+
+    alignedBonuses1.push(hasChargeOnly1
+      ? { isChargeBonus: true, value: chargeOnly1, chargeBonusLabel: chargeLabel1, chargeBonusBurst: getChargeBonusBurst(data1, activeTechnologies1) }
+      : { hidden: true });
+    if (hasChargeOnly1) chargeLineIndex1 = alignedBonuses1.length - 1;
+
+    alignedBonuses2.push(hasChargeOnly2
+      ? { isChargeBonus: true, value: chargeOnly2, chargeBonusLabel: chargeLabel2, chargeBonusBurst: getChargeBonusBurst(data2, activeTechnologies2) }
+      : { hidden: true });
+    if (hasChargeOnly2) chargeLineIndex2 = alignedBonuses2.length - 1;
   }
 
   // Phase 1: Add the shared bonuses (aligned)
-  allyBonuses.forEach((allyBonus: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-    const allyTarget = allyBonus.target?.class?.flat().join(' ') || '';
-    const enemyBonus = enemyBonuses.find((b: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-      const enemyTarget = b.target?.class?.flat().join(' ') || '';
-      return enemyTarget === allyTarget;
+  bonuses1.forEach((bonus1: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const target1 = bonus1.target?.class?.flat().join(' ') || '';
+    const bonus2 = bonuses2.find((b: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      const target2 = b.target?.class?.flat().join(' ') || '';
+      return target2 === target1;
     });
 
-    if (enemyBonus) {
-      matchedTargets.add(allyTarget);
-      alignedAllyBonuses.push(allyBonus);
-      alignedEnemyBonuses.push(enemyBonus);
+    if (bonus2) {
+      matchedTargets.add(target1);
+      alignedBonuses1.push(bonus1);
+      alignedBonuses2.push(bonus2);
     }
   });
 
   // Phase 2: Add the unmatched bonuses
-  const unmatchedAlly = allyBonuses.filter((b: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const unmatched1 = bonuses1.filter((b: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     const target = b.target?.class?.flat().join(' ') || '';
     return !matchedTargets.has(target);
   });
 
-  const unmatchedEnemy = enemyBonuses.filter((b: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const unmatched2 = bonuses2.filter((b: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     const target = b.target?.class?.flat().join(' ') || '';
     return !matchedTargets.has(target);
   });
 
   // Phase 3: Fill the empty rows created by the charge bonus with the first unmatched bonuses
-  let allyUnmatchedIndex = 0;
-  let enemyUnmatchedIndex = 0;
+  let unmatchedIndex1 = 0;
+  let unmatchedIndex2 = 0;
 
-  if (allyChargeLineIndex === -1 && alignedAllyBonuses.length > 0 && alignedAllyBonuses[0]?.hidden && unmatchedAlly.length > 0) {
-    alignedAllyBonuses[0] = unmatchedAlly[0];
-    allyUnmatchedIndex = 1;
+  if (chargeLineIndex1 === -1 && alignedBonuses1.length > 0 && alignedBonuses1[0]?.hidden && unmatched1.length > 0) {
+    alignedBonuses1[0] = unmatched1[0];
+    unmatchedIndex1 = 1;
   }
 
-  if (enemyChargeLineIndex === -1 && alignedEnemyBonuses.length > 0 && alignedEnemyBonuses[0]?.hidden && unmatchedEnemy.length > 0) {
-    alignedEnemyBonuses[0] = unmatchedEnemy[0];
-    enemyUnmatchedIndex = 1;
+  if (chargeLineIndex2 === -1 && alignedBonuses2.length > 0 && alignedBonuses2[0]?.hidden && unmatched2.length > 0) {
+    alignedBonuses2[0] = unmatched2[0];
+    unmatchedIndex2 = 1;
   }
 
   // Phase 4: Add the remaining unmatched bonuses with empty rows to preserve alignment
-  const remainingUnmatchedAlly = unmatchedAlly.slice(allyUnmatchedIndex);
-  const remainingUnmatchedEnemy = unmatchedEnemy.slice(enemyUnmatchedIndex);
-  const maxUnmatched = Math.max(remainingUnmatchedAlly.length, remainingUnmatchedEnemy.length);
+  const remainingUnmatched1 = unmatched1.slice(unmatchedIndex1);
+  const remainingUnmatched2 = unmatched2.slice(unmatchedIndex2);
+  const maxUnmatched = Math.max(remainingUnmatched1.length, remainingUnmatched2.length);
 
   for (let i = 0; i < maxUnmatched; i++) {
-    if (i < remainingUnmatchedAlly.length) {
-      alignedAllyBonuses.push(remainingUnmatchedAlly[i]);
+    if (i < remainingUnmatched1.length) {
+      alignedBonuses1.push(remainingUnmatched1[i]);
     } else {
-      alignedAllyBonuses.push({ hidden: true });
+      alignedBonuses1.push({ hidden: true });
     }
 
-    if (i < remainingUnmatchedEnemy.length) {
-      alignedEnemyBonuses.push(remainingUnmatchedEnemy[i]);
+    if (i < remainingUnmatched2.length) {
+      alignedBonuses2.push(remainingUnmatched2[i]);
     } else {
-      alignedEnemyBonuses.push({ hidden: true });
+      alignedBonuses2.push({ hidden: true });
     }
   }
 
-  const maxBonusDamageLines = alignedAllyBonuses.length;
+  const maxBonusDamageLines = alignedBonuses1.length;
 
   // If no units are loaded, display a message
   if (!aoe4Units || aoe4Units.length === 0) {
@@ -682,9 +892,9 @@ const Sandbox = () => {
             {isVersus && (
               <div className="inline-flex items-center gap-3">
                 {(() => {
-                  const allyEffectiveCost = modifiedVariationAlly ? getTotalCost(modifiedVariationAlly) : (allyStats?.cost ?? 0);
-                  const enemyEffectiveCost = modifiedVariationEnemy ? getTotalCost(modifiedVariationEnemy) : (enemyStats?.cost ?? 0);
-                  const sameCost = unit1 && unit2 && allyEffectiveCost > 0 && enemyEffectiveCost > 0 && allyEffectiveCost === enemyEffectiveCost;
+                  const effectiveCost1 = modifiedVariation1 ? getTotalCost(modifiedVariation1) : (stats1?.cost ?? 0);
+                  const effectiveCost2 = modifiedVariation2 ? getTotalCost(modifiedVariation2) : (stats2?.cost ?? 0);
+                  const sameCost = unit1 && unit2 && effectiveCost1 > 0 && effectiveCost2 > 0 && effectiveCost1 === effectiveCost2;
                   return (
                     <div
                       className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card ${sameCost ? 'opacity-50' : ''}`}
@@ -741,19 +951,31 @@ const Sandbox = () => {
                     )}
                   </div>
                 )}
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card">
+                  <input
+                    type="checkbox"
+                    id="showDurationEffect"
+                    checked={showDurationEffect}
+                    onChange={(e) => setShowDurationEffect(e.target.checked)}
+                    className="w-4 h-4 rounded border-border"
+                  />
+                  <label htmlFor="showDurationEffect" className="text-sm font-medium cursor-pointer">
+                    ⏱ Duration
+                  </label>
+                </div>
               </div>
             )}
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-6 mb-8">
-          {/* Ally Column */}
+          {/* Civ 1 Column */}
           <div className="space-y-4 flex flex-col items-end">
-            <label className="text-sm font-medium text-foreground">Civilization (Ally):</label>
-            <Select value={selectedCivAlly} onValueChange={setSelectedCivAlly}>
+            <label className="text-sm font-medium text-foreground">Civ 1:</label>
+            <Select value={selectedCiv1} onValueChange={setSelectedCiv1}>
               <SelectTrigger className="bg-secondary border-border h-14">
                 <SelectValue>
-                  {selectedCivAlly === "all" ? (
+                  {selectedCiv1 === "all" ? (
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 flex items-center justify-center bg-muted rounded">
                         <span className="text-xl">?</span>
@@ -763,12 +985,12 @@ const Sandbox = () => {
                   ) : (
                     <div className="flex items-center gap-3">
                       <img
-                        src={CIVILIZATIONS.find(c => c.abbr === selectedCivAlly)?.flagPath}
+                        src={CIVILIZATIONS.find(c => c.abbr === selectedCiv1)?.flagPath}
                         alt=""
                         className="w-8 h-8 object-contain"
                       />
                       <span className="font-medium">
-                        {CIVILIZATIONS.find(c => c.abbr === selectedCivAlly)?.name}
+                        {CIVILIZATIONS.find(c => c.abbr === selectedCiv1)?.name}
                       </span>
                     </div>
                   )}
@@ -796,12 +1018,12 @@ const Sandbox = () => {
 
             <label className="text-sm font-medium text-foreground mt-6 block">Friendly Unit:</label>
             <Select
-              value={unit1?.id === 'desert-raider' && activeAbilitiesAlly.has('ability-desert-raider-blade') ? 'desert-raider_cavalry' : (unit1?.id || "")}
+              value={isJeanneUnit(unit1) ? 'jeanne-darc-peasant' : unit1?.id === 'desert-raider' && activeAbilities1.has('ability-desert-raider-blade') ? 'desert-raider_cavalry' : (unit1?.id || "")}
               onValueChange={(value) => {
                 if (value === 'desert-raider_cavalry') {
-                  setUnit1(filteredUnitsAlly.find(u => u.id === 'desert-raider') || null, 'ability-desert-raider-blade');
+                  setUnit1(filteredUnits1.find(u => u.id === 'desert-raider') || null, 'ability-desert-raider-blade');
                 } else {
-                  setUnit1(filteredUnitsAlly.find(u => u.id === value) || null);
+                  setUnit1(filteredUnits1.find(u => u.id === value) || null);
                 }
               }}
             >
@@ -810,10 +1032,10 @@ const Sandbox = () => {
               </SelectTrigger>
               <SelectContent className="bg-popover border-border max-h-[500px]">
                 {categoryOrder.map(categoryKey => {
-                  const units = categorizedUnitsAlly[categoryKey];
+                  const units = categorizedUnits1[categoryKey];
                   if (!units || units.length === 0) return null;
 
-                  const isOpen = openCategoriesAlly[categoryKey];
+                  const isOpen = openCategories1[categoryKey];
 
                   return (
                     <SelectGroup key={categoryKey}>
@@ -821,7 +1043,7 @@ const Sandbox = () => {
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          toggleCategoryAlly(categoryKey);
+                          toggleCategory1(categoryKey);
                         }}
                         className="cursor-pointer hover:bg-accent px-2 py-2 rounded group"
                       >
@@ -856,6 +1078,17 @@ const Sandbox = () => {
                             ))}
                           </React.Fragment>
                         ));
+                      })() : isOpen && categoryKey === 'jeanne' ? (() => {
+                        const peasant = units.find(u => u.id === 'jeanne-darc-peasant');
+                        if (!peasant) return null;
+                        return (
+                          <SelectItem key="jeanne-darc" value="jeanne-darc-peasant" className="data-[state=checked]:font-bold pl-8 group">
+                            <div className="flex items-center gap-2">
+                              <img src={peasant.icon} alt="Jeanne d'Arc" className="w-6 h-6 object-contain" />
+                              <span className="text-white group-hover:text-black transition-colors">Jeanne d'Arc</span>
+                            </div>
+                          </SelectItem>
+                        );
                       })() : isOpen && units.map((unit) => (
                         <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-8 group">
                           <div className="flex items-center gap-2">
@@ -870,16 +1103,24 @@ const Sandbox = () => {
                 })}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">{filteredUnitsAlly.length} units available</p>
+            {isJeanneUnit(unit1) && (
+              <JeanneFormSelector
+                mode="panel"
+                allForms={filteredUnits1}
+                currentFormId={unit1?.id}
+                onSelect={setUnit1}
+              />
+            )}
+            <p className="text-xs text-muted-foreground">{filteredUnits1.length} units available</p>
           </div>
 
-          {/* Enemy Column */}
+          {/* Civ 2 Column */}
           <div className="space-y-4 flex flex-col items-start">
-            <label className="text-sm font-medium text-foreground">Civilization (Enemy):</label>
-            <Select value={selectedCivEnemy} onValueChange={setSelectedCivEnemy}>
+            <label className="text-sm font-medium text-foreground">Civ 2:</label>
+            <Select value={selectedCiv2} onValueChange={setSelectedCiv2}>
               <SelectTrigger className="bg-secondary border-border h-14">
                 <SelectValue>
-                  {selectedCivEnemy === "all" ? (
+                  {selectedCiv2 === "all" ? (
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 flex items-center justify-center bg-muted rounded">
                         <span className="text-xl">?</span>
@@ -889,12 +1130,12 @@ const Sandbox = () => {
                   ) : (
                     <div className="flex items-center gap-3">
                       <img
-                        src={CIVILIZATIONS.find(c => c.abbr === selectedCivEnemy)?.flagPath}
+                        src={CIVILIZATIONS.find(c => c.abbr === selectedCiv2)?.flagPath}
                         alt=""
                         className="w-8 h-8 object-contain"
                       />
                       <span className="font-medium">
-                        {CIVILIZATIONS.find(c => c.abbr === selectedCivEnemy)?.name}
+                        {CIVILIZATIONS.find(c => c.abbr === selectedCiv2)?.name}
                       </span>
                     </div>
                   )}
@@ -920,14 +1161,14 @@ const Sandbox = () => {
               </SelectContent>
             </Select>
 
-            <label className="text-sm font-medium text-foreground mt-6 block">Enemy Unit:</label>
+            <label className="text-sm font-medium text-foreground mt-6 block">Civ 2 Unit:</label>
             <Select
-              value={unit2?.id === 'desert-raider' && activeAbilitiesEnemy.has('ability-desert-raider-blade') ? 'desert-raider_cavalry' : (unit2?.id || "")}
+              value={isJeanneUnit(unit2) ? 'jeanne-darc-peasant' : unit2?.id === 'desert-raider' && activeAbilities2.has('ability-desert-raider-blade') ? 'desert-raider_cavalry' : (unit2?.id || "")}
               onValueChange={(value) => {
                 if (value === 'desert-raider_cavalry') {
-                  setUnit2(filteredUnitsEnemy.find(u => u.id === 'desert-raider') || null, 'ability-desert-raider-blade');
+                  setUnit2(filteredUnits2.find(u => u.id === 'desert-raider') || null, 'ability-desert-raider-blade');
                 } else {
-                  setUnit2(filteredUnitsEnemy.find(u => u.id === value) || null);
+                  setUnit2(filteredUnits2.find(u => u.id === value) || null);
                 }
               }}
             >
@@ -936,10 +1177,10 @@ const Sandbox = () => {
               </SelectTrigger>
               <SelectContent className="bg-popover border-border max-h-[500px]">
                 {categoryOrder.map(categoryKey => {
-                  const units = categorizedUnitsEnemy[categoryKey];
+                  const units = categorizedUnits2[categoryKey];
                   if (!units || units.length === 0) return null;
 
-                  const isOpen = openCategoriesEnemy[categoryKey];
+                  const isOpen = openCategories2[categoryKey];
 
                   return (
                     <SelectGroup key={categoryKey}>
@@ -947,7 +1188,7 @@ const Sandbox = () => {
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          toggleCategoryEnemy(categoryKey);
+                          toggleCategory2(categoryKey);
                         }}
                         className="cursor-pointer hover:bg-accent px-2 py-2 rounded group"
                       >
@@ -982,6 +1223,17 @@ const Sandbox = () => {
                             ))}
                           </React.Fragment>
                         ));
+                      })() : isOpen && categoryKey === 'jeanne' ? (() => {
+                        const peasant = units.find(u => u.id === 'jeanne-darc-peasant');
+                        if (!peasant) return null;
+                        return (
+                          <SelectItem key="jeanne-darc" value="jeanne-darc-peasant" className="data-[state=checked]:font-bold pl-8 group">
+                            <div className="flex items-center gap-2">
+                              <img src={peasant.icon} alt="Jeanne d'Arc" className="w-6 h-6 object-contain" />
+                              <span className="text-white group-hover:text-black transition-colors">Jeanne d'Arc</span>
+                            </div>
+                          </SelectItem>
+                        );
                       })() : isOpen && units.map((unit) => (
                         <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-8 group">
                           <div className="flex items-center gap-2">
@@ -996,14 +1248,22 @@ const Sandbox = () => {
                 })}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">{filteredUnitsEnemy.length} units available</p>
+            {isJeanneUnit(unit2) && (
+              <JeanneFormSelector
+                mode="panel"
+                allForms={filteredUnits2}
+                currentFormId={unit2?.id}
+                onSelect={setUnit2}
+              />
+            )}
+            <p className="text-xs text-muted-foreground">{filteredUnits2.length} units available</p>
           </div>
         </div>
 
         {/* Comparison / versus area */}
         {!isVersus && (
           <div className="grid grid-cols-2 gap-6 mt-8">
-            {/* Ally Unit */}
+            {/* Civ 1 Unit */}
             <motion.div
               initial={{ opacity: 0, x: -50 }}
               animate={{ opacity: 1, x: 0 }}
@@ -1014,63 +1274,63 @@ const Sandbox = () => {
                 <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 w-full">
                   <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0">
                     <AgeSelector
-                      availableAges={getAvailableAges(unit1.id, selectedCivAlly)}
-                      selectedAge={selectedAgeAlly}
-                      onAgeChange={setSelectedAgeAlly}
+                      availableAges={getAvailableAges(unit1.id, selectedCiv1)}
+                      selectedAge={selectedAge1}
+                      onAgeChange={setSelectedAge1}
                       orientation="left"
                     />
                     <TechnologySelector
-                      technologies={techsAlly}
-                      activeTechnologies={activeTechnologiesAlly}
-                      onToggle={toggleTechnologyAlly}
+                      technologies={techs1}
+                      activeTechnologies={activeTechnologies1}
+                      onToggle={toggleTechnology1}
                       orientation="left"
-                      selectedCiv={selectedCivAlly}
-                      lockedTechnologies={lockedTechnologiesAlly}
-                      unitId={variationAlly?.baseId ?? unit1?.id}
+                      selectedCiv={selectedCiv1}
+                      lockedTechnologies={lockedTechnologies1}
+                      unitId={variation1?.baseId ?? unit1?.id}
                     />
                     <AbilitySelector
-                      abilities={abilitiesAlly}
-                      activeAbilities={activeAbilitiesAlly}
-                      onToggle={toggleAbilityAlly}
+                      abilities={abilities1}
+                      activeAbilities={activeAbilities1}
+                      onToggle={toggleAbility1}
                       orientation="left"
-                      selectedCiv={selectedCivAlly}
-                      lockedAbilities={lockedAbilitiesAlly}
-                      abilityCounters={abilityCountersAlly}
-                      onIncrement={incrementAbilityAlly}
-                      onDecrement={decrementAbilityAlly}
-                      unitId={variationAlly?.baseId ?? unit1?.id}
+                      selectedCiv={selectedCiv1}
+                      lockedAbilities={lockedAbilities1}
+                      abilityCounters={abilityCounters1}
+                      onIncrement={incrementAbility1}
+                      onDecrement={decrementAbility1}
+                      unitId={variation1?.baseId ?? unit1?.id}
                     />
                   </div>
                   <div className="flex-1 min-w-0">
                     <UnitCard
                       className="w-full"
-                      variation={modifiedVariationAlly!}
+                      variation={modifiedVariation1!}
                       unit={modifiedUnit1 || unit1}
                       side="left"
                       isSelected={true}
-                      compareHp={enemyStats?.hp}
-                      compareAttack={enemyStats?.attack}
-                      compareMeleeArmor={enemyStats?.meleeArmor}
-                      compareRangedArmor={enemyStats?.rangedArmor}
-                      compareSpeed={enemyStats?.speed}
-                      compareAttackSpeed={enemyStats?.attackSpeed}
-                      compareMaxRange={enemyStats?.maxRange}
-                      bonusDamage={alignedAllyBonuses}
-                      compareBonusDamage={alignedEnemyBonuses}
+                      compareHp={stats2?.hp}
+                      compareAttack={stats2?.attack}
+                      compareMeleeArmor={stats2?.meleeArmor}
+                      compareRangedArmor={stats2?.rangedArmor}
+                      compareSpeed={stats2?.speed}
+                      compareAttackSpeed={stats2?.attackSpeed}
+                      compareMaxRange={stats2?.maxRange}
+                      bonusDamage={alignedBonuses1}
+                      compareBonusDamage={alignedBonuses2}
                       maxBonusDamageLines={maxBonusDamageLines}
-                      chargeBonus={allyStats?.chargeBonus}
-                      compareChargeBonus={enemyStats?.chargeBonus}
-                      compareCost={enemyStats?.cost}
-                      comparePopulation={enemyStats?.population}
-                      compareProductionTime={enemyStats?.productionTime}
-                      secondaryWeapons={modifiedVariationAlly?.secondaryWeapons ?? secondaryWeaponsAlly}
-                      showSecondaryWeaponRow={secondaryWeaponsAlly.length > 0 || secondaryWeaponsEnemy.length > 0}
+                      chargeBonus={stats1?.chargeBonus}
+                      compareChargeBonus={stats2?.chargeBonus}
+                      compareCost={stats2?.cost}
+                      comparePopulation={stats2?.population}
+                      compareProductionTime={stats2?.productionTime}
+                      secondaryWeapons={modifiedVariation1?.secondaryWeapons ?? secondaryWeapons1}
+                      showSecondaryWeaponRow={secondaryWeapons1.length > 0 || secondaryWeapons2.length > 0}
                     />
                   </div>
                 </div>
               )}
             </motion.div>
-            {/* Enemy Unit */}
+            {/* Civ 2 Unit */}
             <motion.div
               initial={{ opacity: 0, x: 50 }}
               animate={{ opacity: 1, x: 0 }}
@@ -1082,56 +1342,56 @@ const Sandbox = () => {
                   <div className="flex-1 min-w-0 order-2 sm:order-1">
                     <UnitCard
                       className="w-full"
-                      variation={modifiedVariationEnemy!}
+                      variation={modifiedVariation2!}
                       unit={modifiedUnit2 || unit2}
                       side="right"
                       isSelected={true}
-                      compareHp={allyStats?.hp}
-                      compareAttack={allyStats?.attack}
-                      compareMeleeArmor={allyStats?.meleeArmor}
-                      compareRangedArmor={allyStats?.rangedArmor}
-                      compareSpeed={allyStats?.speed}
-                      compareAttackSpeed={allyStats?.attackSpeed}
-                      compareMaxRange={allyStats?.maxRange}
-                      bonusDamage={alignedEnemyBonuses}
-                      compareBonusDamage={alignedAllyBonuses}
+                      compareHp={stats1?.hp}
+                      compareAttack={stats1?.attack}
+                      compareMeleeArmor={stats1?.meleeArmor}
+                      compareRangedArmor={stats1?.rangedArmor}
+                      compareSpeed={stats1?.speed}
+                      compareAttackSpeed={stats1?.attackSpeed}
+                      compareMaxRange={stats1?.maxRange}
+                      bonusDamage={alignedBonuses2}
+                      compareBonusDamage={alignedBonuses1}
                       maxBonusDamageLines={maxBonusDamageLines}
-                      chargeBonus={enemyStats?.chargeBonus}
-                      compareChargeBonus={allyStats?.chargeBonus}
-                      compareCost={allyStats?.cost}
-                      comparePopulation={allyStats?.population}
-                      compareProductionTime={allyStats?.productionTime}
-                      secondaryWeapons={modifiedVariationEnemy?.secondaryWeapons ?? secondaryWeaponsEnemy}
-                      showSecondaryWeaponRow={secondaryWeaponsAlly.length > 0 || secondaryWeaponsEnemy.length > 0}
+                      chargeBonus={stats2?.chargeBonus}
+                      compareChargeBonus={stats1?.chargeBonus}
+                      compareCost={stats1?.cost}
+                      comparePopulation={stats1?.population}
+                      compareProductionTime={stats1?.productionTime}
+                      secondaryWeapons={modifiedVariation2?.secondaryWeapons ?? secondaryWeapons2}
+                      showSecondaryWeaponRow={secondaryWeapons1.length > 0 || secondaryWeapons2.length > 0}
                     />
                   </div>
                   <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
                     <AgeSelector
-                      availableAges={getAvailableAges(unit2.id, selectedCivEnemy)}
-                      selectedAge={selectedAgeEnemy}
-                      onAgeChange={setSelectedAgeEnemy}
+                      availableAges={getAvailableAges(unit2.id, selectedCiv2)}
+                      selectedAge={selectedAge2}
+                      onAgeChange={setSelectedAge2}
                       orientation="right"
                     />
                     <TechnologySelector
-                      technologies={techsEnemy}
-                      activeTechnologies={activeTechnologiesEnemy}
+                      technologies={techs2}
+                      activeTechnologies={activeTechnologies2}
                       orientation="right"
-                      onToggle={toggleTechnologyEnemy}
-                      selectedCiv={selectedCivEnemy}
-                      lockedTechnologies={lockedTechnologiesEnemy}
-                      unitId={variationEnemy?.baseId ?? unit2?.id}
+                      onToggle={toggleTechnology2}
+                      selectedCiv={selectedCiv2}
+                      lockedTechnologies={lockedTechnologies2}
+                      unitId={variation2?.baseId ?? unit2?.id}
                     />
                     <AbilitySelector
-                      abilities={abilitiesEnemy}
-                      activeAbilities={activeAbilitiesEnemy}
-                      onToggle={toggleAbilityEnemy}
+                      abilities={abilities2}
+                      activeAbilities={activeAbilities2}
+                      onToggle={toggleAbility2}
                       orientation="right"
-                      selectedCiv={selectedCivEnemy}
-                      lockedAbilities={lockedAbilitiesEnemy}
-                      abilityCounters={abilityCountersEnemy}
-                      onIncrement={incrementAbilityEnemy}
-                      onDecrement={decrementAbilityEnemy}
-                      unitId={variationEnemy?.baseId ?? unit2?.id}
+                      selectedCiv={selectedCiv2}
+                      lockedAbilities={lockedAbilities2}
+                      abilityCounters={abilityCounters2}
+                      onIncrement={incrementAbility2}
+                      onDecrement={decrementAbility2}
+                      unitId={variation2?.baseId ?? unit2?.id}
                     />
                   </div>
                 </div>
@@ -1148,21 +1408,24 @@ const Sandbox = () => {
               let multipliers = undefined;
 
               // Convert Sets to arrays to pass to combat functions
-              const abilitiesArrayAlly = Array.from(activeAbilitiesAlly);
-              const abilitiesArrayEnemy = Array.from(activeAbilitiesEnemy);
+              const abilitiesArray1 = Array.from(activeAbilities1);
+              const abilitiesArray2 = Array.from(activeAbilities2);
 
               // Compute charge bonuses
-              const chargeAlly = getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly, activeTechnologiesAlly, modifiedAllyStats.chargeMultiplier, modifiedAllyStats.meleeAttack, abilityCountersAlly, modifiedAllyStats.rangedAttack);
-              const chargeEnemy = getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy, activeTechnologiesEnemy, modifiedEnemyStats.chargeMultiplier, modifiedEnemyStats.meleeAttack, abilityCountersEnemy, modifiedEnemyStats.rangedAttack);
+              const charge1 = getChargeBonus(data1, activeAbilities1, selectedAge1, activeTechnologies1, modifiedStats1.chargeMultiplier, modifiedStats1.meleeAttack, abilityCounters1, modifiedStats1.rangedAttack);
+              const charge2 = getChargeBonus(data2, activeAbilities2, selectedAge2, activeTechnologies2, modifiedStats2.chargeMultiplier, modifiedStats2.meleeAttack, abilityCounters2, modifiedStats2.rangedAttack);
+
+              const noTimerData1 = showDurationEffect ? (modifiedVariation1NoTimer || modifiedUnit1NoTimer) : undefined;
+              const noTimerData2 = showDurationEffect ? (modifiedVariation2NoTimer || modifiedUnit2NoTimer) : undefined;
 
               if (atEqualCost) {
                 const result = computeVersusAtEqualCost(
-                  modifiedVariationAlly || modifiedUnit1!,
-                  modifiedVariationEnemy || modifiedUnit2!,
-                  abilitiesArrayAlly,
-                  abilitiesArrayEnemy,
-                  chargeAlly,
-                  chargeEnemy,
+                  modifiedVariation1 || modifiedUnit1!,
+                  modifiedVariation2 || modifiedUnit2!,
+                  abilitiesArray1,
+                  abilitiesArray2,
+                  charge1,
+                  charge2,
                   allowKiting,
                   startDistance,
                 );
@@ -1170,34 +1433,53 @@ const Sandbox = () => {
                 multipliers = result.multipliers;
               } else {
                 versusData = computeVersus(
-                  modifiedVariationAlly || modifiedUnit1!,
-                  modifiedVariationEnemy || modifiedUnit2!,
-                  abilitiesArrayAlly,
-                  abilitiesArrayEnemy,
-                  chargeAlly,
-                  chargeEnemy,
+                  modifiedVariation1 || modifiedUnit1!,
+                  modifiedVariation2 || modifiedUnit2!,
+                  abilitiesArray1,
+                  abilitiesArray2,
+                  charge1,
+                  charge2,
                   allowKiting,
                   startDistance,
+                  noTimerData1,
+                  noTimerData2,
+                  showDurationEffect ? timedDuration1 : undefined,
+                  showDurationEffect ? timedDuration2 : undefined,
                 );
-              }              // Win/loss logic based on weapon ownership
+              }
+
+              // For delta display: also compute without duration correction when toggle is ON
+              const hasActiveDuration = showDurationEffect && !atEqualCost && (!!timedDuration1 || !!timedDuration2);
+              const versusDataOriginal = hasActiveDuration ? computeVersus(
+                modifiedVariation1 || modifiedUnit1!,
+                modifiedVariation2 || modifiedUnit2!,
+                abilitiesArray1,
+                abilitiesArray2,
+                charge1,
+                charge2,
+                allowKiting,
+                startDistance,
+              ) : undefined;
+
+              // Win/loss logic based on weapon ownership
               // A unit without a weapon always loses against a unit with a weapon
               // A draw only occurs when neither unit has a weapon
-              const allyHasWeapon = !!getPrimaryWeapon(modifiedVariationAlly || modifiedUnit1);
-              const enemyHasWeapon = !!getPrimaryWeapon(modifiedVariationEnemy || modifiedUnit2);
+              const hasWeapon1 = !!getPrimaryWeapon(modifiedVariation1 || modifiedUnit1);
+              const hasWeapon2 = !!getPrimaryWeapon(modifiedVariation2 || modifiedUnit2);
 
               let isDraw = versusData.winner === 'draw';
               let leftIsWinner = false;
               let rightIsWinner = false;
 
-              if (allyHasWeapon && !enemyHasWeapon) {
-                // Ally has a weapon, Enemy does not -> Ally wins
+              if (hasWeapon1 && !hasWeapon2) {
+                // Civ 1 has a weapon, Civ 2 does not -> Civ 1 wins
                 leftIsWinner = true;
                 isDraw = false;
-              } else if (!allyHasWeapon && enemyHasWeapon) {
-                // Ally has no weapon, Enemy does -> Enemy wins
+              } else if (!hasWeapon1 && hasWeapon2) {
+                // Civ 1 has no weapon, Civ 2 does -> Civ 2 wins
                 rightIsWinner = true;
                 isDraw = false;
-              } else if (allyHasWeapon && enemyHasWeapon) {
+              } else if (hasWeapon1 && hasWeapon2) {
                 // Both have a weapon -> use normal versus logic
                 isDraw = versusData.winner === 'draw';
                 leftIsWinner = !isDraw && versusData.winner === 'attacker';
@@ -1220,7 +1502,7 @@ const Sandbox = () => {
                 isWinner: leftIsWinner,
                 isLoser: !leftIsWinner && !isDraw,
                 isDraw,
-                opponentClasses: (modifiedVariationEnemy || modifiedUnit2)?.classes ?? unit2?.classes ?? [],
+                opponentClasses: (modifiedVariation2 || modifiedUnit2)?.classes ?? unit2?.classes ?? [],
                 opponentDps: versusData.defender.dps,
                 opponentDpsPerCost: versusData.defender.dpsPerCost,
                 opponentHitsToKill: versusData.defender.hitsToKill,
@@ -1245,7 +1527,7 @@ const Sandbox = () => {
                 isWinner: rightIsWinner,
                 isLoser: !rightIsWinner && !isDraw,
                 isDraw,
-                opponentClasses: (modifiedVariationAlly || modifiedUnit1)?.classes ?? unit1?.classes ?? [],
+                opponentClasses: (modifiedVariation1 || modifiedUnit1)?.classes ?? unit1?.classes ?? [],
                 opponentDps: versusData.attacker.dps,
                 opponentDpsPerCost: versusData.attacker.dpsPerCost,
                 opponentHitsToKill: versusData.attacker.hitsToKill,
@@ -1269,42 +1551,42 @@ const Sandbox = () => {
                     <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 w-full">
                       <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0">
                         <AgeSelector
-                          availableAges={getAvailableAges(unit1.id, selectedCivAlly)}
-                          selectedAge={selectedAgeAlly}
-                          onAgeChange={setSelectedAgeAlly}
+                          availableAges={getAvailableAges(unit1.id, selectedCiv1)}
+                          selectedAge={selectedAge1}
+                          onAgeChange={setSelectedAge1}
                           orientation="left"
                         />
                         <TechnologySelector
-                          technologies={techsAlly}
-                          activeTechnologies={activeTechnologiesAlly}
-                          onToggle={toggleTechnologyAlly}
+                          technologies={techs1}
+                          activeTechnologies={activeTechnologies1}
+                          onToggle={toggleTechnology1}
                           orientation="left"
-                          selectedCiv={selectedCivAlly}
-                          lockedTechnologies={lockedTechnologiesAlly}
-                          unitId={variationAlly?.baseId ?? unit1?.id}
+                          selectedCiv={selectedCiv1}
+                          lockedTechnologies={lockedTechnologies1}
+                          unitId={variation1?.baseId ?? unit1?.id}
                         />
                         <AbilitySelector
-                          abilities={abilitiesAlly}
-                          activeAbilities={activeAbilitiesAlly}
-                          onToggle={toggleAbilityAlly}
+                          abilities={abilities1}
+                          activeAbilities={activeAbilities1}
+                          onToggle={toggleAbility1}
                           orientation="left"
-                          selectedCiv={selectedCivAlly}
-                          lockedAbilities={lockedAbilitiesAlly}
-                          abilityCounters={abilityCountersAlly}
-                          onIncrement={incrementAbilityAlly}
-                          onDecrement={decrementAbilityAlly}
-                          unitId={variationAlly?.baseId ?? unit1?.id}
+                          selectedCiv={selectedCiv1}
+                          lockedAbilities={lockedAbilities1}
+                          abilityCounters={abilityCounters1}
+                          onIncrement={incrementAbility1}
+                          onDecrement={decrementAbility1}
+                          unitId={variation1?.baseId ?? unit1?.id}
                         />
                       </div>
                       <div className="flex-1 min-w-0">
                         <UnitCard
                           className="w-full"
-                          variation={modifiedVariationAlly!}
+                          variation={modifiedVariation1!}
                           unit={modifiedUnit1 || unit1}
                           side="left"
                           mode="versus"
                           versusMetrics={leftMetrics}
-                          secondaryWeapons={modifiedVariationAlly?.secondaryWeapons ?? secondaryWeaponsAlly}
+                          secondaryWeapons={modifiedVariation1?.secondaryWeapons ?? secondaryWeapons1}
                         />
                       </div>
                     </div>
@@ -1319,45 +1601,67 @@ const Sandbox = () => {
                       <div className="flex-1 min-w-0 order-2 sm:order-1">
                         <UnitCard
                           className="w-full"
-                          variation={modifiedVariationEnemy!}
+                          variation={modifiedVariation2!}
                           unit={modifiedUnit2 || unit2}
                           side="right"
                           mode="versus"
                           versusMetrics={rightMetrics}
-                          secondaryWeapons={modifiedVariationEnemy?.secondaryWeapons ?? secondaryWeaponsEnemy}
+                          secondaryWeapons={modifiedVariation2?.secondaryWeapons ?? secondaryWeapons2}
                         />
                       </div>
                       <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
                         <AgeSelector
-                          availableAges={getAvailableAges(unit2.id, selectedCivEnemy)}
-                          selectedAge={selectedAgeEnemy}
-                          onAgeChange={setSelectedAgeEnemy}
+                          availableAges={getAvailableAges(unit2.id, selectedCiv2)}
+                          selectedAge={selectedAge2}
+                          onAgeChange={setSelectedAge2}
                           orientation="right"
                         />
                         <TechnologySelector
-                          technologies={techsEnemy}
-                          activeTechnologies={activeTechnologiesEnemy}
-                          onToggle={toggleTechnologyEnemy}
+                          technologies={techs2}
+                          activeTechnologies={activeTechnologies2}
+                          onToggle={toggleTechnology2}
                           orientation="right"
-                          selectedCiv={selectedCivEnemy}
-                          lockedTechnologies={lockedTechnologiesEnemy}
-                          unitId={variationEnemy?.baseId ?? unit2?.id}
+                          selectedCiv={selectedCiv2}
+                          lockedTechnologies={lockedTechnologies2}
+                          unitId={variation2?.baseId ?? unit2?.id}
                         />
                         <AbilitySelector
-                          abilities={abilitiesEnemy}
-                          activeAbilities={activeAbilitiesEnemy}
-                          onToggle={toggleAbilityEnemy}
+                          abilities={abilities2}
+                          activeAbilities={activeAbilities2}
+                          onToggle={toggleAbility2}
                           orientation="right"
-                          selectedCiv={selectedCivEnemy}
-                          lockedAbilities={lockedAbilitiesEnemy}
-                          abilityCounters={abilityCountersEnemy}
-                          onIncrement={incrementAbilityEnemy}
-                          onDecrement={decrementAbilityEnemy}
-                          unitId={variationEnemy?.baseId ?? unit2?.id}
+                          selectedCiv={selectedCiv2}
+                          lockedAbilities={lockedAbilities2}
+                          abilityCounters={abilityCounters2}
+                          onIncrement={incrementAbility2}
+                          onDecrement={decrementAbility2}
+                          unitId={variation2?.baseId ?? unit2?.id}
                         />
                       </div>
                     </div>
                   </motion.div>
+                  {versusDataOriginal && (
+                    <div className="col-span-2 flex flex-wrap justify-center gap-4 mt-2 text-xs text-muted-foreground">
+                      {timedDuration1 && versusDataOriginal.attacker.timeToKill !== versusData.attacker.timeToKill && (
+                        <span className="text-orange-400">
+                          Civ 1 TTK: {versusDataOriginal.attacker.timeToKill}s → {versusData.attacker.timeToKill}s ({timedDuration1}s ability)
+                        </span>
+                      )}
+                      {timedDuration2 && versusDataOriginal.defender.timeToKill !== versusData.defender.timeToKill && (
+                        <span className="text-orange-400">
+                          Civ 2 TTK: {versusDataOriginal.defender.timeToKill}s → {versusData.defender.timeToKill}s ({timedDuration2}s ability)
+                        </span>
+                      )}
+                      {!timedDuration1 && !timedDuration2 && (
+                        <span>No timed ability active — duration correction has no effect.</span>
+                      )}
+                      {(timedDuration1 || timedDuration2) &&
+                        versusDataOriginal.attacker.timeToKill === versusData.attacker.timeToKill &&
+                        versusDataOriginal.defender.timeToKill === versusData.defender.timeToKill && (
+                        <span>Duration ({timedDuration1 ?? timedDuration2}s) covers full fight — no correction needed.</span>
+                      )}
+                    </div>
+                  )}
                 </>
               );
             })()}

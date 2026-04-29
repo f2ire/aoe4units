@@ -152,6 +152,11 @@ export const TechnologySelector = ({
                           : patch?.uiTooltipNative));
                       return (
                         <div key={tech.id} className="relative">
+                          {tech.unique && (
+                            <div className="absolute bottom-1 left-0 w-5 h-5 rounded-full bg-background border border-border/20 flex items-center justify-center pointer-events-none z-10">
+                              <img src="/unique.png" alt="" className="w-5 h-5 object-contain" />
+                            </div>
+                          )}
                           <TooltipProvider delayDuration={750}>
                             <Tooltip>
                               <TooltipTrigger asChild>

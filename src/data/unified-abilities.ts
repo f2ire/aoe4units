@@ -49,7 +49,8 @@ const combatProperties = [
   'attackSpeed',
   'bonusDamage',
   'versusOpponentDamageDebuff',
-  'costReduction'
+  'costReduction',
+  'foodCostReduction',
 ];
 
 const nonCombatTargets = [
@@ -131,6 +132,7 @@ export function abilityAffectsUnit(
     
     // For versus debuff effects, select.id = unit that owns the ability; select.class also checked for ownership
     if (effect.property === 'versusOpponentDamageDebuff') {
+      if (unitId && effect.select?.excludeId?.includes(unitId)) return false;
       if (effect.select?.id && unitId) {
         matchesById = effect.select.id.some(id =>
           id.toLowerCase() === unitId.toLowerCase()
@@ -202,6 +204,7 @@ export function getAbilitiesForUnit(
         
         // For versus debuff effects, select.id = unit that owns the ability; select.class also checked for ownership
         if (effect.property === 'versusOpponentDamageDebuff') {
+          if (unitId && effect.select?.excludeId?.includes(unitId)) return false;
           if (effect.select?.id && unitId) {
             matchesById = effect.select.id.some(id => id.toLowerCase() === unitId.toLowerCase());
           }
