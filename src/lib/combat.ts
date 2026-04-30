@@ -21,6 +21,7 @@ export interface CombatEntity {
   moveSpeed: number; // tiles/s (movement.speed from unit data)
   healingRate?: number; // HP healed per hit the unit lands (e.g. Keshik: 3 HP/hit)
   armorPenetration?: number; // Enemy armor reduced by this amount on each hit (clamped ≥ 0)
+  opponentAttackSpeedDebuff?: number; // Opponent's attack interval multiplied by (1 + value), e.g. 0.20 = 20% slower
   chargeBonusBurst?: number; // Burst count for first-hit bonus display (e.g. 2 daggers for Earl's Guard)
   chargeArmorType?: 'ranged' | 'none'; // 'ranged': charge uses ranged armor (dagger); 'none': charge ignores armor+resistance entirely (holy wrath)
   continuousMovement?: boolean; // unit can move throughout entire attack cycle (e.g. Mangudai)
@@ -66,6 +67,7 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     moveSpeed: source.movement?.speed ?? 0,
     healingRate: (source as any).healingRate ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     armorPenetration: (source as any).armorPenetration ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
+    opponentAttackSpeedDebuff: (source as any).opponentAttackSpeedDebuff ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     chargeBonusBurst: (source as any).chargeBonusBurst ?? 1, // eslint-disable-line @typescript-eslint/no-explicit-any
     chargeArmorType: (source as any).chargeArmorType, // eslint-disable-line @typescript-eslint/no-explicit-any
     continuousMovement: (source as any).continuousMovement ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -268,6 +270,15 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
     resistanceApplied = resistancePct;
   }
 
+  // Gunpowder-specific resistance: applies when attacker has gunpowder class (e.g. handcannoneer)
+  if (isGunpowder(attacker, weapon)) {
+    const gpResistance = getResistanceValue(defender as unknown as AoE4Unit, 'gunpowder');
+    if (gpResistance !== 0) {
+      damagePerProjectile = damagePerProjectile * (1 - gpResistance / 100);
+      resistanceApplied = (resistanceApplied ?? 0) + gpResistance;
+    }
+  }
+
   const clampedPerProjectile = damagePerProjectile < 1 ? 1 : damagePerProjectile;
   const totalPrimary = clampedPerProjectile * burstCount;
 
@@ -394,7 +405,7 @@ function applyKitingToMetrics(
   const retreatTime = getRetreatTime(ranged); // winddown + reload: phases where the unit can move
   const speedRanged = ranged.moveSpeed;
   const speedMelee = melee.moveSpeed;
-  const attackCycle = ranged.weapons[0]?.speed ?? 0;
+  const attackCycle = (ranged.weapons[0]?.speed ?? 0) * (1 + (melee.opponentAttackSpeedDebuff ?? 0));
 
   // All melee units with charge ability active get a 20% speed boost until their first attack
   const hasMeleeCharge = melee.activeAbilities?.includes('charge-attack') ?? false;
@@ -541,10 +552,12 @@ function computeMetrics(
   const firstAttackData = computeEffectiveDamage(attacker, defender, chargeBonus, true);
   const normalAttackData = computeEffectiveDamage(attacker, defender, 0, false);
   const weapon = normalAttackData.weapon;
-  const attackSpeed = weapon?.speed || 0;
+  const rawSpeed = weapon?.speed || 0;
+  const asDebuffFactor = 1 + (defender.opponentAttackSpeedDebuff ?? 0);
+  const attackSpeed = rawSpeed * asDebuffFactor;
   // First hit uses the charge weapon's own attack cycle (if present)
-  const firstHitSpeed = hasChargeWeapon ? (chargeWeapon!.speed || attackSpeed) : attackSpeed;
-  const bugAttackSpeed = attackSpeed <= 0;
+  const firstHitSpeed = (hasChargeWeapon ? (chargeWeapon!.speed || rawSpeed) : rawSpeed) * asDebuffFactor;
+  const bugAttackSpeed = rawSpeed <= 0;
   let dps: number | null = null;
   let hitsToKill: number | null = null;
   let timeToKill: number | null = null;
@@ -611,7 +624,7 @@ function computeMetrics(
     // Defender self-healing: heals healingRate HP per hit it lands
     const defenderHealPerHit = defender.healingRate ?? 0;
     if (defenderHealPerHit > 0 && dps !== null) {
-      const defenderAttackSpeed = defender.weapons[0]?.speed ?? 0;
+      const defenderAttackSpeed = (defender.weapons[0]?.speed ?? 0) * (1 + (attacker.opponentAttackSpeedDebuff ?? 0));
       const healPerS = defenderAttackSpeed > 0 ? defenderHealPerHit / defenderAttackSpeed : 0;
       const netDPS = dps - healPerS;
       if (netDPS <= 0) {
@@ -619,8 +632,8 @@ function computeMetrics(
         timeToKill = null;
       } else {
         const totalDefHP = defender.hitpoints * defenderMultiplier;
-        timeToKill = round(totalDefHP / netDPS, 1);
-        hitsToKill = Math.ceil(timeToKill / attackSpeed);
+        hitsToKill = Math.ceil(totalDefHP / (netDPS * attackSpeed));
+        timeToKill = round(hitsToKill * attackSpeed, 1);
       }
     }
 
@@ -682,7 +695,7 @@ function computeMetrics(
   if (attackerNoTimer && timedDurationAttacker !== undefined && timeToKill !== null && timeToKill > timedDurationAttacker && !bugAttackSpeed && !attacker.selfDestructs) {
     const noTimerData = computeEffectiveDamage(attackerNoTimer, defender, 0, false);
     const noTimerDmgPerHit = noTimerData.value * attackerMultiplier;
-    const noTimerAttackSpeed = noTimerData.weapon?.speed ?? attackSpeed;
+    const noTimerAttackSpeed = (noTimerData.weapon?.speed ?? rawSpeed) * asDebuffFactor;
     if (noTimerDmgPerHit > 0 && noTimerAttackSpeed > 0) {
       const totalDefHP = defender.hitpoints * defenderMultiplier;
       const hitsInDuration = Math.floor(timedDurationAttacker / attackSpeed);

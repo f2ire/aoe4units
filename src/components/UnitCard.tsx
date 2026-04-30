@@ -59,6 +59,8 @@ interface UnitCardProps {
   compareProductionTime?: number;
   secondaryWeapons?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   showSecondaryWeaponRow?: boolean; // true if at least one side has secondary weapons (for alignment)
+  opponentArmorPenetration?: number; // opponent's armorPenetration — reduces this unit's effective armor
+  opponentAttackSpeedDebuff?: number; // opponent's AS debuff — multiplies this unit's attack interval by (1 + value)
 }
 
 // ── Formula parser ────────────────────────────────────────────────────────────
@@ -192,6 +194,8 @@ export const UnitCard = ({
   compareProductionTime,
   secondaryWeapons,
   showSecondaryWeaponRow,
+  opponentArmorPenetration,
+  opponentAttackSpeedDebuff,
   className
 }: UnitCardProps) => {
   const [showFormula, setShowFormula] = useState(false);
@@ -201,7 +205,13 @@ export const UnitCard = ({
   const primaryWeapon = getPrimaryWeapon(displayData);
   const meleeArmor = getArmorValue(displayData, 'melee');
   const rangedArmor = getArmorValue(displayData, 'ranged');
+  const armorPen = opponentArmorPenetration ?? 0;
+  const effectiveMeleeArmor = armorPen > 0 ? Math.max(0, meleeArmor - armorPen) : null;
+  const effectiveRangedArmor = armorPen > 0 ? Math.max(0, rangedArmor - armorPen) : null;
+  const asDebuff = opponentAttackSpeedDebuff ?? 0;
+  const effectiveAttackSpeed = (asDebuff > 0 && primaryWeapon?.speed) ? primaryWeapon.speed * (1 + asDebuff) : null;
   const rangedResistance = getResistanceValue(displayData, 'ranged');
+  const gunpowderResistance = getResistanceValue(displayData, 'gunpowder');
   const meleeResistanceRaw = getResistanceValue(displayData, 'melee');
   const meleeVulnerability = meleeResistanceRaw < 0 ? -meleeResistanceRaw : 0;
   const totalCost = variation ? getTotalCost(variation) : (unit ? getTotalCost(unit) : 0);
@@ -427,6 +437,13 @@ export const UnitCard = ({
                 <span className={cn('flex items-center gap-1', getComparisonColor(primaryWeapon.speed, compareAttackSpeed, false).color)}>
                   {getComparisonColor(primaryWeapon.speed, compareAttackSpeed, false).symbol && <span className="text-xs">{getComparisonColor(primaryWeapon.speed, compareAttackSpeed, false).symbol}</span>}
                   {primaryWeapon.speed.toFixed(3)}s
+                  {effectiveAttackSpeed !== null && (
+                    <span
+                      className="text-orange-400 underline decoration-dotted cursor-help"
+                      title={`Effective attack speed vs opponent: ${primaryWeapon.speed.toFixed(3)}s × ${(1 + asDebuff).toFixed(2)} = ${effectiveAttackSpeed.toFixed(3)}s (opponent's Bludgeoning Attacks)`}>
+                      {' '}(→{effectiveAttackSpeed.toFixed(3)}s)
+                    </span>
+                  )}
                 </span>
               </div>
             )}
@@ -434,7 +451,7 @@ export const UnitCard = ({
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Range</span>
                 <span className="flex items-center gap-1">
-                  {primaryWeapon.range.min} - <span className={getComparisonColor(primaryWeapon.range.max, compareMaxRange, true, 0.5, true).color}>{primaryWeapon.range.max}</span>
+                  {parseFloat(primaryWeapon.range.min.toFixed(2))} - <span className={getComparisonColor(primaryWeapon.range.max, compareMaxRange, true, 0.5, true).color}>{parseFloat(primaryWeapon.range.max.toFixed(2))}</span>
                 </span>
               </div>
             )}
@@ -447,6 +464,18 @@ export const UnitCard = ({
                   className={meleeVulnerability > 0 ? 'underline decoration-dotted cursor-help text-orange-400' : meleeResistanceRaw > 0 ? 'underline decoration-dotted cursor-help' : undefined}>
                   {Math.round(meleeArmor)}
                 </span>
+                {effectiveMeleeArmor !== null && (
+                  <span
+                    className={(() => {
+                      const eff = Math.round(effectiveMeleeArmor);
+                      const cmp = compareMeleeArmor !== undefined ? Math.round(compareMeleeArmor) : null;
+                      const color = cmp === null || eff > cmp ? 'text-green-500' : 'text-orange-400';
+                      return `${color} underline decoration-dotted cursor-help`;
+                    })()}
+                    title={`Effective armor vs opponent: ${Math.round(meleeArmor)} − ${armorPen} = ${Math.round(effectiveMeleeArmor)} (opponent's armor penetration)`}>
+                    {' '}(→{Math.round(effectiveMeleeArmor)})
+                  </span>
+                )}
               </span>
             </div>
             <div className="flex justify-between">
@@ -454,10 +483,25 @@ export const UnitCard = ({
               <span className={cn('flex items-center gap-1', getComparisonColor(rangedArmor, compareRangedArmor).color)}>
                 {getComparisonColor(rangedArmor, compareRangedArmor).symbol && <span className="text-xs">{getComparisonColor(rangedArmor, compareRangedArmor).symbol}</span>}
                 <span
-                  title={rangedResistance > 0 ? `${rangedResistance}% damage resistance vs ranged attacks (applied after armor)` : undefined}
-                  className={rangedResistance > 0 ? 'underline decoration-dotted cursor-help' : undefined}>
+                  title={[
+                    rangedResistance > 0 ? `${rangedResistance}% damage resistance vs ranged attacks (applied after armor)` : null,
+                    gunpowderResistance > 0 ? `${gunpowderResistance}% damage resistance vs gunpowder attacks (applied after armor)` : null,
+                  ].filter(Boolean).join('\n') || undefined}
+                  className={(rangedResistance > 0 || gunpowderResistance > 0) ? 'underline decoration-dotted cursor-help' : undefined}>
                   {Math.round(rangedArmor)}
                 </span>
+                {effectiveRangedArmor !== null && (
+                  <span
+                    className={(() => {
+                      const eff = Math.round(effectiveRangedArmor);
+                      const cmp = compareRangedArmor !== undefined ? Math.round(compareRangedArmor) : null;
+                      const color = cmp === null || eff > cmp ? 'text-green-500' : 'text-orange-400';
+                      return `${color} underline decoration-dotted cursor-help`;
+                    })()}
+                    title={`Effective armor vs opponent: ${Math.round(rangedArmor)} − ${armorPen} = ${Math.round(effectiveRangedArmor)} (opponent's armor penetration)`}>
+                    {' '}(→{Math.round(effectiveRangedArmor)})
+                  </span>
+                )}
               </span>
             </div>
             {movement && (
@@ -929,8 +973,8 @@ export const UnitCard = ({
                         return `${base}`;
                       })()}</span></div>
                     ))}
-                    <div className="flex justify-between"><span className="text-muted-foreground">AS</span><span>{primaryWeapon.speed ? primaryWeapon.speed.toFixed(3) + 's' : '—'}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Range</span><span>{primaryWeapon.range.max}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">AS</span><span className={effectiveAttackSpeed !== null ? 'text-orange-400' : undefined}>{effectiveAttackSpeed !== null ? effectiveAttackSpeed.toFixed(3) + 's' : (primaryWeapon.speed ? primaryWeapon.speed.toFixed(3) + 's' : '—')}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Range</span><span>{parseFloat(primaryWeapon.range.max.toFixed(2))}</span></div>
                   </>
                 ) : (
                   <div className="text-muted-foreground italic">No weapon</div>
@@ -943,7 +987,7 @@ export const UnitCard = ({
                   <span
                     title={meleeVulnerability > 0 ? `+${meleeVulnerability}% melee damage taken (applied after armor)` : meleeResistanceRaw > 0 ? `${meleeResistanceRaw}% melee damage resistance (applied after armor)` : undefined}
                     className={meleeVulnerability > 0 ? 'underline decoration-dotted cursor-help text-orange-400' : meleeResistanceRaw > 0 ? 'underline decoration-dotted cursor-help' : undefined}>
-                    {Math.round(meleeArmor)}
+                    {effectiveMeleeArmor !== null ? Math.round(effectiveMeleeArmor) : Math.round(meleeArmor)}
                   </span>
                 </div>
                 {meleeVulnerability > 0 && (
@@ -963,7 +1007,7 @@ export const UnitCard = ({
                   <span
                     title={rangedResistance > 0 ? `${rangedResistance}% damage damage resistance (applied after armor)` : undefined}
                     className={rangedResistance > 0 ? 'underline decoration-dotted cursor-help' : undefined}>
-                    {Math.round(rangedArmor)}
+                    {effectiveRangedArmor !== null ? Math.round(effectiveRangedArmor) : Math.round(rangedArmor)}
                   </span>
                 </div>
                 {movement && (

@@ -80,6 +80,12 @@ export function useUnitSlot() {
     'by': [
       ['biology', 'royal-bloodlines'],
     ],
+    'kt': [
+      ['principality-of-antioch', 'kingdom-of-france'],
+      ['kingdom-of-castile', 'angevin-empire'],
+      ['teutonic-order', 'kingdom-of-poland'],
+    ],
+
   };
 
   // Ref so toggleTechnology can read selectedCiv without a closure dep
@@ -202,6 +208,22 @@ export function useUnitSlot() {
       if (prev.has(abilityId)) return prev;
       const next = new Set(prev);
       next.add(abilityId);
+      return next;
+    });
+  }, []);
+
+  const setAbilityCounter = useCallback((abilityId: string, value: number) => {
+    const ability = abilitiesRef.current.find(a => a.id === abilityId);
+    if (!ability || ability.counterMax === undefined) return;
+    const clamped = Math.max(0, Math.min(ability.counterMax, Math.round(value)));
+    setAbilityCounters(prev => {
+      const next = new Map(prev);
+      if (clamped === 0) next.delete(abilityId); else next.set(abilityId, clamped);
+      return next;
+    });
+    setActiveAbilities(prev => {
+      const next = new Set(prev);
+      if (clamped === 0) next.delete(abilityId); else next.add(abilityId);
       return next;
     });
   }, []);
@@ -351,7 +373,8 @@ export function useUnitSlot() {
       unit.id === 'shinobi' ||
       unit.id === 'jeanne-darc-markswoman' ||
       unit.id === 'jeanne-darc-mounted-archer' ||
-      unit.id === 'jeanne-darc-blast-cannon'
+      unit.id === 'jeanne-darc-blast-cannon' ||
+      unit.id === 'serjeant'
     )
       ? all.filter(a => a.id !== 'charge-attack')
       : all;
@@ -430,6 +453,22 @@ export function useUnitSlot() {
     setActiveTechnologies(prev => new Set([...prev, ...defaults]));
   }, [unit, selectedCiv, techs]);
 
+  // Auto-activate and lock technologies for specific unit IDs
+  const LOCKED_UNIT_TECHS: Record<string, string[]> = {
+    'teutonic-knight': ['teutonic-order'],
+    'serjeant': ['principality-of-antioch'],
+    'heavy-spearman': ['angevin-empire'],
+    'genitour': ['kingdom-of-castile'],
+    'chevalier-confrere': ['kingdom-of-france'],
+    'szlachta-cavalry': ['kingdom-of-poland'],
+  };
+  useEffect(() => {
+    if (!unit) return;
+    const defaults = (LOCKED_UNIT_TECHS[unit.id] || []).filter(id => techs.some(t => t.id === id));
+    if (defaults.length === 0) return;
+    setActiveTechnologies(prev => new Set([...prev, ...defaults]));
+  }, [unit, techs]);
+
   // Weapon-swap units: reorder weapons so the active weapon is at index 0
   const effectiveVariation = useMemo<UnifiedVariation | null>(() => {
     if (!variation) return null;
@@ -489,8 +528,10 @@ export function useUnitSlot() {
       bonusDamage: (weapon?.modifiers || []).map((m: any) => ({ ...m, fromWeapon: true })), // eslint-disable-line @typescript-eslint/no-explicit-any
       rangedResistance: getResistanceValue(data, 'ranged'),
       meleeResistance: getResistanceValue(data, 'melee'),
+      siegeResistance: getResistanceValue(data, 'siege'),
       healingRate: 0,
       armorPenetration: 0,
+      opponentAttackSpeedDebuff: 0,
     };
 
     const techVariations = getActiveTechnologyVariationsWithTiers(activeTechnologies, selectedCiv, selectedAge);
@@ -560,7 +601,7 @@ export function useUnitSlot() {
       if (!counterVariation) continue;
       const syntheticVariation = {
         ...counterVariation,
-        effects: (counterVariation.effects || []).map((e: any) => ({ ...e, value: effectiveValue })), // eslint-disable-line @typescript-eslint/no-explicit-any
+        effects: (counterVariation.effects || []).map((e: any) => ({ ...e, value: effectiveValue * (e.counterStepScale ?? 1) })), // eslint-disable-line @typescript-eslint/no-explicit-any
       };
       result = applyTechnologyEffects(result, effectiveClasses, [syntheticVariation], unit?.id);
     }
@@ -607,8 +648,10 @@ export function useUnitSlot() {
       bonusDamage: (weapon?.modifiers || []).map((m: any) => ({ ...m, fromWeapon: true })), // eslint-disable-line @typescript-eslint/no-explicit-any
       rangedResistance: getResistanceValue(data, 'ranged'),
       meleeResistance: getResistanceValue(data, 'melee'),
+      siegeResistance: getResistanceValue(data, 'siege'),
       healingRate: 0,
       armorPenetration: 0,
+      opponentAttackSpeedDebuff: 0,
     };
     const techVariations = getActiveTechnologyVariationsWithTiers(activeTechnologies, selectedCiv, selectedAge);
     const counterAbilityIds = new Set(abilities.filter(a => a.counterMax !== undefined).map(a => a.id));
@@ -651,7 +694,7 @@ export function useUnitSlot() {
       if (!counterVariation) continue;
       const syntheticVariation = {
         ...counterVariation,
-        effects: (counterVariation.effects || []).map((e: any) => ({ ...e, value: effectiveValue })), // eslint-disable-line @typescript-eslint/no-explicit-any
+        effects: (counterVariation.effects || []).map((e: any) => ({ ...e, value: effectiveValue * (e.counterStepScale ?? 1) })), // eslint-disable-line @typescript-eslint/no-explicit-any
       };
       result = applyTechnologyEffects(result, effectiveClasses, [syntheticVariation], unit?.id);
     }
@@ -683,10 +726,10 @@ export function useUnitSlot() {
 
   const lockedTechnologies = useMemo(() => {
     const locked = new Set<string>();
-    const defaults = DEFAULT_ACTIVE_TECHS[selectedCiv] || [];
-    defaults.forEach(id => locked.add(id));
+    (DEFAULT_ACTIVE_TECHS[selectedCiv] || []).forEach(id => locked.add(id));
+    (LOCKED_UNIT_TECHS[unit?.id ?? ''] || []).forEach(id => locked.add(id));
     return locked;
-  }, [selectedCiv]);
+  }, [selectedCiv, unit]);
 
   return {
     unit, setUnit,
@@ -708,6 +751,7 @@ export function useUnitSlot() {
     toggleAbility,
     incrementAbility,
     decrementAbility,
+    setAbilityCounter,
     lockedAbilities,
     lockedTechnologies,
     secondaryWeapons,

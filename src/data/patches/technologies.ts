@@ -252,6 +252,19 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
       variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
     }),
   },
+
+  {
+    id: "piety",
+    reason: "Add combat_monk class to select so Hospitaller Knight (class: combat_monk) is also affected.",
+    after: (tech) => ({
+      ...tech,
+      effects: (tech.effects || []).map((e: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...e,
+        select: { ...e.select, class: [['combat_monk']] }
+      }))
+    }),
+  },
+
   //_________________
   //
   // ABBASID DYNASTY
@@ -1323,7 +1336,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     update: {
       effects: [
         {
-          property: 'costReduction',
+          property: 'meleeArmor',
           select: { id: ['annihilation_condition'] },
           effect: 'multiply',
           value: 1.0,
@@ -1347,6 +1360,184 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         ),
       })),
     }),
+  },
+
+
+  //___________________
+  //
+  // KNIGHTS TEMPLAR
+  //
+  //___________________
+
+  {
+    id: 'desert-citadels',
+    reason: 'Raw effects empty. Dummy value (1.0) to stay visible in isCombatTechnology. Real effect in techAbilityInteractions',
+    update: {
+      effects: [
+        { property: 'meleeArmor', select: { class: [['annihilation_condition']] }, effect: 'multiply', value: 1, type: 'passive' },
+        { property: 'rangedArmor', select: { class: [['annihilation_condition']] }, effect: 'multiply', value: 1, type: 'passive' },
+      ]
+    }
+  },
+
+  {
+    id: 'fanaticism',
+    reason: 'Variation effects have no select. Restricted to templar-brother and commanderie_unit. Bonus is conditional on HP % in-game — approximated as fixed ×1.1 here.',
+    excludedUnits: ["venetian-galley"],
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: (v.effects || []).map((e: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+          ...e,
+          select: { id: ['templar-brother'], class: [['commanderie_unit']] }
+        }))
+      }))
+    }),
+    uiTooltip: "Approximation: ×1.1 applied permanently. In-game: ×1.1 below 50% HP, ×1.3 below 25% HP."
+  },
+
+  {
+    id: 'principality-of-antioch',
+    reason: 'Raw variation effects have no select. Restricted to annihilation-condition class.',
+    excludedUnits: ["hospitaller-knight", "chevalier-confrere"],
+    after: (tech) => ({
+      ...tech,
+      minAge: 2,
+      unique: true,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: (v.effects || []).map((e: any) => ({
+          ...e,
+          select: { id: ['melee'] }
+        }))
+      }))
+    })
+  },
+
+  {
+    id: 'kingdom-of-france',
+    reason: 'Raw variation effects have no select. Restricted to annihilation-condition class.',
+    excludedUnits: ["hospitaller-knight", "serjeant"],
+    update: {
+      minAge: 2,
+      unique: true,
+      effects: [
+        { property: 'goldCostReduction', select: { class: [['heavy', 'military']], id: ["condottiero", "crossbowman", "counterweight-trebuchet", "mangonel", "springald"] }, effect: 'multiply', value: 0.95, type: 'passive' },
+      ]
+    }
+  },
+
+  {
+    id: 'kingdom-of-castile',
+    excludedUnits: ['heavy-spearman', 'genoese-crossbowman'],
+    reason: 'Raw variation effects have no select. Restricted to annihilation-condition class.',
+    update: {
+      minAge: 3,
+      unique: true,
+      effects: [
+        { property: 'meleeAttack', select: { class: [['human', 'military']] }, effect: 'multiply', value: 1.2, type: 'passive' },
+        { property: 'rangedAttack', select: { class: [['human', 'military']] }, effect: 'multiply', value: 1.2, type: 'passive' },
+        { property: 'healingRate', select: { class: [['human', 'military']] }, effect: 'change', value: 1, type: 'passive' },
+      ]
+    }
+  },
+
+  {
+    id: 'angevin-empire',
+    reason: 'Raw variation effects have no select. Restricted to annihilation-condition class. Also manage Angevin Durability Ability.',
+    update: {
+      description: "Fortresses and Docks gain +30% Health. Increasesf the damage and hit points of Heavy Spearmen within desert citadels range.",
+      minAge: 3,
+      unique: true,
+      effects: [
+        { property: 'meleeAttack', select: { id: ['heavy-spearman'] }, effect: 'multiply', value: 1.2, type: 'passive' },
+        { property: 'hitpoints', select: { id: ['heavy-spearman'] }, effect: 'multiply', value: 1.2, type: 'passive' },
+      ]
+    }
+  },
+
+  {
+    id: 'teutonic-order',
+    excludedUnits: ["szlachta-cavalry"],
+    reason: 'Raw variation effects have no select.',
+    update: {
+      minAge: 4,
+      unique: true,
+      effects: [
+        { property: 'meleeArmor', select: { class: [['human', 'heavy']], id: ["crossbowman", "monk"] }, effect: 'change', value: 2, type: 'passive' },
+      ]
+    }
+  },
+
+  {
+    id: 'kingdom-of-poland',
+    reason: 'Raw variation has no effect.',
+    after: (tech) => ({
+      ...tech,
+      minAge: 4,
+      unique: true,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [
+          { property: 'hitpoints', select: { class: [["cavalry"]] }, effect: 'multiply', value: 1.1, type: 'passive' },
+          { property: 'chargeMultiplier', select: { class: [["cavalry"]] }, effect: 'change', value: 0.5, type: 'passive' },
+        ],
+      }))
+    })
+  },
+
+  {
+    id: 'cranequins',
+    reason: 'Raw variation effects have no select. Restricted to crossbowman unitId.',
+    after: (tech) => ({
+      ...tech,
+      minAge: 4,
+      unique: true,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [
+          ...(v.effects || []).map((e: any) => ({
+            ...e,
+            select: { id: ['crossbowman'] },
+          })),
+          { property: 'maxRange', effect: 'change', value: 0.5, type: 'passive', select: { id: ['crossbowman'] } },
+        ],
+      }))
+    })
+  },
+
+  {
+    id: 'brigandine',
+    reason: 'Raw variation has no effect.',
+    after: (tech) => ({
+      ...tech,
+      minAge: 4,
+      unique: true,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [
+          { property: 'meleeArmor', select: { id: ["horseman", "genitour"] }, effect: 'change', value: 2, type: 'passive' },
+          { property: 'rangedArmor', select: { id: ["horseman", "genitour"] }, effect: 'change', value: 2, type: 'passive' },
+        ],
+      }))
+    })
+  },
+
+  {
+    id: 'counterweight-defenses',
+    reason: 'Raw variation has no effect.',
+    after: (tech) => ({
+      ...tech,
+      minAge: 4,
+      unique: true,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [
+          { property: 'burst', select: { id: ["counterweight-trebuchet", "venetian-galley"] }, effect: 'change', value: 1, type: 'passive' },
+        ],
+      }))
+    })
   },
 
   //___________
@@ -1510,6 +1701,12 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
 ];
 
+//__________________
+//
+// HOLY ROMAN EMPIRE
+//
+//__________________
+
 function createBurgravePalaceAgeUp(): Technology {
   return {
     id: 'burgrave-palace-age-up',
@@ -1538,6 +1735,49 @@ function createBurgravePalaceAgeUp(): Technology {
         pbgid: 0,
         attribName: '',
         civs: ['hr'],
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        effects: [] as TechnologyEffect[],
+      }
+    ],
+    shared: {}
+  } as Technology;
+}
+
+function createCrusaderFleets(): Technology {
+  return {
+    id: 'crusader-fleets',
+    name: 'Crusader Fleets',
+    type: 'technology',
+    civs: ['kt'],
+    classes: [],
+    displayClasses: [],
+    minAge: 4,
+    icon: 'public/technologies/crusader-fleets.png',
+    description: 'It increases the range and attack of the springald ships by +1.5 and +25% respectively.',
+    unique: true,
+    effects: [
+      {
+        property: 'maxRange',
+        select: { id: ['hulk'] },
+        effect: 'change',
+        value: 1.5,
+        type: 'passive'
+      },
+      {
+        property: 'rangedAttack',
+        select: { id: ['hulk'] },
+        effect: 'multiply',
+        value: 1.2,
+        type: 'passive'
+      }
+    ] as TechnologyEffect[],
+    variations: [
+      {
+        id: 'crusader-fleets-4',
+        baseId: 'crusader-fleets',
+        pbgid: 58852,
+        attribName: '',
+        civs: ['kt'],
         costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
         effects: [] as TechnologyEffect[],
       }
@@ -1583,6 +1823,7 @@ export function applyTechnologyPatches(allTechs: Technology[]): Technology[] {
   const allWithSynthetic = [
     ...allTechs,
     createBurgravePalaceAgeUp(),
+    createCrusaderFleets(),
   ];
 
   return allWithSynthetic.map((tech) => {

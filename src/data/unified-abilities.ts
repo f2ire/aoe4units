@@ -13,6 +13,7 @@ import { getTechnologiesForUnit } from './unified-technologies';
 export interface Ability extends Technology {
   active?: string;
   activeForIds?: string[]; // if set, auto-activates only when unit.id or unit.baseId is in this list
+  counterInputMode?: 'type'; // if set, renders a free-text number input instead of +/- buttons
 }
 export interface AbilityVariation extends TechnologyVariation {
   active?: string;
@@ -51,6 +52,8 @@ const combatProperties = [
   'versusOpponentDamageDebuff',
   'costReduction',
   'foodCostReduction',
+  'armorPenetration',
+  'opponentAttackSpeedDebuff',
 ];
 
 const nonCombatTargets = [

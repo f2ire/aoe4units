@@ -53,7 +53,7 @@ function getMercenarySubCategory(unit: { classes: string[] }): string {
 const MERCENARY_SUB_ORDER = ['Melee Infantry', 'Ranged Infantry', 'Melee Cavalry', 'Ranged Cavalry', 'Siege', 'Other'];
 
 // Function to calculate the charge bonus for a unit
-const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activeAbilities: Set<string>, age: number, activeTechnologies: Set<string> = new Set(), chargeMultiplier?: number, modifiedMeleeAttack?: number, abilityCounters?: Map<string, number>, modifiedRangedAttack?: number): number => {
+const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activeAbilities: Set<string>, age: number, activeTechnologies: Set<string> = new Set(), chargeMultiplier?: number, modifiedMeleeAttack?: number, abilityCounters?: Map<string, number>, modifiedRangedAttack?: number, chargeChange?: number): number => {
   if (!unitData) return 0;
 
   // Get the base ID for variations
@@ -116,75 +116,88 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
   // Set up special unit charge damage 
   // _________________________________
 
+  let charge_bonus = 0;
+  let charge_bonus_mult = 1;
+  if (chargeMultiplier && chargeMultiplier > 0) {
+    const primaryWeapon = getPrimaryWeapon(unitData as UnifiedVariation);
+    charge_bonus = (primaryWeapon?.damage ?? 0) * chargeMultiplier;
+    charge_bonus_mult = 1.5;
+  }
+  charge_bonus += chargeChange ?? 0;
+
 
   if (baseId === 'demilancer') {
     switch (age) {
-      case 2: return 4;
-      case 3: return 5;
-      case 4: return 14;
-      default: return 0;
+      case 2: return 4 + charge_bonus;
+      case 3: return 5 + charge_bonus;
+      case 4: return 14 + charge_bonus;
+      default: return charge_bonus;
     }
   }
 
   if (baseId === 'torguud') {
     switch (age) {
-      case 2: return 5;
-      case 3: return 7;
-      case 4: return 9;
-      default: return 0;
+      case 2: return 5 + charge_bonus;
+      case 3: return 7 + charge_bonus;
+      case 4: return 9 + charge_bonus;
+      default: return charge_bonus;
     }
   }
 
   if (baseId === 'batu-khan') {
     switch (age) {
-      case 2: return 10;
-      case 3: return 12;
-      case 4: return 12;
-      default: return 0;
+      case 2: return 10 + charge_bonus;
+      case 3: return 12 + charge_bonus;
+      case 4: return 12 + charge_bonus;
+      default: return charge_bonus;
     }
   }
 
   if (baseId === 'keshik') {
     switch (age) {
-      case 2: return 8;
-      case 3: return 10;
-      case 4: return 12;
-      default: return 0;
+      case 2: return 8 + charge_bonus;
+      case 3: return 10 + charge_bonus;
+      case 4: return 12 + charge_bonus;
+      default: return charge_bonus;
     }
+  }
+
+  if (baseId === 'chevalier-confrere') {
+    switch (age) {
+      case 2: return 7 * charge_bonus_mult + charge_bonus;
+      case 3: return 9 * charge_bonus_mult + charge_bonus;
+      case 4: return 11 * charge_bonus_mult + charge_bonus;
+      default: return charge_bonus;
+    }
+  }
+  if (baseId === "szlachta-cavalry") {
+    return 15 * charge_bonus_mult + charge_bonus;
   }
   if (baseId === 'ghulam' || unitClasses.some(c => c.toLowerCase() === 'merc_ghulam')) {
     switch (age) {
-      case 3: return 5;
-      case 4: return 6;
-      default: return 0;
+      case 3: return 5 + charge_bonus;
+      case 4: return 6 + charge_bonus;
+      default: return charge_bonus;
     }
   }
 
   if (baseId === 'fire-lancer') {
-    return 4;
+    return 4 + charge_bonus;
   }
-
-
 
   // chargeMultiplier: bonus = % of unit's primary melee damage (e.g. Burgrave Palace: ×0.5)
-  if (chargeMultiplier && chargeMultiplier > 0) {
-    const primaryWeapon = getPrimaryWeapon(unitData as UnifiedVariation);
-    return (primaryWeapon?.damage ?? 0) * chargeMultiplier;
-  }
 
   // If basic knight
-
   if (isKnight) {
     switch (age) {
-      case 2: return 10;
-      case 3: return 12;
-      case 4: return 14;
-      default: return 0;
+      case 2: return 10 * charge_bonus_mult + charge_bonus;
+      case 3: return 12 * charge_bonus_mult + charge_bonus;
+      case 4: return 14 * charge_bonus_mult + charge_bonus;
+      default: return charge_bonus;
     }
   }
 
-
-  return 0;
+  return charge_bonus;
 };
 
 const getChargeBonusBurst = (unitData: AoE4Unit | UnifiedVariation | undefined, activeTechnologies: Set<string> = new Set()): number => {
@@ -228,6 +241,7 @@ const Sandbox = () => {
     toggleAbility: toggleAbility1,
     incrementAbility: incrementAbility1,
     decrementAbility: decrementAbility1,
+    setAbilityCounter: setAbilityCounter1,
     abilityCounters: abilityCounters1,
     lockedAbilities: lockedAbilities1,
     lockedTechnologies: lockedTechnologies1,
@@ -253,6 +267,7 @@ const Sandbox = () => {
     toggleAbility: toggleAbility2,
     incrementAbility: incrementAbility2,
     decrementAbility: decrementAbility2,
+    setAbilityCounter: setAbilityCounter2,
     abilityCounters: abilityCounters2,
     lockedAbilities: lockedAbilities2,
     lockedTechnologies: lockedTechnologies2,
@@ -291,15 +306,16 @@ const Sandbox = () => {
         { type: 'ranged', value: modifiedStats1.rangedArmor }
       ],
       resistance: [
-        ...(variation1.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee'),
+        ...(variation1.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee' && r.type !== 'siege'),
         ...((modifiedStats1.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedStats1.rangedResistance! }] : []),
         ...((modifiedStats1.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: modifiedStats1.meleeResistance! }] : []),
+        ...((modifiedStats1.siegeResistance ?? 0) !== 0 ? [{ type: 'siege', value: modifiedStats1.siegeResistance! }] : []),
       ],
-      costs: (modifiedStats1.costMultiplier != null && modifiedStats1.costMultiplier !== 1.0) || (modifiedStats1.stoneCostMultiplier != null && modifiedStats1.stoneCostMultiplier !== 1.0) || (modifiedStats1.foodCostMultiplier != null && modifiedStats1.foodCostMultiplier !== 1.0) ? {
+      costs: (modifiedStats1.costMultiplier != null && modifiedStats1.costMultiplier !== 1.0) || (modifiedStats1.stoneCostMultiplier != null && modifiedStats1.stoneCostMultiplier !== 1.0) || (modifiedStats1.foodCostMultiplier != null && modifiedStats1.foodCostMultiplier !== 1.0) || (modifiedStats1.goldCostMultiplier != null && modifiedStats1.goldCostMultiplier !== 1.0) ? {
         ...variation1.costs,
         food: Math.round((variation1.costs.food || 0) * (modifiedStats1.costMultiplier ?? 1) * (modifiedStats1.foodCostMultiplier ?? 1)),
         wood: Math.round((variation1.costs.wood || 0) * (modifiedStats1.costMultiplier ?? 1)),
-        gold: Math.round((variation1.costs.gold || 0) * (modifiedStats1.costMultiplier ?? 1)),
+        gold: Math.round((variation1.costs.gold || 0) * (modifiedStats1.costMultiplier ?? 1) * (modifiedStats1.goldCostMultiplier ?? 1)),
         stone: Math.round((variation1.costs.stone || 0) * (modifiedStats1.costMultiplier ?? 1) * (modifiedStats1.stoneCostMultiplier ?? 1)),
         oliveoil: Math.round((variation1.costs.oliveoil || 0) * (modifiedStats1.costMultiplier ?? 1)),
       } : variation1.costs,
@@ -309,12 +325,13 @@ const Sandbox = () => {
       } : undefined,
       healingRate: modifiedStats1.healingRate ?? 0,
       armorPenetration: modifiedStats1.armorPenetration ?? 0,
+      opponentAttackSpeedDebuff: modifiedStats1.opponentAttackSpeedDebuff ?? 0,
       postChargeMeleeBonus: modifiedStats1.postChargeMeleeBonus ?? 0,
       firstHitBlocked: activeAbilities1.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(variation1, activeTechnologies1),
       chargeArmorType: variation1.baseId === 'earls-guard' ? 'ranged' as const :
         (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(variation1.baseId) && (abilityCounters1?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
-        (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(variation1.baseId) && (abilityCounters1?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const : undefined,
+          (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(variation1.baseId) && (abilityCounters1?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const : undefined,
       secondaryWeapons: (() => {
         const primaryWeapon1 = getPrimaryWeapon(variation1);
         const primaryBaseDamage = primaryWeapon1?.damage || 0;
@@ -365,15 +382,16 @@ const Sandbox = () => {
         { type: 'ranged', value: modifiedStats2.rangedArmor }
       ],
       resistance: [
-        ...(variation2.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee'),
+        ...(variation2.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee' && r.type !== 'siege'),
         ...((modifiedStats2.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedStats2.rangedResistance! }] : []),
         ...((modifiedStats2.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: modifiedStats2.meleeResistance! }] : []),
+        ...((modifiedStats2.siegeResistance ?? 0) !== 0 ? [{ type: 'siege', value: modifiedStats2.siegeResistance! }] : []),
       ],
-      costs: (modifiedStats2.costMultiplier != null && modifiedStats2.costMultiplier !== 1.0) || (modifiedStats2.stoneCostMultiplier != null && modifiedStats2.stoneCostMultiplier !== 1.0) || (modifiedStats2.foodCostMultiplier != null && modifiedStats2.foodCostMultiplier !== 1.0) ? {
+      costs: (modifiedStats2.costMultiplier != null && modifiedStats2.costMultiplier !== 1.0) || (modifiedStats2.stoneCostMultiplier != null && modifiedStats2.stoneCostMultiplier !== 1.0) || (modifiedStats2.foodCostMultiplier != null && modifiedStats2.foodCostMultiplier !== 1.0) || (modifiedStats2.goldCostMultiplier != null && modifiedStats2.goldCostMultiplier !== 1.0) ? {
         ...variation2.costs,
         food: Math.round((variation2.costs.food || 0) * (modifiedStats2.costMultiplier ?? 1) * (modifiedStats2.foodCostMultiplier ?? 1)),
         wood: Math.round((variation2.costs.wood || 0) * (modifiedStats2.costMultiplier ?? 1)),
-        gold: Math.round((variation2.costs.gold || 0) * (modifiedStats2.costMultiplier ?? 1)),
+        gold: Math.round((variation2.costs.gold || 0) * (modifiedStats2.costMultiplier ?? 1) * (modifiedStats2.goldCostMultiplier ?? 1)),
         stone: Math.round((variation2.costs.stone || 0) * (modifiedStats2.costMultiplier ?? 1) * (modifiedStats2.stoneCostMultiplier ?? 1)),
         oliveoil: Math.round((variation2.costs.oliveoil || 0) * (modifiedStats2.costMultiplier ?? 1)),
       } : variation2.costs,
@@ -383,12 +401,13 @@ const Sandbox = () => {
       } : undefined,
       healingRate: modifiedStats2.healingRate ?? 0,
       armorPenetration: modifiedStats2.armorPenetration ?? 0,
+      opponentAttackSpeedDebuff: modifiedStats2.opponentAttackSpeedDebuff ?? 0,
       postChargeMeleeBonus: modifiedStats2.postChargeMeleeBonus ?? 0,
       firstHitBlocked: activeAbilities2.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(variation2, activeTechnologies2),
       chargeArmorType: variation2.baseId === 'earls-guard' ? 'ranged' as const :
         (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(variation2.baseId) && (abilityCounters2?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
-        (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(variation2.baseId) && (abilityCounters2?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const : undefined,
+          (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(variation2.baseId) && (abilityCounters2?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const : undefined,
       secondaryWeapons: (() => {
         const primaryWeapon2 = getPrimaryWeapon(variation2);
         const primaryBaseDamage = primaryWeapon2?.damage || 0;
@@ -444,9 +463,10 @@ const Sandbox = () => {
         { type: 'ranged', value: modifiedStats1.rangedArmor }
       ],
       resistance: [
-        ...(unit1.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee'),
+        ...(unit1.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee' && r.type !== 'siege'),
         ...((modifiedStats1.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedStats1.rangedResistance! }] : []),
         ...((modifiedStats1.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: modifiedStats1.meleeResistance! }] : []),
+        ...((modifiedStats1.siegeResistance ?? 0) !== 0 ? [{ type: 'siege', value: modifiedStats1.siegeResistance! }] : []),
       ],
       movement: unit1.movement ? {
         ...unit1.movement,
@@ -454,12 +474,13 @@ const Sandbox = () => {
       } : undefined,
       healingRate: modifiedStats1.healingRate ?? 0,
       armorPenetration: modifiedStats1.armorPenetration ?? 0,
+      opponentAttackSpeedDebuff: modifiedStats1.opponentAttackSpeedDebuff ?? 0,
       postChargeMeleeBonus: modifiedStats1.postChargeMeleeBonus ?? 0,
       firstHitBlocked: activeAbilities1.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(unit1, activeTechnologies1),
       chargeArmorType: unit1.id === 'earls-guard' ? 'ranged' as const :
         (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(unit1.id) && (abilityCounters1?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
-        (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(unit1.id) && (abilityCounters1?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const : undefined,
+          (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(unit1.id) && (abilityCounters1?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const : undefined,
       secondaryWeapons: (() => {
         const primaryWeaponU1 = getPrimaryWeapon(unit1);
         const primaryBaseDamage = primaryWeaponU1?.damage || 0;
@@ -511,9 +532,10 @@ const Sandbox = () => {
         { type: 'ranged', value: modifiedStats2.rangedArmor }
       ],
       resistance: [
-        ...(unit2.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee'),
+        ...(unit2.resistance || []).filter((r: { type: string }) => r.type !== 'ranged' && r.type !== 'melee' && r.type !== 'siege'),
         ...((modifiedStats2.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: modifiedStats2.rangedResistance! }] : []),
         ...((modifiedStats2.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: modifiedStats2.meleeResistance! }] : []),
+        ...((modifiedStats2.siegeResistance ?? 0) !== 0 ? [{ type: 'siege', value: modifiedStats2.siegeResistance! }] : []),
       ],
       movement: unit2.movement ? {
         ...unit2.movement,
@@ -521,12 +543,13 @@ const Sandbox = () => {
       } : undefined,
       healingRate: modifiedStats2.healingRate ?? 0,
       armorPenetration: modifiedStats2.armorPenetration ?? 0,
+      opponentAttackSpeedDebuff: modifiedStats2.opponentAttackSpeedDebuff ?? 0,
       postChargeMeleeBonus: modifiedStats2.postChargeMeleeBonus ?? 0,
       firstHitBlocked: activeAbilities2.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(unit2, activeTechnologies2),
       chargeArmorType: unit2.id === 'earls-guard' ? 'ranged' as const :
         (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(unit2.id) && (abilityCounters2?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
-        (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(unit2.id) && (abilityCounters2?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const : undefined,
+          (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(unit2.id) && (abilityCounters2?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const : undefined,
       secondaryWeapons: (() => {
         const primaryWeaponU2 = getPrimaryWeapon(unit2);
         const primaryBaseDamage = primaryWeaponU2?.damage || 0;
@@ -571,13 +594,15 @@ const Sandbox = () => {
       })),
       armor: [{ type: 'melee', value: s.meleeArmor }, { type: 'ranged', value: s.rangedArmor }],
       resistance: [
-        ...(variation1.resistance || []).filter((r: any) => r.type !== 'ranged' && r.type !== 'melee'), // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...(variation1.resistance || []).filter((r: any) => r.type !== 'ranged' && r.type !== 'melee' && r.type !== 'siege'), // eslint-disable-line @typescript-eslint/no-explicit-any
         ...((s.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: s.rangedResistance! }] : []),
         ...((s.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: s.meleeResistance! }] : []),
+        ...((s.siegeResistance ?? 0) !== 0 ? [{ type: 'siege', value: s.siegeResistance! }] : []),
       ],
       movement: modifiedVariation1.movement ? { ...modifiedVariation1.movement, speed: s.moveSpeed } : undefined,
       healingRate: s.healingRate ?? 0,
       armorPenetration: s.armorPenetration ?? 0,
+      opponentAttackSpeedDebuff: s.opponentAttackSpeedDebuff ?? 0,
     };
   })() : undefined;
 
@@ -597,13 +622,15 @@ const Sandbox = () => {
       })),
       armor: [{ type: 'melee', value: s.meleeArmor }, { type: 'ranged', value: s.rangedArmor }],
       resistance: [
-        ...(variation2.resistance || []).filter((r: any) => r.type !== 'ranged' && r.type !== 'melee'), // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...(variation2.resistance || []).filter((r: any) => r.type !== 'ranged' && r.type !== 'melee' && r.type !== 'siege'), // eslint-disable-line @typescript-eslint/no-explicit-any
         ...((s.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: s.rangedResistance! }] : []),
         ...((s.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: s.meleeResistance! }] : []),
+        ...((s.siegeResistance ?? 0) !== 0 ? [{ type: 'siege', value: s.siegeResistance! }] : []),
       ],
       movement: modifiedVariation2.movement ? { ...modifiedVariation2.movement, speed: s.moveSpeed } : undefined,
       healingRate: s.healingRate ?? 0,
       armorPenetration: s.armorPenetration ?? 0,
+      opponentAttackSpeedDebuff: s.opponentAttackSpeedDebuff ?? 0,
     };
   })() : undefined;
 
@@ -623,13 +650,15 @@ const Sandbox = () => {
       })),
       armor: [{ type: 'melee', value: s.meleeArmor }, { type: 'ranged', value: s.rangedArmor }],
       resistance: [
-        ...(unit1.resistance || []).filter((r: any) => r.type !== 'ranged' && r.type !== 'melee'), // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...(unit1.resistance || []).filter((r: any) => r.type !== 'ranged' && r.type !== 'melee' && r.type !== 'siege'), // eslint-disable-line @typescript-eslint/no-explicit-any
         ...((s.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: s.rangedResistance! }] : []),
         ...((s.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: s.meleeResistance! }] : []),
+        ...((s.siegeResistance ?? 0) !== 0 ? [{ type: 'siege', value: s.siegeResistance! }] : []),
       ],
       movement: unit1.movement ? { ...unit1.movement, speed: s.moveSpeed } : undefined,
       healingRate: s.healingRate ?? 0,
       armorPenetration: s.armorPenetration ?? 0,
+      opponentAttackSpeedDebuff: s.opponentAttackSpeedDebuff ?? 0,
     };
   })() : undefined;
 
@@ -649,13 +678,15 @@ const Sandbox = () => {
       })),
       armor: [{ type: 'melee', value: s.meleeArmor }, { type: 'ranged', value: s.rangedArmor }],
       resistance: [
-        ...(unit2.resistance || []).filter((r: any) => r.type !== 'ranged' && r.type !== 'melee'), // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...(unit2.resistance || []).filter((r: any) => r.type !== 'ranged' && r.type !== 'melee' && r.type !== 'siege'), // eslint-disable-line @typescript-eslint/no-explicit-any
         ...((s.rangedResistance ?? 0) > 0 ? [{ type: 'ranged', value: s.rangedResistance! }] : []),
         ...((s.meleeResistance ?? 0) !== 0 ? [{ type: 'melee', value: s.meleeResistance! }] : []),
+        ...((s.siegeResistance ?? 0) !== 0 ? [{ type: 'siege', value: s.siegeResistance! }] : []),
       ],
       movement: unit2.movement ? { ...unit2.movement, speed: s.moveSpeed } : undefined,
       healingRate: s.healingRate ?? 0,
       armorPenetration: s.armorPenetration ?? 0,
+      opponentAttackSpeedDebuff: s.opponentAttackSpeedDebuff ?? 0,
     };
   })() : undefined;
 
@@ -680,7 +711,7 @@ const Sandbox = () => {
     attackSpeed: modifiedStats1.attackSpeed || 0,
     maxRange: modifiedStats1.maxRange || 0,
     bonusDamage: modifiedStats1.bonusDamage || [],
-    chargeBonus: getChargeBonus(data1, activeAbilities1, selectedAge1, activeTechnologies1, modifiedStats1.chargeMultiplier, modifiedStats1.meleeAttack, abilityCounters1, modifiedStats1.rangedAttack),
+    chargeBonus: getChargeBonus(data1, activeAbilities1, selectedAge1, activeTechnologies1, modifiedStats1.chargeMultiplier, modifiedStats1.meleeAttack, abilityCounters1, modifiedStats1.rangedAttack, modifiedStats1.chargeChange),
     cost: variation1 ? getTotalCost(variation1) : (unit1 ? getTotalCost(unit1) : 0),
     costs: variation1 ? variation1.costs : (unit1 ? unit1.costs : undefined),
     population: 'costs' in (variation1 || unit1 || {}) ? (variation1 || unit1 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -707,7 +738,7 @@ const Sandbox = () => {
     attackSpeed: modifiedStats2.attackSpeed || 0,
     maxRange: modifiedStats2.maxRange || 0,
     bonusDamage: modifiedStats2.bonusDamage || [],
-    chargeBonus: getChargeBonus(data2, activeAbilities2, selectedAge2, activeTechnologies2, modifiedStats2.chargeMultiplier, modifiedStats2.meleeAttack, abilityCounters2, modifiedStats2.rangedAttack),
+    chargeBonus: getChargeBonus(data2, activeAbilities2, selectedAge2, activeTechnologies2, modifiedStats2.chargeMultiplier, modifiedStats2.meleeAttack, abilityCounters2, modifiedStats2.rangedAttack, modifiedStats2.chargeChange),
     cost: variation2 ? getTotalCost(variation2) : (unit2 ? getTotalCost(unit2) : 0),
     costs: variation2 ? variation2.costs : (unit2 ? unit2.costs : undefined),
     population: 'costs' in (variation2 || unit2 || {}) ? (variation2 || unit2 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -1298,6 +1329,7 @@ const Sandbox = () => {
                       abilityCounters={abilityCounters1}
                       onIncrement={incrementAbility1}
                       onDecrement={decrementAbility1}
+                      onSetCounter={setAbilityCounter1}
                       unitId={variation1?.baseId ?? unit1?.id}
                     />
                   </div>
@@ -1325,6 +1357,8 @@ const Sandbox = () => {
                       compareProductionTime={stats2?.productionTime}
                       secondaryWeapons={modifiedVariation1?.secondaryWeapons ?? secondaryWeapons1}
                       showSecondaryWeaponRow={secondaryWeapons1.length > 0 || secondaryWeapons2.length > 0}
+                      opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
+                      opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
                     />
                   </div>
                 </div>
@@ -1363,6 +1397,8 @@ const Sandbox = () => {
                       compareProductionTime={stats1?.productionTime}
                       secondaryWeapons={modifiedVariation2?.secondaryWeapons ?? secondaryWeapons2}
                       showSecondaryWeaponRow={secondaryWeapons1.length > 0 || secondaryWeapons2.length > 0}
+                      opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
+                      opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
                     />
                   </div>
                   <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
@@ -1391,6 +1427,7 @@ const Sandbox = () => {
                       abilityCounters={abilityCounters2}
                       onIncrement={incrementAbility2}
                       onDecrement={decrementAbility2}
+                      onSetCounter={setAbilityCounter2}
                       unitId={variation2?.baseId ?? unit2?.id}
                     />
                   </div>
@@ -1412,8 +1449,8 @@ const Sandbox = () => {
               const abilitiesArray2 = Array.from(activeAbilities2);
 
               // Compute charge bonuses
-              const charge1 = getChargeBonus(data1, activeAbilities1, selectedAge1, activeTechnologies1, modifiedStats1.chargeMultiplier, modifiedStats1.meleeAttack, abilityCounters1, modifiedStats1.rangedAttack);
-              const charge2 = getChargeBonus(data2, activeAbilities2, selectedAge2, activeTechnologies2, modifiedStats2.chargeMultiplier, modifiedStats2.meleeAttack, abilityCounters2, modifiedStats2.rangedAttack);
+              const charge1 = getChargeBonus(data1, activeAbilities1, selectedAge1, activeTechnologies1, modifiedStats1.chargeMultiplier, modifiedStats1.meleeAttack, abilityCounters1, modifiedStats1.rangedAttack, modifiedStats1.chargeChange);
+              const charge2 = getChargeBonus(data2, activeAbilities2, selectedAge2, activeTechnologies2, modifiedStats2.chargeMultiplier, modifiedStats2.meleeAttack, abilityCounters2, modifiedStats2.rangedAttack, modifiedStats2.chargeChange);
 
               const noTimerData1 = showDurationEffect ? (modifiedVariation1NoTimer || modifiedUnit1NoTimer) : undefined;
               const noTimerData2 = showDurationEffect ? (modifiedVariation2NoTimer || modifiedUnit2NoTimer) : undefined;
@@ -1575,6 +1612,7 @@ const Sandbox = () => {
                           abilityCounters={abilityCounters1}
                           onIncrement={incrementAbility1}
                           onDecrement={decrementAbility1}
+                          onSetCounter={setAbilityCounter1}
                           unitId={variation1?.baseId ?? unit1?.id}
                         />
                       </div>
@@ -1587,6 +1625,8 @@ const Sandbox = () => {
                           mode="versus"
                           versusMetrics={leftMetrics}
                           secondaryWeapons={modifiedVariation1?.secondaryWeapons ?? secondaryWeapons1}
+                          opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
+                          opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
                         />
                       </div>
                     </div>
@@ -1607,6 +1647,8 @@ const Sandbox = () => {
                           mode="versus"
                           versusMetrics={rightMetrics}
                           secondaryWeapons={modifiedVariation2?.secondaryWeapons ?? secondaryWeapons2}
+                          opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
+                          opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
                         />
                       </div>
                       <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
@@ -1635,6 +1677,7 @@ const Sandbox = () => {
                           abilityCounters={abilityCounters2}
                           onIncrement={incrementAbility2}
                           onDecrement={decrementAbility2}
+                          onSetCounter={setAbilityCounter2}
                           unitId={variation2?.baseId ?? unit2?.id}
                         />
                       </div>
@@ -1658,8 +1701,8 @@ const Sandbox = () => {
                       {(timedDuration1 || timedDuration2) &&
                         versusDataOriginal.attacker.timeToKill === versusData.attacker.timeToKill &&
                         versusDataOriginal.defender.timeToKill === versusData.defender.timeToKill && (
-                        <span>Duration ({timedDuration1 ?? timedDuration2}s) covers full fight — no correction needed.</span>
-                      )}
+                          <span>Duration ({timedDuration1 ?? timedDuration2}s) covers full fight — no correction needed.</span>
+                        )}
                     </div>
                   )}
                 </>

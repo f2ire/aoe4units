@@ -452,7 +452,7 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
 
   //_____________________
   //
-  // LORD OF LANCASTER
+  // HOUSE OF LANCASTER
   //
   //_____________________
 
@@ -541,6 +541,33 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       };
     },
   },
+
+  ...(['galley', 'hulk', 'carrack', 'demolition-ship', 'transport-ship', 'fishing-boat'] as const).map(id => ({
+    id,
+    reason: 'Lord of Lancaster (hl) ships cost 10% less, matching the English civ passive. Raw data lacks this discount for hl variations.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      return {
+        ...u,
+        variations: (u.variations as Record<string, unknown>[]).map(v => {
+          if (!(v.civs as string[])?.includes('hl')) return v;
+          const c = v.costs as Record<string, number>;
+          return {
+            ...v,
+            costs: {
+              ...c,
+              food: Math.round((c.food || 0) * 0.9),
+              wood: Math.round((c.wood || 0) * 0.9),
+              gold: Math.round((c.gold || 0) * 0.9),
+              stone: Math.round((c.stone || 0) * 0.9),
+              oliveoil: Math.round((c.oliveoil || 0) * 0.9),
+              total: Math.round((c.total || 0) * 0.9),
+            },
+          };
+        }),
+      };
+    },
+  })),
 
   //_________
   //
@@ -647,35 +674,12 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
     },
   },
 
-
-  //_________
+  //____________
   //
-  // MONGOLS
+  // JEANNE D'ARC
   //
-  //_________
-  {
-    id: 'mangudai',
-    reason: 'Shoots while moving: any melee unit slower than the Mangudai can never catch it in kiting mode.',
-    after: (unit: unknown) => {
-      const u = unit as Record<string, unknown>;
-      if (Array.isArray(u.variations)) {
-        u.variations = u.variations.map((v: unknown) => {
-          const variation = v as Record<string, unknown>;
-          if (Array.isArray(variation.weapons) && variation.weapons[0]) {
-            const weapon = { ...(variation.weapons[0] as Record<string, unknown>) };
-            const speed = weapon.speed as number;
-            weapon.durations = { ...(weapon.durations as object), winddown: speed, reload: 0 };
-            variation.weapons = [weapon, ...variation.weapons.slice(1)];
-          }
-          return { ...variation, continuousMovement: true };
-        });
-      }
-      return u;
-    },
-  },
+  //____________
 
-
-  // Jeanne d'Arc — stat corrections
   {
     id: 'jeanne-darc-hunter',
     reason: 'Raw JSON has Bow damage 5 and range 5. Corrected to damage 8, range 8 per in-game stats.',
@@ -704,8 +708,6 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
     }),
   },
 
-  // Jeanne d'Arc — ranged resistance (absent from raw data)
-  // Lv3 forms: 45% ranged resistance
   {
     id: 'jeanne-darc-knight',
     reason: 'Jeanne Lv3 forms have 45% ranged resistance per in-game stats.',
@@ -717,6 +719,7 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       })),
     }),
   },
+
   {
     id: 'jeanne-darc-mounted-archer',
     reason: 'Jeanne Lv3 forms have 45% ranged resistance per in-game stats.',
@@ -728,7 +731,7 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       })),
     }),
   },
-  // Lv4 forms: 60% ranged resistance
+
   {
     id: 'jeanne-darc-blast-cannon',
     reason: 'Jeanne Lv4 forms have 60% ranged resistance per in-game stats.',
@@ -740,6 +743,7 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       })),
     }),
   },
+
   {
     id: 'jeanne-darc-markswoman',
     reason: 'Jeanne Lv4 forms have 60% ranged resistance per in-game stats.',
@@ -752,33 +756,78 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
     }),
   },
 
-  // Lord of Lancaster ships cost 10% less (matches English civ passive baked into en costs in raw data)
-  ...(['galley', 'hulk', 'carrack', 'demolition-ship', 'transport-ship', 'fishing-boat'] as const).map(id => ({
+  //_________________
+  //
+  // KNIGHTS TEMPLAR
+  //
+  //_________________
+
+
+  {
+    id: 'condottiero',
+    reason: 'Condottiero takes 33% less damage from gunpowder/siege attacks per in-game stats.',
+    after: (unit: any) => ({
+      ...unit,
+      variations: unit.variations.map((v: any) => ({
+        ...v,
+        resistance: [...(v.resistance || []), { type: 'gunpowder', value: 33 }],
+      })),
+    }),
+  },
+
+  ...(['battering-ram', 'counterweight-trebuchet', 'mangonel', 'springald', 'siege-tower'] as const).map(id => ({
     id,
-    reason: 'Lord of Lancaster (hl) ships cost 10% less, matching the English civ passive. Raw data lacks this discount for hl variations.',
+    reason: 'Knights templer siege cost 25% less wood.',
     after: (unit: unknown) => {
       const u = unit as Record<string, unknown>;
       return {
         ...u,
         variations: (u.variations as Record<string, unknown>[]).map(v => {
-          if (!(v.civs as string[])?.includes('hl')) return v;
+          if (!(v.civs as string[])?.includes('kt')) return v;
           const c = v.costs as Record<string, number>;
           return {
             ...v,
             costs: {
               ...c,
-              food: Math.round((c.food || 0) * 0.9),
-              wood: Math.round((c.wood || 0) * 0.9),
-              gold: Math.round((c.gold || 0) * 0.9),
-              stone: Math.round((c.stone || 0) * 0.9),
-              oliveoil: Math.round((c.oliveoil || 0) * 0.9),
-              total: Math.round((c.total || 0) * 0.9),
+              food: Math.round((c.food || 0) * 1),
+              wood: Math.round((c.wood || 0) * 0.75),
+              gold: Math.round((c.gold || 0) * 1),
+              stone: Math.round((c.stone || 0) * 1),
+              oliveoil: Math.round((c.oliveoil || 0) * 1),
+              total: Math.round((c.total || 0) * 1),
             },
           };
         }),
       };
     },
   })),
+
+  //_________
+  //
+  // MONGOLS
+  //
+  //_________
+
+  {
+    id: 'mangudai',
+    reason: 'Shoots while moving: any melee unit slower than the Mangudai can never catch it in kiting mode.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      if (Array.isArray(u.variations)) {
+        u.variations = u.variations.map((v: unknown) => {
+          const variation = v as Record<string, unknown>;
+          if (Array.isArray(variation.weapons) && variation.weapons[0]) {
+            const weapon = { ...(variation.weapons[0] as Record<string, unknown>) };
+            const speed = weapon.speed as number;
+            weapon.durations = { ...(weapon.durations as object), winddown: speed, reload: 0 };
+            variation.weapons = [weapon, ...variation.weapons.slice(1)];
+          }
+          return { ...variation, continuousMovement: true };
+        });
+      }
+      return u;
+    },
+  },
 
 ];
 

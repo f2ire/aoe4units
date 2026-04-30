@@ -47,7 +47,13 @@ export const techAbilityInteractions: TechAbilityInteraction[] = [
     requiredTech: 'do-maru-armor',
     requiredAbility: 'ability-deflective-armor',
     apply: (stats) => ({ ...stats, moveSpeed: stats.moveSpeed * 1.1 })
-  }
+  },
+
+  {
+    requiredTech: 'desert-citadels',
+    requiredAbility: 'ability-desert-citadels',
+    apply: (stats) => ({ ...stats, meleeArmor: stats.meleeArmor + 1, rangedArmor: stats.rangedArmor + 1, })
+  },
 ];
 
 //_________________
@@ -234,7 +240,6 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
       }))
     }),
   },
-
 
   //___________
   //
@@ -955,6 +960,46 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
       minAge: 4,
       variations: ability.variations.map(v => ({ ...v, effects: [] })),
     }),
+  },
+
+  //___________________
+  //
+  // KNIGHTS TEMPLAR
+  //
+  //___________________
+
+
+  {
+    id: "ability-desert-citadels",
+    reason: "Raw effect corrected.",
+    update: {
+      effects: [
+        { property: "maxRange", select: { class: [["ranged", "infantry"], ["axe_thrower"], ["ranged", "ship"]] }, effect: "multiply", value: 1.15, type: "passive" },
+        { property: 'meleeArmor', select: { class: [['human']] }, effect: 'multiply', value: 1, type: 'passive' },
+        { property: 'rangedArmor', select: { class: [['human']] }, effect: 'multiply', value: 1, type: 'passive' },
+      ]
+
+    },
+    after: (ability: Ability) => ({
+      ...ability,
+      minAge: 2,
+      variations: ability.variations.map(v => ({ ...v, active: 'manual', effects: [] })),
+    }),
+  },
+
+  {
+    id: "ability-teutonic-wrath",
+    reason: "Always active for Teutonic Knight.",
+    after: (ability: Ability) => ({
+      ...ability,
+      activeForIds: ["teutonic-knight"],
+    }),
+  },
+
+  {
+    id: "ability-battle-glory",
+    reason: "Add uiTooltip.",
+    uiTooltip: "Max is set to 999 but has not limit in game.",
   },
 
   //___________
@@ -1714,6 +1759,282 @@ function createNehan(): Ability {
   } as Ability;
 }
 
+// Synthetic ability — Teutonic Wrath (Knights Templar).
+// Teutonic Knight reduces the opponent's melee and ranged armor by 2.
+function createTeutonicWrath(): Ability {
+  return {
+    id: 'ability-teutonic-wrath',
+    name: 'Teutonic Wrath',
+    type: 'ability',
+    civs: ['kt'],
+    displayClasses: [],
+    classes: [],
+    minAge: 4,
+    active: 'always',
+    icon: 'public/abilities/TeutonicWrath.png',
+    description: 'Teutonic Knight reduces the opponent\'s melee and ranged armor by 2.',
+    unique: true,
+    effects: [
+      {
+        property: 'armorPenetration',
+        select: { class: [['human', 'military']], excludeId: ['monk'] },
+        effect: 'change',
+        value: 2,
+        type: 'ability',
+      },
+    ],
+    variations: [{
+      id: 'ability-teutonic-wrath-4',
+      baseId: 'ability-teutonic-wrath',
+      type: 'manual',
+      name: 'Teutonic Wrath',
+      pbgid: 999400,
+      attribName: 'ability_teutonic_wrath',
+      age: 4,
+      civs: ['kt'],
+      description: 'Teutonic Knight reduces the opponent\'s melee and ranged armor by 2.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createBattleGlory(): Ability {
+  return {
+    id: 'ability-battle-glory',
+    name: 'Battle Glory',
+    type: 'ability',
+    civs: ['kt'],
+    displayClasses: [],
+    classes: [],
+    minAge: 4,
+    active: 'manual',
+    icon: 'public/abilities/battleglory.png',
+    description: 'Teutonic Knight reduces the opponent\'s melee and ranged armor by 2.',
+    unique: true,
+    counterMax: 999,
+    counterHideMax: true,
+    counterStep: 1,
+    counterDirection: 'additive' as const,
+    counterTooltipLabel: 'kills',
+    effects: [
+      {
+        property: 'hitpoints',
+        select: { id: ['teutonic-knight'] },
+        effect: 'change',
+        value: 5,
+        counterStepScale: 5,
+        type: 'ability',
+      },
+      {
+        property: 'meleeAttack',
+        select: { id: ['teutonic-knight'] },
+        effect: 'change',
+        value: 1,
+        counterStepScale: 1,
+        type: 'ability',
+      },
+    ],
+    variations: [{
+      id: 'ability-battle-glory-4',
+      baseId: 'ability-battle-glory',
+      type: 'ability',
+      name: 'Battle Glory',
+      pbgid: 999401,
+      attribName: 'ability-battle-glory',
+      age: 4,
+      civs: ['kt'],
+      description: 'The Teutonic Knight permanently gains 5 health and 1 damage for each enemy unit it kills.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createKnightlyBrotherhood(): Ability {
+  return {
+    id: 'ability-knightly-brotherhood',
+    name: 'Knightly Brotherhood',
+    type: 'ability',
+    civs: ['kt'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    active: 'manual',
+    icon: 'public/abilities/Knightly_brotherhood.png',
+    description: 'Teutonic Knight reduces the opponent\'s melee and ranged armor by 2.',
+    unique: true,
+    counterMax: 200,
+    counterHideMax: true,
+    counterStep: 1,
+    counterDirection: 'additive' as const,
+    counterTooltipLabel: 'Knights',
+    effects: [
+      {
+        property: 'hitpoints',
+        select: { id: ['chevalier-confrere'] },
+        effect: 'change',
+        value: 1,
+        counterStepScale: 1,
+        type: 'ability',
+      },
+    ],
+    variations: [{
+      id: 'ability-knightly-brotherhood-2',
+      baseId: 'ability-knightly-brotherhood',
+      type: 'ability',
+      name: 'Knightly Brotherhood',
+      pbgid: 999401,
+      attribName: 'ability-knightly-brotherhood',
+      age: 4,
+      civs: ['kt'],
+      description: 'The Teutonic Knight permanently gains 5 health and 1 damage for each enemy unit it kills.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+// Synthetic ability — Bludgeoning Attacks (Szlachta Cavalry).
+// Szlachta Cavalry reduces the opponent's attack speed by 20%.
+function createBludgeoningAttacks(): Ability {
+  return {
+    id: 'ability-bludgeoning-attacks',
+    name: 'Bludgeoning Attacks',
+    type: 'ability',
+    civs: ['kt'],
+    displayClasses: [],
+    classes: [],
+    minAge: 4,
+    active: 'always',
+    icon: 'public/abilities/Bludgeoning-attacks.png',
+    description: 'Szlachta Cavalry reduces the opponent\'s attack speed by 20%.',
+    unique: true,
+    effects: [
+      {
+        property: 'opponentAttackSpeedDebuff',
+        select: { id: ['szlachta-cavalry'] },
+        effect: 'change',
+        value: 0.20,
+        type: 'ability',
+      },
+    ],
+    variations: [{
+      id: 'ability-bludgeoning-attacks-4',
+      baseId: 'ability-bludgeoning-attacks',
+      type: 'ability',
+      name: 'Bludgeoning Attacks',
+      pbgid: 999500,
+      attribName: 'ability_bludgeoning_attacks',
+      age: 4,
+      civs: ['kt'],
+      description: 'Szlachta Cavalry reduces the opponent\'s attack speed by 20%.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createRuleOfTemplars(): Ability {
+  return {
+    id: 'ability-rule-of-templars',
+    name: 'Rule of Templars',
+    type: 'ability',
+    civs: ['kt'],
+    displayClasses: [],
+    classes: [],
+    minAge: 3,
+    active: 'always',
+    icon: 'https://data.aoe4world.com/images/technologies/rule-of-templars-3.png',
+    description: 'Gain +2 charge damage per nearby charging Heavy Cavalry.',
+    unique: true,
+    counterMax: 200,
+    counterHideMax: true,
+    counterStep: 1,
+    counterDirection: 'additive' as const,
+    counterTooltipLabel: 'Charging knights',
+    effects: [
+      {
+        property: 'chargeChange',
+        select: { id: ['templar-brother'] },
+        effect: 'change',
+        value: 2,
+        counterStepScale: 2,
+        type: 'ability',
+      },
+    ],
+    variations: [{
+      id: 'ability-rule-of-templars-3',
+      baseId: 'ability-rule-of-templars',
+      type: 'ability',
+      name: 'Rule of Templars',
+      pbgid: 999501,
+      attribName: 'ability-rule-of-templars',
+      age: 4,
+      civs: ['kt'],
+      description: 'Gain +2 charge damage per nearby charging Heavy Cavalry.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createHarborAura(): Ability {
+  return {
+    id: 'ability-harbor-aura',
+    name: 'Harbor Aura',
+    type: 'ability',
+    civs: ['kt'],
+    displayClasses: [],
+    classes: [],
+    minAge: 1,
+    active: 'manual',
+    icon: 'public/abilities/templar_harbor.png',
+    description: 'Increase the hit points of nearby naval units by 15%.',
+    unique: true,
+    effects: [
+      {
+        property: 'hitpoints',
+        select: { class: [['naval_unit']] },
+        effect: 'multiply',
+        value: 1.15,
+        type: 'ability',
+      },
+    ],
+    variations: [{
+      id: 'ability-harbor-aura-1',
+      baseId: 'ability-harbor-aurars',
+      type: 'ability',
+      name: 'Harbor Aura',
+      pbgid: 999502,
+      attribName: 'ability-rule-of-templars',
+      age: 4,
+      civs: ['kt'],
+      description: 'Increase the hit points of nearby naval units by 15%.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
 // Display row grouping for AbilitySelector.
 // Each entry reserves a dedicated row with a short label.
 // Abilities not listed here share the default "ABI:" row.
@@ -1745,6 +2066,12 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createHouseUnified(),
     createBuddhistConversion(),
     createNehan(),
+    createTeutonicWrath(),
+    createBattleGlory(),
+    createKnightlyBrotherhood(),
+    createBludgeoningAttacks(),
+    createRuleOfTemplars(),
+    createHarborAura(),
   ];
 
   return abilitiesWithCharge.map(ability => {

@@ -13,6 +13,7 @@ export interface TechnologyEffect {
     class: string[][];
   };
   duration?: number;
+  counterStepScale?: number; // per-effect multiplier for counter abilities: effectiveValue × counterStepScale
 }
 
 export interface TechnologyVariation {
@@ -63,6 +64,7 @@ export interface Technology {
   unitCounterStep?: Record<string, number>; // per-unit override of counterStep (keyed by unit baseId)
   counterDirection?: 'increase' | 'decrease' | 'additive'; // 'decrease' (default): 1/(1+N×step) — 'increase': 1+N×step — 'additive': N×step (flat bonus, used with effect:'change')
   counterTooltipLabel?: string;             // label shown in tooltip (e.g. 'HP', defaults to 'attack cycle')
+  counterHideMax?: boolean;                 // if true, hides the '/max' from the counter display (e.g. for unbounded-feeling counters)
 }
 import allTechnologiesData from './all-optimized_tec.json';
 import { applyTechnologyPatches } from './patches/technologies';
@@ -90,10 +92,14 @@ const combatProperties = [
   'costReduction',    // Unit production cost multiplier
   'stoneCostReduction', // Stone-only cost multiplier
   'foodCostReduction',  // Food-only cost multiplier
+  'goldCostReduction',  // Gold-only cost multiplier
   'rangedResistance',    // Ranged damage resistance (%)
   'meleeResistance',     // Melee damage resistance (%, positive = reduction, negative = vulnerability)
+  'siegeResistance',     // Siege damage resistance (%)
   'healingRate',         // HP healed per hit the unit lands
-  'chargeMultiplier'     // First-hit bonus = primaryMeleeDamage × value (requires charge-attack)
+  'chargeMultiplier',    // First-hit bonus = primaryMeleeDamage × value (requires charge-attack)
+  'chargeChange',        // Flat additive bonus added to charge damage (requires charge-attack)
+  'opponentAttackSpeedDebuff', // Opponent's attack interval × (1 + value), e.g. 0.20 = 20% slower
 ];
 
 // Non-combatant target classes to exclude
@@ -319,13 +325,17 @@ export interface UnitStats {
   costMultiplier?: number; // Production cost multiplier (e.g. 0.8 = -20%)
   stoneCostMultiplier?: number; // Stone-only cost multiplier (e.g. 0.8 = -20% stone)
   foodCostMultiplier?: number;  // Food-only cost multiplier (e.g. 0.75 = -25% food)
+  goldCostMultiplier?: number;  // Gold-only cost multiplier (e.g. 0.8 = -20% gold)
   rangedResistance?: number;   // Ranged damage resistance percentage (0-100), e.g. 30 = 30% reduction
   meleeResistance?: number;    // Melee damage resistance (positive = reduction, negative = vulnerability), e.g. 15 = −15%, −50 = +50% taken
+  siegeResistance?: number;    // Siege damage resistance percentage (0-100), e.g. 33 = 33% reduction
   healingRate?: number;        // HP healed per hit the unit lands (e.g. Keshik: 3 HP/hit)
   armorPenetration?: number;   // Enemy armor reduced by this amount on each hit (clamped to 0)
+  opponentAttackSpeedDebuff?: number; // Opponent's attack speed interval multiplied by (1 + value), e.g. 0.20 = 20% slower
   siegeAttack?: number;        // Siege/gunpowder weapon damage — tracked separately from rangedAttack to prevent stacking when both effects target the same unit
   rangedAttackMultiplier?: number; // Product of all rangedAttack multiply effects (tracked separately to correctly scale secondary weapons)
   chargeMultiplier?: number;   // First-hit charge bonus = primaryMeleeDamage × chargeMultiplier (requires charge-attack active)
+  chargeChange?: number;       // Flat additive bonus added to charge damage (requires charge-attack active)
   postChargeMeleeBonus?: number; // Melee attack bonus active only from hit 2 onward (after charge fires). Excluded from hit 1.
 }
 
@@ -425,7 +435,7 @@ export function applyTechnologyEffects(
       if (!combatProperties.includes(property)) continue;
 
       // Handle special properties
-      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'costReduction' || property === 'stoneCostReduction' || property === 'foodCostReduction' || property === 'rangedResistance' || property === 'meleeResistance' || property === 'healingRate' || property === 'chargeMultiplier' || property === 'bonusDamageMultiplier' || property === 'armorPenetration') {
+      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'costReduction' || property === 'stoneCostReduction' || property === 'foodCostReduction' || property === 'goldCostReduction' || property === 'rangedResistance' || property === 'meleeResistance' || property === 'siegeResistance' || property === 'healingRate' || property === 'chargeMultiplier' || property === 'chargeChange' || property === 'bonusDamageMultiplier' || property === 'armorPenetration' || property === 'opponentAttackSpeedDebuff') {
         specialEffects.push({
           property,
           effectType: effect.effect as 'change' | 'multiply',
@@ -606,6 +616,18 @@ export function applyTechnologyEffects(
     }
   }
 
+  // Apply goldCostReduction
+  for (const effect of specialEffects) {
+    if (effect.property === 'goldCostReduction') {
+      if (modifiedStats.goldCostMultiplier == null) modifiedStats.goldCostMultiplier = 1.0;
+      if (effect.effectType === 'multiply') {
+        modifiedStats.goldCostMultiplier *= effect.value;
+      } else if (effect.effectType === 'change') {
+        modifiedStats.goldCostMultiplier += effect.value;
+      }
+    }
+  }
+
   // Apply rangedResistance
   for (const effect of specialEffects) {
     if (effect.property === 'rangedResistance') {
@@ -626,6 +648,18 @@ export function applyTechnologyEffects(
         modifiedStats.meleeResistance = current + effect.value;
       } else if (effect.effectType === 'multiply') {
         modifiedStats.meleeResistance = current * effect.value;
+      }
+    }
+  }
+
+  // Apply siegeResistance
+  for (const effect of specialEffects) {
+    if (effect.property === 'siegeResistance') {
+      const current = modifiedStats.siegeResistance ?? 0;
+      if (effect.effectType === 'change') {
+        modifiedStats.siegeResistance = current + effect.value;
+      } else if (effect.effectType === 'multiply') {
+        modifiedStats.siegeResistance = current * effect.value;
       }
     }
   }
@@ -654,6 +688,18 @@ export function applyTechnologyEffects(
     }
   }
 
+  // Apply chargeChange (flat additive bonus to charge damage)
+  for (const effect of specialEffects) {
+    if (effect.property === 'chargeChange') {
+      const current = modifiedStats.chargeChange ?? 0;
+      if (effect.effectType === 'change') {
+        modifiedStats.chargeChange = current + effect.value;
+      } else if (effect.effectType === 'multiply') {
+        modifiedStats.chargeChange = current * effect.value;
+      }
+    }
+  }
+
   // Apply armorPenetration (additive stacking)
   for (const effect of specialEffects) {
     if (effect.property === 'armorPenetration') {
@@ -661,6 +707,17 @@ export function applyTechnologyEffects(
         modifiedStats.armorPenetration = (modifiedStats.armorPenetration ?? 0) + effect.value;
       } else if (effect.effectType === 'multiply') {
         modifiedStats.armorPenetration = (modifiedStats.armorPenetration ?? 0) * effect.value;
+      }
+    }
+  }
+
+  // Apply opponentAttackSpeedDebuff (additive stacking)
+  for (const effect of specialEffects) {
+    if (effect.property === 'opponentAttackSpeedDebuff') {
+      if (effect.effectType === 'change') {
+        modifiedStats.opponentAttackSpeedDebuff = (modifiedStats.opponentAttackSpeedDebuff ?? 0) + effect.value;
+      } else if (effect.effectType === 'multiply') {
+        modifiedStats.opponentAttackSpeedDebuff = (modifiedStats.opponentAttackSpeedDebuff ?? 0) * effect.value;
       }
     }
   }

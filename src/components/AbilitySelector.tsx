@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Ability, AbilityVariation } from "@/data/unified-abilities";
 import { abilityPatches, foreignEngineeringAbilityIds, ABILITY_ROW_GROUPS } from "@/data/patches/abilities";
 import {
@@ -22,6 +23,7 @@ interface AbilitySelectorProps {
   abilityCounters?: Map<string, number>;
   onIncrement?: (abilityId: string) => void;
   onDecrement?: (abilityId: string) => void;
+  onSetCounter?: (abilityId: string, value: number) => void;
   unitId?: string;
 }
 
@@ -35,11 +37,21 @@ export const AbilitySelector = ({
   abilityCounters,
   onIncrement,
   onDecrement,
+  onSetCounter,
   unitId,
 }: AbilitySelectorProps) => {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+
   if (abilities.length === 0) return null;
 
   const ages = [1, 2, 3, 4];
+
+  const commitEdit = (abilityId: string, max: number) => {
+    const v = parseInt(editValue, 10);
+    if (!isNaN(v)) onSetCounter?.(abilityId, Math.max(0, Math.min(max, v)));
+    setEditingId(null);
+  };
 
   const renderCounterAbilityButton = (ability: Ability) => {
     const count = abilityCounters?.get(ability.id) ?? 0;
@@ -126,9 +138,27 @@ export const AbilitySelector = ({
           >
             −
           </button>
-          <span className="text-[9px] text-muted-foreground text-center flex-1 tabular-nums">
-            {count}/{max}
-          </span>
+          {editingId === ability.id ? (
+            <input
+              autoFocus
+              type="number"
+              min={0}
+              max={max}
+              value={editValue}
+              onChange={e => setEditValue(e.target.value)}
+              onBlur={() => commitEdit(ability.id, max)}
+              onKeyDown={e => { if (e.key === 'Enter') commitEdit(ability.id, max); if (e.key === 'Escape') setEditingId(null); }}
+              className="w-8 h-4 rounded border border-amber-500 bg-secondary text-center text-[9px] tabular-nums focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+          ) : (
+            <span
+              className="text-[9px] text-muted-foreground text-center flex-1 tabular-nums cursor-text hover:text-foreground transition-colors"
+              onClick={() => { setEditingId(ability.id); setEditValue(String(count)); }}
+              title="Click to type a value"
+            >
+              {ability.counterHideMax ? count : `${count}/${max}`}
+            </span>
+          )}
           <button
             onClick={() => onIncrement?.(ability.id)}
             disabled={count >= max}
