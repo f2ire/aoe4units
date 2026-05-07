@@ -324,6 +324,7 @@ const Sandbox = () => {
         speed: modifiedStats1.moveSpeed
       } : undefined,
       healingRate: modifiedStats1.healingRate ?? 0,
+      healingRatePerSecond: modifiedStats1.healingRatePerSecond ?? 0,
       armorPenetration: modifiedStats1.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: modifiedStats1.opponentAttackSpeedDebuff ?? 0,
       postChargeMeleeBonus: modifiedStats1.postChargeMeleeBonus ?? 0,
@@ -400,6 +401,7 @@ const Sandbox = () => {
         speed: modifiedStats2.moveSpeed
       } : undefined,
       healingRate: modifiedStats2.healingRate ?? 0,
+      healingRatePerSecond: modifiedStats2.healingRatePerSecond ?? 0,
       armorPenetration: modifiedStats2.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: modifiedStats2.opponentAttackSpeedDebuff ?? 0,
       postChargeMeleeBonus: modifiedStats2.postChargeMeleeBonus ?? 0,
@@ -473,6 +475,7 @@ const Sandbox = () => {
         speed: modifiedStats1.moveSpeed
       } : undefined,
       healingRate: modifiedStats1.healingRate ?? 0,
+      healingRatePerSecond: modifiedStats1.healingRatePerSecond ?? 0,
       armorPenetration: modifiedStats1.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: modifiedStats1.opponentAttackSpeedDebuff ?? 0,
       postChargeMeleeBonus: modifiedStats1.postChargeMeleeBonus ?? 0,
@@ -542,6 +545,7 @@ const Sandbox = () => {
         speed: modifiedStats2.moveSpeed
       } : undefined,
       healingRate: modifiedStats2.healingRate ?? 0,
+      healingRatePerSecond: modifiedStats2.healingRatePerSecond ?? 0,
       armorPenetration: modifiedStats2.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: modifiedStats2.opponentAttackSpeedDebuff ?? 0,
       postChargeMeleeBonus: modifiedStats2.postChargeMeleeBonus ?? 0,
@@ -601,6 +605,7 @@ const Sandbox = () => {
       ],
       movement: modifiedVariation1.movement ? { ...modifiedVariation1.movement, speed: s.moveSpeed } : undefined,
       healingRate: s.healingRate ?? 0,
+      healingRatePerSecond: s.healingRatePerSecond ?? 0,
       armorPenetration: s.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: s.opponentAttackSpeedDebuff ?? 0,
     };
@@ -629,6 +634,7 @@ const Sandbox = () => {
       ],
       movement: modifiedVariation2.movement ? { ...modifiedVariation2.movement, speed: s.moveSpeed } : undefined,
       healingRate: s.healingRate ?? 0,
+      healingRatePerSecond: s.healingRatePerSecond ?? 0,
       armorPenetration: s.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: s.opponentAttackSpeedDebuff ?? 0,
     };
@@ -657,6 +663,7 @@ const Sandbox = () => {
       ],
       movement: unit1.movement ? { ...unit1.movement, speed: s.moveSpeed } : undefined,
       healingRate: s.healingRate ?? 0,
+      healingRatePerSecond: s.healingRatePerSecond ?? 0,
       armorPenetration: s.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: s.opponentAttackSpeedDebuff ?? 0,
     };
@@ -685,6 +692,7 @@ const Sandbox = () => {
       ],
       movement: unit2.movement ? { ...unit2.movement, speed: s.moveSpeed } : undefined,
       healingRate: s.healingRate ?? 0,
+      healingRatePerSecond: s.healingRatePerSecond ?? 0,
       armorPenetration: s.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: s.opponentAttackSpeedDebuff ?? 0,
     };

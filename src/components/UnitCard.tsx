@@ -974,7 +974,7 @@ export const UnitCard = ({
                       })()}</span></div>
                     ))}
                     <div className="flex justify-between"><span className="text-muted-foreground">AS</span><span className={effectiveAttackSpeed !== null ? 'text-orange-400' : undefined}>{effectiveAttackSpeed !== null ? effectiveAttackSpeed.toFixed(3) + 's' : (primaryWeapon.speed ? primaryWeapon.speed.toFixed(3) + 's' : '—')}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Range</span><span>{parseFloat(primaryWeapon.range.max.toFixed(2))}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Range</span><span>{primaryWeapon.range?.max != null ? parseFloat(primaryWeapon.range.max.toFixed(2)) : '—'}</span></div>
                   </>
                 ) : (
                   <div className="text-muted-foreground italic">No weapon</div>

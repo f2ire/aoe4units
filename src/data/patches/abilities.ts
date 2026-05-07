@@ -54,6 +54,18 @@ export const techAbilityInteractions: TechAbilityInteraction[] = [
     requiredAbility: 'ability-desert-citadels',
     apply: (stats) => ({ ...stats, meleeArmor: stats.meleeArmor + 1, rangedArmor: stats.rangedArmor + 1, })
   },
+
+  {
+    requiredTech: 'fervor',
+    requiredAbility: 'ability-saints-blessing',
+    apply: (stats) => ({ ...stats, meleeAttack: stats.meleeAttack + 1, rangedAttack: stats.rangedAttack + 1, siegeAttack: stats.siegeAttack + 1 })
+  },
+
+  {
+    requiredTech: 'mounted-training',
+    requiredAbility: 'ability-gallop',
+    apply: (stats) => ({ ...stats, maxRange: stats.maxRange + 1 })
+  }
 ];
 
 //_________________
@@ -304,7 +316,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
       variations: ability.variations.map((v: AbilityVariation) => ({
         ...v,
         effects: [
-          ...v.effects.filter((e: any) => e.property !== 'moveSpeed'),
+          ...v.effects.filter((e: any) => e.property !== 'moveSpeed' && e.property !== 'healingRate'),
           {
             property: 'rangedAttack',
             select: { class: [['cavalry']] },
@@ -318,7 +330,14 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
             effect: 'multiply',
             value: 1.1,
             type: 'ability',
-          }
+          },
+          {
+            property: 'healingRatePerSecond',
+            select: { class: [['cavalry']] },
+            effect: 'change',
+            value: 2,
+            type: 'ability',
+          },
         ]
       }))
     })
@@ -1074,7 +1093,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
       variations: abilities.variations.map(v => ({
         ...v,
         civs: [...(v.civs || []), "by"],
-        effects: (v.effects || []).map(e => ({ ...e, duration: 10 })),
+        effects: (v.effects || []).map(e => ({ ...e, duration: 10, active: "manual" })),
       }))
     }),
   },
@@ -1105,6 +1124,40 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     uiTooltip: 'Available only with Foreign Engineering Company.',
   },
 
+  {
+    id: "ability-saints-blessing",
+    reason: "Not always active. Duration stripped — effect is considered permanent.",
+    after: (ability: Ability) => ({
+      ...ability,
+      active: 'manual',
+      variations: ability.variations.map(v => ({
+        ...v,
+        active: 'manual',
+        effects: (v.effects || []).map(({ duration: _, ...e }) => e),
+      })),
+    }),
+  },
+
+  {
+    id: "ability-high-armory-production-bonus",
+    reason: "goldCost/woodCost mapped to costReduction (special property covering all costs).",
+    after: (ability: Ability) => ({
+      ...ability,
+      active: 'manual',
+      variations: ability.variations.map(v => ({
+        ...v,
+        active: 'manual',
+        effects: [{
+          property: 'costReduction',
+          select: { class: [['siege']] },
+          effect: 'multiply',
+          value: 0.8,
+          type: 'ability'
+        }]
+      }))
+    }),
+  },
+
 ];
 
 export const foreignEngineeringAbilityIds: Set<string> = new Set(
@@ -1133,7 +1186,7 @@ function createChargeAttackAbility(): Ability {
     // Speed boost for ALL melee units (displayed as moveSpeed effect)
     {
       property: 'moveSpeed',
-      select: { class: [['melee']] },
+      select: { class: [['melee']], id: ["warrior-monk"] },
       effect: 'multiply',
       value: 1.2, // +20% speed until first attack
       type: 'ability',
@@ -2035,6 +2088,133 @@ function createHarborAura(): Ability {
   } as Ability;
 }
 
+// Synthetic abilities — Streltsy weapon swap (Berdysh Axe ↔ Handcannon).
+function createStreltsyBerdysh(): Ability {
+  return {
+    id: 'ability-streltsy-berdysh',
+    name: 'Berdysh Axe',
+    type: 'ability',
+    civs: ['ru', 'by'],
+    displayClasses: [],
+    classes: [],
+    minAge: 4,
+    active: 'manual',
+    icon: 'https://data.aoe4world.com/images/abilities/ability-desert-raider-blade-1.png',
+    description: 'Switch to melee Berdysh Axe.',
+    unique: false,
+    effects: [],
+    variations: [{
+      id: 'ability-streltsy-berdysh-4',
+      baseId: 'ability-streltsy-berdysh',
+      type: 'ability',
+      name: 'Berdysh Axe',
+      pbgid: 999600,
+      attribName: 'ability_streltsy_berdysh',
+      age: 4,
+      civs: ['ru', 'by'],
+      description: 'Switch to melee Berdysh Axe.',
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [{
+        property: 'unknown',
+        select: { id: ['streltsy'] },
+        effect: 'change',
+        value: 0,
+        type: 'ability',
+      }],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createStreltsyHandcannon(): Ability {
+  return {
+    id: 'ability-streltsy-handcannon',
+    name: 'Handcannon',
+    type: 'ability',
+    civs: ['ru', 'by'],
+    displayClasses: [],
+    classes: [],
+    minAge: 4,
+    active: 'manual',
+    icon: 'https://data.aoe4world.com/images/units/streltsy-4.png',
+    description: 'Switch to ranged Handcannon.',
+    unique: false,
+    effects: [],
+    variations: [{
+      id: 'ability-streltsy-handcannon-4',
+      baseId: 'ability-streltsy-handcannon',
+      type: 'ability',
+      name: 'Handcannon',
+      pbgid: 999601,
+      attribName: 'ability_streltsy_handcannon',
+      age: 4,
+      civs: ['ru', 'by'],
+      description: 'Switch to ranged Handcannon.',
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [{
+        property: 'unknown',
+        select: { id: ['streltsy'] },
+        effect: 'change',
+        value: 0,
+        type: 'ability',
+      }],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createAbbeyOfTheTrinityAbility(): Ability {
+  return {
+    id: 'ability-abbey-of-the-trinity',
+    name: 'Abbey of the Trinity',
+    type: 'ability',
+    civs: ['ru'],
+    displayClasses: [],
+    classes: [],
+    minAge: 3,
+    active: 'manual',
+    icon: 'https://data.aoe4world.com/images/buildings/abbey-of-the-trinity-2.png',
+    description: 'Reduces the food and gold cost of Warrior Monks by 50%.',
+    unique: true,
+    effects: [
+      {
+        property: 'foodCostReduction',
+        select: { id: ['warrior-monk'] },
+        effect: 'multiply',
+        value: 0.5,
+        type: 'ability',
+      },
+      {
+        property: 'goldCostReduction',
+        select: { id: ['warrior-monk'] },
+        effect: 'multiply',
+        value: 0.5,
+        type: 'ability',
+      },
+    ],
+    variations: [{
+      id: 'ability-abbey-of-the-trinity-3',
+      baseId: 'ability-abbey-of-the-trinity',
+      type: 'ability',
+      name: 'Abbey of the Trinity',
+      pbgid: 999602,
+      attribName: 'ability_abbey_of_the_trinity',
+      age: 3,
+      civs: ['ru'],
+      description: 'Reduces the food and gold cost of Warrior Monks by 50%.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
 // Display row grouping for AbilitySelector.
 // Each entry reserves a dedicated row with a short label.
 // Abilities not listed here share the default "ABI:" row.
@@ -2043,6 +2223,8 @@ export const ABILITY_ROW_GROUPS: readonly { label: string; ids: readonly string[
   { label: 'WC', ids: ['ability-khan-warcry-2', 'ability-khan-warcry-3', 'ability-khan-warcry-4'] },
   { label: 'CTR', ids: ['ability-house-unified', 'ability-lord-of-lancaster-inspiration'] },
   { label: 'CONV', ids: ['ability-buddhist-conversion', 'ability-nehan'] },
+  { label: 'WPN', ids: ['ability-streltsy-berdysh', 'ability-streltsy-handcannon'] },
+  { label: 'Age', ids: ['ability-high-armory-production-bonus', 'ability-abbey-of-the-trinity'] },
 ];
 
 export function applyAbilityPatches(abilities: Ability[]): Ability[] {
@@ -2072,6 +2254,9 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createBludgeoningAttacks(),
     createRuleOfTemplars(),
     createHarborAura(),
+    createStreltsyBerdysh(),
+    createStreltsyHandcannon(),
+    createAbbeyOfTheTrinityAbility(),
   ];
 
   return abilitiesWithCharge.map(ability => {

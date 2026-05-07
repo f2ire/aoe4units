@@ -97,6 +97,7 @@ const combatProperties = [
   'meleeResistance',     // Melee damage resistance (%, positive = reduction, negative = vulnerability)
   'siegeResistance',     // Siege damage resistance (%)
   'healingRate',         // HP healed per hit the unit lands
+  'healingRatePerSecond', // HP healed per second (time-based regeneration, e.g. Triumph)
   'chargeMultiplier',    // First-hit bonus = primaryMeleeDamage × value (requires charge-attack)
   'chargeChange',        // Flat additive bonus added to charge damage (requires charge-attack)
   'opponentAttackSpeedDebuff', // Opponent's attack interval × (1 + value), e.g. 0.20 = 20% slower
@@ -205,7 +206,11 @@ export function technologyAffectsUnit(
     }
 
     // Return true if the unit matches by ID OR by class OR by ID-as-class (OR logic)
-    return matchesById || matchesByClass || matchesByIdAsClass;
+    if (matchesById || matchesByClass || matchesByIdAsClass) {
+      if (effect.select?.excludeId && unitId && effect.select.excludeId.includes(unitId)) return false;
+      return true;
+    }
+    return false;
   });
 }
 
@@ -254,7 +259,11 @@ export function getTechnologiesForUnit(
           );
         }
 
-        return matchesById || matchesByClass || matchesByIdAsClass;
+        if (matchesById || matchesByClass || matchesByIdAsClass) {
+          if (effect.select?.excludeId && unitId && effect.select.excludeId.includes(unitId)) return false;
+          return true;
+        }
+        return false;
       });
 
       if (affectsUnit) return true;
@@ -330,6 +339,7 @@ export interface UnitStats {
   meleeResistance?: number;    // Melee damage resistance (positive = reduction, negative = vulnerability), e.g. 15 = −15%, −50 = +50% taken
   siegeResistance?: number;    // Siege damage resistance percentage (0-100), e.g. 33 = 33% reduction
   healingRate?: number;        // HP healed per hit the unit lands (e.g. Keshik: 3 HP/hit)
+  healingRatePerSecond?: number; // HP healed per second (e.g. Triumph: 2 HP/s)
   armorPenetration?: number;   // Enemy armor reduced by this amount on each hit (clamped to 0)
   opponentAttackSpeedDebuff?: number; // Opponent's attack speed interval multiplied by (1 + value), e.g. 0.20 = 20% slower
   siegeAttack?: number;        // Siege/gunpowder weapon damage — tracked separately from rangedAttack to prevent stacking when both effects target the same unit
@@ -672,6 +682,18 @@ export function applyTechnologyEffects(
         modifiedStats.healingRate = current + effect.value;
       } else if (effect.effectType === 'multiply') {
         modifiedStats.healingRate = current * effect.value;
+      }
+    }
+  }
+
+  // Apply healingRatePerSecond (HP healed per second, e.g. Triumph)
+  for (const effect of specialEffects) {
+    if (effect.property === 'healingRatePerSecond') {
+      const current = modifiedStats.healingRatePerSecond ?? 0;
+      if (effect.effectType === 'change') {
+        modifiedStats.healingRatePerSecond = current + effect.value;
+      } else if (effect.effectType === 'multiply') {
+        modifiedStats.healingRatePerSecond = current * effect.value;
       }
     }
   }

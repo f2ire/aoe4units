@@ -152,6 +152,27 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   },
 
   {
+    id: 'serpentine-powder',
+    reason: 'Raw effects empty. Handcannoneers gain +5 bonus damage vs melee infantry.',
+    update: {
+      effects: [{
+        property: 'rangedAttack',
+        select: { class: [['handcannon']] },
+        effect: 'change',
+        value: 5,
+        type: 'bonus',
+        target: { class: [['melee', 'infantry']] },
+      }],
+    },
+  },
+
+  {
+    id: "elite-army-tactics",
+    reason: "Streltsy is a gunpowder unit — this melee infantry tech should not apply in either weapon mode.",
+    excludedUnits: ['streltsy'],
+  },
+
+  {
     id: "greased-axles",
     reason: "Must exclude some sieges units that is not really siege units.",
     excludedUnits: ['grenadier'],
@@ -210,10 +231,19 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     }),
   },
 
-  // Bloomery melee upgrade family — jeanne-darc-mounted-archer is ranged-only, no melee upgrades
-  { id: 'bloomery', reason: "jeanne-darc-mounted-archer is a ranged unit, melee upgrades don't apply.", excludedUnits: ['jeanne-darc-mounted-archer'] },
-  { id: 'decarbonization', reason: "jeanne-darc-mounted-archer is a ranged unit, melee upgrades don't apply.", excludedUnits: ['jeanne-darc-mounted-archer'] },
-  { id: 'damascus-steel', reason: "jeanne-darc-mounted-archer is a ranged unit, melee upgrades don't apply.", excludedUnits: ['jeanne-darc-mounted-archer'] },
+  // Bloomery melee upgrade family — jeanne-darc-mounted-archer is ranged-only; warrior-monk has melee weapon but no 'melee' class.
+  ...(['bloomery', 'decarbonization', 'damascus-steel'] as const).map(id => ({
+    id,
+    reason: "jeanne-darc-mounted-archer excluded (ranged only). Warrior Monk added by ID: has melee weapon but lacks 'melee' class.",
+    excludedUnits: ['jeanne-darc-mounted-archer'],
+    after: (tech: Technology) => ({
+      ...tech,
+      effects: [
+        ...tech.effects,
+        { property: 'meleeAttack', select: { id: ['warrior-monk'] }, effect: 'change', value: 1, type: 'passive' }
+      ]
+    })
+  })),
 
   {
     id: 'steeled-arrow',
@@ -1670,10 +1700,10 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: "mounted-training",
     reason: 'Available for Byzantines.',
-    after: (abilities) => ({
-      ...abilities,
-      civs: [...abilities.civs, 'by'],
-      variations: abilities.variations.map(v => ({
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
         ...v,
         civs: [...(v.civs || []), "by"]
       }))
@@ -1686,10 +1716,10 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: "boyars-fortitude",
     reason: 'Available for Byzantines.',
-    after: (abilities) => ({
-      ...abilities,
-      civs: [...abilities.civs, 'by'],
-      variations: abilities.variations.map(v => ({
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
         ...v,
         civs: [...(v.civs || []), "by"]
       }))
@@ -1697,6 +1727,79 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     foreignEngineering: true,
     foreignEngineeringUnits: ['horse-archer'],
     uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  {
+    id: "fervor",
+    reason: 'Make it null to able interaction with Saints Blessing ability.',
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v, effects: [
+          { property: 'meleeAttack', select: { class: [["land", "military"]], excludeId: ['warrior-monk'] }, effect: 'multiply', value: 1, type: 'passive' },
+          { property: 'rangedAttack', select: { class: [["land", "military"]], excludeId: ['warrior-monk'] }, effect: 'multiply', value: 1, type: 'passive' },
+          { property: 'siegeAttack', select: { class: [["land", "military"]], excludeId: ['warrior-monk'] }, effect: 'multiply', value: 1, type: 'passive' }
+        ]
+      }))
+    }),
+  },
+
+  {
+    id: 'upgrade-miltia-3',
+    reason: 'No UI value, age up covered automatically.',
+    after: (tech) => ({
+      ...tech,
+      effects: [],
+      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
+    })
+  },
+
+  {
+    id: 'upgrade-militia-4',
+    reason: 'No UI value, age up covered automatically.',
+    after: (tech) => ({
+      ...tech,
+      effects: [],
+      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
+    })
+  },
+
+  {
+    id: "siege-crew-training",
+    reason: "Useless for UI",
+    after: (tech) => ({
+      ...tech,
+      effects: [],
+      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
+    })
+  },
+
+  {
+    id: "fine-tuned-guns",
+    reason: "Raw data uses multiply 0.8 and multiply 0.7 — corrected to multiply 1.2 (+20%) and change +50 vs infantry.",
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map((v: any) => ({
+        ...v,
+        effects: [
+          {
+            property: "siegeAttack",
+            select: { id: ["bombard"] },
+            effect: "multiply",
+            value: 1.2,
+            type: "passive"
+          },
+          {
+            property: "siegeAttack",
+            select: { id: ["bombard"] },
+            target: { class: [["infantry"]] },
+            effect: "change",
+            value: 50,
+            type: "bonus"
+          }
+        ]
+      }))
+    })
   },
 
 ];
@@ -1767,7 +1870,7 @@ function createCrusaderFleets(): Technology {
         property: 'rangedAttack',
         select: { id: ['hulk'] },
         effect: 'multiply',
-        value: 1.2,
+        value: 1.25,
         type: 'passive'
       }
     ] as TechnologyEffect[],

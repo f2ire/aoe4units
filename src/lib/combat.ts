@@ -20,6 +20,7 @@ export interface CombatEntity {
   activeAbilities?: string[]; // IDs of active abilities
   moveSpeed: number; // tiles/s (movement.speed from unit data)
   healingRate?: number; // HP healed per hit the unit lands (e.g. Keshik: 3 HP/hit)
+  healingRatePerSecond?: number; // HP healed per second (e.g. Triumph: 2 HP/s)
   armorPenetration?: number; // Enemy armor reduced by this amount on each hit (clamped ≥ 0)
   opponentAttackSpeedDebuff?: number; // Opponent's attack interval multiplied by (1 + value), e.g. 0.20 = 20% slower
   chargeBonusBurst?: number; // Burst count for first-hit bonus display (e.g. 2 daggers for Earl's Guard)
@@ -66,6 +67,7 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     activeAbilities: activeAbilities || [],
     moveSpeed: source.movement?.speed ?? 0,
     healingRate: (source as any).healingRate ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
+    healingRatePerSecond: (source as any).healingRatePerSecond ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     armorPenetration: (source as any).armorPenetration ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     opponentAttackSpeedDebuff: (source as any).opponentAttackSpeedDebuff ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     chargeBonusBurst: (source as any).chargeBonusBurst ?? 1, // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -674,6 +676,20 @@ function computeMetrics(
             hitsToKill = Math.ceil(timeToKill / attackSpeed);
           }
         }
+      }
+    }
+
+    // Defender per-second healing/self-damage (Triumph: +2 HP/s; Militia: −1 HP/s)
+    const defenderHealPerSecond = defender.healingRatePerSecond ?? 0;
+    if (defenderHealPerSecond !== 0 && dps !== null && timeToKill !== null) {
+      const totalDefHP = defender.hitpoints * defenderMultiplier;
+      const netDPS = dps - defenderHealPerSecond;
+      if (netDPS <= 0) {
+        hitsToKill = null;
+        timeToKill = null;
+      } else {
+        timeToKill = round(totalDefHP / netDPS, 1);
+        hitsToKill = attackSpeed > 0 ? Math.ceil(timeToKill / attackSpeed) : null;
       }
     }
 

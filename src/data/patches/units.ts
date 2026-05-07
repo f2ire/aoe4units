@@ -829,7 +829,79 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
     },
   },
 
+  //_________________
+  //
+  // RUS
+  //
+  //_________________
+
+  {
+    id: 'streltsy',
+    reason: 'Add melee Berdysh Axe weapon for weapon swap (60 dmg, 2.125s AS).',
+    after: (unit: any) => ({
+      ...unit,
+      variations: unit.variations.map((v: any) => ({
+        ...v,
+        weapons: [
+          ...v.weapons,
+          { name: 'Berdysh', type: 'melee', damage: 60, speed: 2.125, modifiers: [], range: { min: 0, max: 0.29 } },
+        ],
+      })),
+    }),
+  },
+
+  {
+    id: 'militia',
+    reason: 'Raw data is a placeholder with no stats. Adding age -3/4 variations per in-game.',
+    after: (unit: any) => {
+      const base = unit.variations[0];
+      const makeVariation = (age: number, hp: number, swordDmg: number, food: number, popcap: number, bonusCav: number) => ({
+        ...base,
+        age,
+        id: `militia-${age}`,
+        hitpoints: hp,
+        weapons: base.weapons.map((w: any, i: number) => i === 0 ? {
+          ...w,
+          damage: swordDmg,
+          modifiers: [{ ...w.modifiers[0], value: bonusCav }, ...w.modifiers.slice(1)]
+        } : w),
+        costs: { ...base.costs, food, popcap },
+        healingRatePerSecond: -1,
+      });
+      return {
+        ...unit,
+        variations: [
+          { ...base, healingRatePerSecond: -1 },
+          makeVariation(3, 115, 10, 27.5, 1, 12),
+          makeVariation(4, 165, 18, 27.5, 1, 18),
+        ],
+      };
+    },
+  },
 ];
+//   after: (unit: unknown) => {
+//     const u = unit as Record<string, unknown>;
+//     const variations = u.variations as Record<string, unknown>[];
+//     const base = variations[0] as Record<string, unknown>;
+//     const baseCosts = base.costs as Record<string, unknown>;
+
+//     const makeVariation = (age: number, hp: number, damage: number, meleeBonus: number, gold: number) => {
+//       const weapons = (base.weapons as Record<string, unknown>[]).map((w, i) => {
+//         if (i === 0) {
+//           const modifiers = (w.modifiers as Record<string, unknown>[]).map(mod => {
+//             const m = mod as Record<string, unknown>;
+//             return m.property === 'meleeAttack' ? { ...m, value: meleeBonus } : m;
+//           });
+//           return { ...w, damage, modifiers };
+//         }
+//         return w;
+//       });
+//       // Raw data has food:60 but unit costs 0 food in-game (pure gold cost)
+//       const costs = { ...baseCosts, food: 0, gold, total: gold };
+//       return { ...base, age, id: `bedouin-swordsman-${age}`, hitpoints: hp, weapons, costs };
+//     };
+//   },
+// },
 
 export function applyUnitPatches(unifiedUnits: unknown[]): unknown[] {
   if (!Array.isArray(unifiedUnits) || unitPatches.length === 0) return unifiedUnits;

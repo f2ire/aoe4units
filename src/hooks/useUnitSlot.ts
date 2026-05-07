@@ -126,12 +126,14 @@ export function useUnitSlot() {
   const WEAPON_SWAP_GROUPS: readonly (readonly string[])[] = [
     ['ability-desert-raider-blade', 'ability-desert-raider-bow'],
     ['ability-swap-weapon-kinetic', 'ability-swap-weapon-incendiary'],
+    ['ability-streltsy-berdysh', 'ability-streltsy-handcannon'],
   ];
 
   // Default weapon ability per weapon-swap unit (activated on first load)
   const WEAPON_SWAP_DEFAULTS: Record<string, string> = {
     'desert-raider': 'ability-desert-raider-bow',
     'manjaniq': 'ability-swap-weapon-kinetic',
+    'streltsy': 'ability-streltsy-handcannon',
   };
 
   // Ability dependencies: a dependent ability can only be active when its required ability is active
@@ -316,14 +318,17 @@ export function useUnitSlot() {
     return categories;
   }, [filteredUnits]);
 
-  // Effective classes for desert-raider: swap ranged ↔ melee class set based on active weapon
+  // Effective classes for weapon-swap units: swap ranged ↔ melee class set based on active weapon
   const DESERT_RAIDER_RANGED_CLASSES = ['ranged', 'archer', 'cavalry_archer', 'ranged_hybrid'];
+  const STRELTSY_RANGED_CLASSES = ['ranged', 'ranged_infantry', 'gunpowder', 'handcannon'];
   const effectiveClasses = useMemo(() => {
-    if (unit?.id !== 'desert-raider') return unit?.classes || [];
-    const cls = unit.classes || [];
-    if (activeAbilities.has('ability-desert-raider-blade')) {
-      // Blade mode: strip ranged classes, add 'melee'
+    const cls = unit?.classes || [];
+    if (unit?.id === 'desert-raider' && activeAbilities.has('ability-desert-raider-blade')) {
       const withoutRanged = cls.filter(c => !DESERT_RAIDER_RANGED_CLASSES.includes(c.toLowerCase()));
+      return withoutRanged.includes('melee') ? withoutRanged : [...withoutRanged, 'melee'];
+    }
+    if (unit?.id === 'streltsy' && activeAbilities.has('ability-streltsy-berdysh')) {
+      const withoutRanged = cls.filter(c => !STRELTSY_RANGED_CLASSES.includes(c.toLowerCase()));
       return withoutRanged.includes('melee') ? withoutRanged : [...withoutRanged, 'melee'];
     }
     return cls;
@@ -358,6 +363,21 @@ export function useUnitSlot() {
         return !relevant.every((e: any) => RANGED_ONLY_PROPS.has(e.property)); // eslint-disable-line @typescript-eslint/no-explicit-any
       });
     }
+
+    // Berdysh mode: strip techs that only affect ranged/gunpowder properties
+    if (unit.id === 'streltsy' && activeAbilities.has('ability-streltsy-berdysh')) {
+      return filtered.filter(t => {
+        const allEffects = [
+          ...(t.effects || []),
+          ...t.variations.flatMap((v: any) => v.effects || []) // eslint-disable-line @typescript-eslint/no-explicit-any
+        ];
+        const relevant = allEffects.filter((e: any) => e.property && e.property !== 'unknown'); // eslint-disable-line @typescript-eslint/no-explicit-any
+        if (relevant.length === 0) return true;
+        const RANGED_ONLY_PROPS = new Set(['rangedAttack', 'maxRange', 'siegeAttack', 'gunpowderAttack']);
+        return !relevant.every((e: any) => RANGED_ONLY_PROPS.has(e.property)); // eslint-disable-line @typescript-eslint/no-explicit-any
+      });
+    }
+
     return filtered;
   }, [unit, effectiveClasses, selectedCiv, selectedAge, activeAbilities]);
 
@@ -374,7 +394,8 @@ export function useUnitSlot() {
       unit.id === 'jeanne-darc-markswoman' ||
       unit.id === 'jeanne-darc-mounted-archer' ||
       unit.id === 'jeanne-darc-blast-cannon' ||
-      unit.id === 'serjeant'
+      unit.id === 'serjeant' ||
+      unit.id === 'streltsy'
     )
       ? all.filter(a => a.id !== 'charge-attack')
       : all;
@@ -484,6 +505,16 @@ export function useUnitSlot() {
       return { ...variation, weapons: [activeMainWeapon, ...supportWeapons] };
     }
 
+    // Streltsy: Handcannon (ranged) vs Berdysh Axe (melee)
+    if (unit?.id === 'streltsy') {
+      const useBerdysh = activeAbilities.has('ability-streltsy-berdysh');
+      const berdyshWeapon = variation.weapons.find(w => w.type === 'melee');
+      const handcannonWeapon = variation.weapons.find(w => w.type === 'ranged');
+      const activeMainWeapon = useBerdysh ? berdyshWeapon : handcannonWeapon;
+      if (!activeMainWeapon) return variation;
+      return { ...variation, weapons: [activeMainWeapon] };
+    }
+
     // Manjaniq: kinetic (siege) vs incendiary (fire→retyped as siege for stats)
     if (unit?.id === 'manjaniq') {
       const useIncendiary = activeAbilities.has('ability-swap-weapon-incendiary');
@@ -530,6 +561,7 @@ export function useUnitSlot() {
       meleeResistance: getResistanceValue(data, 'melee'),
       siegeResistance: getResistanceValue(data, 'siege'),
       healingRate: 0,
+      healingRatePerSecond: (data as any).healingRatePerSecond ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
       armorPenetration: 0,
       opponentAttackSpeedDebuff: 0,
     };
@@ -650,6 +682,7 @@ export function useUnitSlot() {
       meleeResistance: getResistanceValue(data, 'melee'),
       siegeResistance: getResistanceValue(data, 'siege'),
       healingRate: 0,
+      healingRatePerSecond: (data as any).healingRatePerSecond ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
       armorPenetration: 0,
       opponentAttackSpeedDebuff: 0,
     };
