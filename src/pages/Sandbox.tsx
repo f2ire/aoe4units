@@ -327,6 +327,7 @@ const Sandbox = () => {
       healingRatePerSecond: modifiedStats1.healingRatePerSecond ?? 0,
       armorPenetration: modifiedStats1.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: modifiedStats1.opponentAttackSpeedDebuff ?? 0,
+      versusOpponentDamageDebuff: modifiedStats1.versusOpponentDamageDebuff ?? 1,
       postChargeMeleeBonus: modifiedStats1.postChargeMeleeBonus ?? 0,
       firstHitBlocked: activeAbilities1.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(variation1, activeTechnologies1),
@@ -404,6 +405,7 @@ const Sandbox = () => {
       healingRatePerSecond: modifiedStats2.healingRatePerSecond ?? 0,
       armorPenetration: modifiedStats2.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: modifiedStats2.opponentAttackSpeedDebuff ?? 0,
+      versusOpponentDamageDebuff: modifiedStats2.versusOpponentDamageDebuff ?? 1,
       postChargeMeleeBonus: modifiedStats2.postChargeMeleeBonus ?? 0,
       firstHitBlocked: activeAbilities2.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(variation2, activeTechnologies2),
@@ -478,6 +480,7 @@ const Sandbox = () => {
       healingRatePerSecond: modifiedStats1.healingRatePerSecond ?? 0,
       armorPenetration: modifiedStats1.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: modifiedStats1.opponentAttackSpeedDebuff ?? 0,
+      versusOpponentDamageDebuff: modifiedStats1.versusOpponentDamageDebuff ?? 1,
       postChargeMeleeBonus: modifiedStats1.postChargeMeleeBonus ?? 0,
       firstHitBlocked: activeAbilities1.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(unit1, activeTechnologies1),
@@ -548,6 +551,7 @@ const Sandbox = () => {
       healingRatePerSecond: modifiedStats2.healingRatePerSecond ?? 0,
       armorPenetration: modifiedStats2.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: modifiedStats2.opponentAttackSpeedDebuff ?? 0,
+      versusOpponentDamageDebuff: modifiedStats2.versusOpponentDamageDebuff ?? 1,
       postChargeMeleeBonus: modifiedStats2.postChargeMeleeBonus ?? 0,
       firstHitBlocked: activeAbilities2.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(unit2, activeTechnologies2),
@@ -1326,6 +1330,7 @@ const Sandbox = () => {
                       selectedCiv={selectedCiv1}
                       lockedTechnologies={lockedTechnologies1}
                       unitId={variation1?.baseId ?? unit1?.id}
+                      selectedAge={selectedAge1}
                     />
                     <AbilitySelector
                       abilities={abilities1}
@@ -1367,6 +1372,7 @@ const Sandbox = () => {
                       showSecondaryWeaponRow={secondaryWeapons1.length > 0 || secondaryWeapons2.length > 0}
                       opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
                       opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
+                      opponentVersusDebuff={modifiedStats2.versusOpponentDamageDebuff ?? 1}
                     />
                   </div>
                 </div>
@@ -1407,6 +1413,7 @@ const Sandbox = () => {
                       showSecondaryWeaponRow={secondaryWeapons1.length > 0 || secondaryWeapons2.length > 0}
                       opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
                       opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
+                      opponentVersusDebuff={modifiedStats1.versusOpponentDamageDebuff ?? 1}
                     />
                   </div>
                   <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
@@ -1424,6 +1431,7 @@ const Sandbox = () => {
                       selectedCiv={selectedCiv2}
                       lockedTechnologies={lockedTechnologies2}
                       unitId={variation2?.baseId ?? unit2?.id}
+                      selectedAge={selectedAge2}
                     />
                     <AbilitySelector
                       abilities={abilities2}
@@ -1609,6 +1617,7 @@ const Sandbox = () => {
                           selectedCiv={selectedCiv1}
                           lockedTechnologies={lockedTechnologies1}
                           unitId={variation1?.baseId ?? unit1?.id}
+                          selectedAge={selectedAge1}
                         />
                         <AbilitySelector
                           abilities={abilities1}
@@ -1635,6 +1644,7 @@ const Sandbox = () => {
                           secondaryWeapons={modifiedVariation1?.secondaryWeapons ?? secondaryWeapons1}
                           opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
                           opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
+                      opponentVersusDebuff={modifiedStats2.versusOpponentDamageDebuff ?? 1}
                         />
                       </div>
                     </div>
@@ -1657,6 +1667,7 @@ const Sandbox = () => {
                           secondaryWeapons={modifiedVariation2?.secondaryWeapons ?? secondaryWeapons2}
                           opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
                           opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
+                      opponentVersusDebuff={modifiedStats1.versusOpponentDamageDebuff ?? 1}
                         />
                       </div>
                       <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
@@ -1674,6 +1685,7 @@ const Sandbox = () => {
                           selectedCiv={selectedCiv2}
                           lockedTechnologies={lockedTechnologies2}
                           unitId={variation2?.baseId ?? unit2?.id}
+                          selectedAge={selectedAge2}
                         />
                         <AbilitySelector
                           abilities={abilities2}

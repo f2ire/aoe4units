@@ -14,6 +14,7 @@ export interface Ability extends Technology {
   active?: string;
   activeForIds?: string[]; // if set, auto-activates only when unit.id or unit.baseId is in this list
   counterInputMode?: 'type'; // if set, renders a free-text number input instead of +/- buttons
+  uiTooltip?: string; // inline tooltip shown as * badge (fallback when no abilityPatches entry has uiTooltip)
 }
 export interface AbilityVariation extends TechnologyVariation {
   active?: string;
@@ -54,6 +55,8 @@ const combatProperties = [
   'foodCostReduction',
   'armorPenetration',
   'opponentAttackSpeedDebuff',
+  'siegeAttack',
+  'gunpowderAttack',
 ];
 
 const nonCombatTargets = [

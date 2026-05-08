@@ -113,6 +113,16 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     reason: 'Synthetic gameplay rule: aoe4world does not model the Camel Unease debuff. In-game, camel units passively reduce the attack of nearby horse cavalry by 20%. Modelled here as a versusOpponentDamageDebuff effect (×0.8). Marked active:always so it auto-activates on unit select.',
     update: {
       active: 'always',
+      activeForIds: [
+        'camel-archer',
+        'camel-rider',
+        'camel-lancer',
+        'desert-raider',
+        'atabeg',
+        'dervish',
+        'trade-caravan',
+        'camel'
+      ],
       effects: [
         {
           property: 'versusOpponentDamageDebuff',
@@ -279,8 +289,10 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     reason: 'Raw value was +30 (wrong), correct value is +6. Duration 30s (description).',
     after: (ability) => ({
       ...ability,
+      civs: [...ability.civs, 'mac'],
       variations: ability.variations.map(v => ({
         ...v,
+        civs: [...(v.civs ?? []), 'mac'],
         effects: [
           { property: 'meleeAttack', select: { id: ["varangian-guard"] }, effect: 'change', value: 6, type: 'ability', duration: 30 },
           { property: 'meleeArmor', select: { id: ["varangian-guard"] }, effect: 'change', value: -4, type: 'ability', duration: 30 },
@@ -294,8 +306,10 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     reason: 'Trample is a charge-style ability — +12 bonus on first hit only (handled by getChargeBonus in Sandbox.tsx). Raw meleeAttack +12 zeroed in variations to avoid permanent buff. Speed boost +25% on variations (update.effects alone is ignored by getActiveAbilityVariations).',
     after: (ability: Ability) => ({
       ...ability,
+      civs: [...ability.civs, 'mac'],
       variations: ability.variations.map((v: AbilityVariation) => ({
         ...v,
+        civs: [...(v.civs ?? []), 'mac'],
         effects: [
           {
             property: 'moveSpeed',
@@ -661,11 +675,6 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   // HOUSE OF LANCASTER
   //
   //___________
-  {
-    id: "ability-house-unified",
-    reason: "Add Tooltip.",
-    uiTooltip: "Max value goes from 4 to 6 only if the Berkshire Palace has been constructed.",
-  },
   //___________
   //
   // JAPANESE
@@ -1015,11 +1024,6 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     }),
   },
 
-  {
-    id: "ability-battle-glory",
-    reason: "Add uiTooltip.",
-    uiTooltip: "Max is set to 999 but has not limit in game.",
-  },
 
   //___________
   //
@@ -1703,6 +1707,7 @@ function createHouseUnified(): Ability {
     icon: 'https://data.aoe4world.com/images/buildings/keep-3.png',
     description: "Gains +1 damage for each active Keep (including Keep landmarks), up to a maximum of +4, or +6 if the Berkshire Palace has been constructed. This applies to both melee and dagger throw attacks.",
     unique: true,
+    uiTooltip: "Max value goes from 4 to 6 only if the Berkshire Palace has been constructed.",
     counterMax: 6,
     counterStep: 1,
     counterDirection: 'additive' as const,
@@ -1868,6 +1873,7 @@ function createBattleGlory(): Ability {
     icon: 'public/abilities/battleglory.png',
     description: 'Teutonic Knight reduces the opponent\'s melee and ranged armor by 2.',
     unique: true,
+    uiTooltip: "Max is set to 999 but has no limit in game.",
     counterMax: 999,
     counterHideMax: true,
     counterStep: 1,
@@ -2227,6 +2233,330 @@ export const ABILITY_ROW_GROUPS: readonly { label: string; ids: readonly string[
   { label: 'Age', ids: ['ability-high-armory-production-bonus', 'ability-abbey-of-the-trinity'] },
 ];
 
+//_____________________
+//
+// MACEDONIAN DYNASTY
+//
+//_____________________
+
+function createRunestones(): Ability {
+  return {
+    id: 'ability-runestones',
+    name: 'Runestones',
+    type: 'ability',
+    civs: ['mac'],
+    displayClasses: [],
+    classes: [],
+    minAge: 1,
+    active: 'manual',
+    icon: 'https://data.aoe4world.com/images/buildings/runestones-1.png',
+    description: 'Melee units gain +1 attack, ranged infantry gain +1 range, all units gain +15% movement speed.',
+    unique: true,
+    effects: [
+      { property: 'meleeAttack', select: { id: ['atgeirmadr', 'varangian-guard', 'hippodrome-riddari', 'riddari'] }, effect: 'change', value: 1, type: 'ability' },
+      { property: 'maxRange', select: { id: ['bogmadr'] }, effect: 'change', value: 1, type: 'ability' },
+      { property: 'moveSpeed', select: { id: ['atgeirmadr', 'bogmadr', 'varangian-guard', 'hippodrome-riddari', 'riddari'] }, effect: 'multiply', value: 1.15, type: 'ability' },
+    ],
+    variations: [{
+      id: 'ability-runestones-1',
+      baseId: 'ability-runestones',
+      type: 'ability',
+      name: 'Runestones',
+      pbgid: 999500,
+      attribName: 'ability-runestones',
+      age: 1,
+      civs: ['mac'],
+      description: 'Melee units gain +1 attack, ranged infantry gain +1 range, all units gain +15% movement speed.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createStrongerTogether(): Ability {
+  return {
+    id: 'ability-stronger-together',
+    name: 'Stronger Together',
+    type: 'ability',
+    civs: ['mac'],
+    displayClasses: [],
+    classes: [],
+    minAge: 1,
+    active: 'manual',
+    icon: 'public/abilities/Stronger_Together.png',
+    description: 'The attack speed of the Atgeirmaðr is increased by 2% for every other Varangian unit within a 1-tile radius.',
+    unique: true,
+    counterMax: 18,
+    counterSteps: [-0.01, -0.01, -0.01, -0.01, -0.01, -0.20, -0.01, -0.01, -0.01, -0.01, -0.01, -0.01, -0.01, -0.01, -0.01, -0.01, -0.28],
+    counterDirection: 'additive' as const,
+    counterTooltipLabel: 'stacks',
+    uiTooltip: "Gains are uneven: −0.01s per stack normally, −0.20s at stack 6, −0.28s at stack 17. No further gain beyond stack 17.",
+    effects: [
+      { property: 'attackSpeed', select: { id: ['atgeirmadr'] }, effect: 'change', value: -1, type: 'ability' },
+    ],
+    variations: [{
+      id: 'ability-stronger-together-1',
+      baseId: 'ability-stronger-together',
+      type: 'ability',
+      name: 'Stronger Together',
+      pbgid: 999501,
+      attribName: 'ability-stronger-together',
+      age: 1,
+      civs: ['mac'],
+      description: 'Atgeirmadr gains +0.2% attack speed per stack (up to 100 stacks).',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createCheirosiphonGarrison(): Ability {
+  return {
+    id: 'ability-cheirosiphon-garrison',
+    name: 'Garrison Varangian Guards',
+    type: 'ability',
+    civs: ['mac'],
+    displayClasses: [], classes: [],
+    minAge: 2, active: 'manual',
+    icon: 'https://data.aoe4world.com/images/units/varangian-guard-3.png',
+    description: 'Cheirosiphon gains +1 melee and +1 ranged armor for every garrisoned Varangian Guard (up to 16).',
+    unique: true,
+    counterMax: 16,
+    counterStep: 1,
+    counterDirection: 'additive' as const,
+    counterTooltipLabel: 'Varangian Guards',
+    effects: [
+      { property: 'meleeArmor', select: { id: ['cheirosiphon'] }, effect: 'change', value: 1, type: 'ability' },
+      { property: 'rangedArmor', select: { id: ['cheirosiphon'] }, effect: 'change', value: 1, type: 'ability' },
+    ],
+    variations: [{
+      id: 'ability-cheirosiphon-garrison-2',
+      baseId: 'ability-cheirosiphon-garrison',
+      type: 'ability',
+      name: 'Garrison Varangian Guards',
+      pbgid: 999630,
+      attribName: 'ability-cheirosiphon-garrison',
+      age: 2, civs: ['mac'],
+      description: 'Cheirosiphon gains +1 melee and +1 ranged armor for every garrisoned Varangian Guard (up to 16).',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createProlongedSiege(): Ability {
+  return {
+    id: 'ability-prolonged-siege',
+    name: 'Prolonged Siege',
+    type: 'ability',
+    civs: ['mac'],
+    displayClasses: [], classes: [],
+    minAge: 4, active: 'manual',
+    icon: 'https://data.aoe4world.com/images/technologies/prolonged-siege-4.png',
+    description: 'Siege units deal 10% additional damage per stack, up to a maximum of 50%.',
+    unique: true,
+    counterMax: 5,
+    counterStep: 0.1,
+    counterDirection: 'increase' as const,
+    counterTooltipLabel: 'stacks',
+    effects: [
+      { property: 'siegeAttack', select: { class: [['siege']] }, effect: 'multiply', value: 1, type: 'ability' },
+    ],
+    variations: [{
+      id: 'ability-prolonged-siege-4',
+      baseId: 'ability-prolonged-siege',
+      type: 'ability',
+      name: 'Prolonged Siege',
+      pbgid: 999620,
+      attribName: 'ability-prolonged-siege',
+      age: 4, civs: ['mac'],
+      description: 'Siege units deal 10% additional damage per stack, up to a maximum of 50%.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+// Synthetic abilities — Riddari weapon swap (Melee ↔ Thrown Axes).
+function createRiddariMelee(): Ability {
+  return {
+    id: 'ability-riddari-melee',
+    name: 'Melee',
+    type: 'ability',
+    civs: ['mac'],
+    displayClasses: [], classes: [],
+    minAge: 2, active: 'manual',
+    icon: 'https://data.aoe4world.com/images/units/riddari-3.png',
+    description: 'Switch to melee Sword.',
+    unique: false,
+    effects: [],
+    variations: [{
+      id: 'ability-riddari-melee-2',
+      baseId: 'ability-riddari-melee',
+      type: 'ability',
+      name: 'Melee',
+      pbgid: 999610,
+      attribName: 'ability-riddari-melee',
+      age: 2, civs: ['mac'],
+      description: 'Switch to melee Sword.',
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [{
+        property: 'unknown',
+        select: { id: ['riddari', 'hippodrome-riddari'] },
+        effect: 'change',
+        value: 0,
+        type: 'ability',
+      }],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createRiddariThrownAxes(): Ability {
+  return {
+    id: 'ability-riddari-thrown-axes',
+    name: 'Thrown Axes',
+    type: 'ability',
+    civs: ['mac'],
+    displayClasses: [], classes: [],
+    minAge: 2, active: 'manual',
+    icon: 'public/abilities/Thrown_Axes.png',
+    description: 'Switch to ranged Throwing Axe attack.',
+    unique: false,
+    effects: [],
+    variations: [{
+      id: 'ability-riddari-thrown-axes-2',
+      baseId: 'ability-riddari-thrown-axes',
+      type: 'ability',
+      name: 'Thrown Axes',
+      pbgid: 999611,
+      attribName: 'ability-riddari-thrown-axes',
+      age: 2, civs: ['mac'],
+      description: 'Switch to ranged Throwing Axe attack.',
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [{
+        property: 'unknown',
+        select: { id: ['riddari', 'hippodrome-riddari'] },
+        effect: 'change',
+        value: 0,
+        type: 'ability',
+        duration: 10,
+      }],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createRiddariChampionAura(): Ability {
+  return {
+    id: 'ability-riddari-champion-aura',
+    name: 'Riddari Champion Aura',
+    type: 'ability',
+    civs: ['mac'],
+    displayClasses: [], classes: [],
+    minAge: 2, active: 'manual',
+    icon: 'public/abilities/Riddari_Champion_Aura.png',
+    description: 'Increases move speed of all infantry within a 5-tile radius by +10%.',
+    unique: true,
+    effects: [
+      { property: 'moveSpeed', select: { class: [['infantry']] }, effect: 'multiply', value: 1.1, type: 'ability' },
+    ],
+    variations: [{
+      id: 'ability-riddari-champion-aura-1',
+      baseId: 'ability-riddari-champion-aura',
+      type: 'ability',
+      name: 'Riddari Champion Aura',
+      pbgid: 999502,
+      attribName: 'ability-riddari-champion-aura',
+      age: 2, civs: ['mac'],
+      description: 'Increases move speed of all infantry within a 5-tile radius by +10%.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [], effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createHorsemanChampionAura(): Ability {
+  return {
+    id: 'ability-horseman-champion-aura',
+    name: 'Horseman Champion Aura',
+    type: 'ability',
+    civs: ['mac'],
+    displayClasses: [], classes: [],
+    minAge: 2, active: 'manual',
+    icon: 'public/abilities/Horseman_Champion_Aura.png',
+    description: 'Increases the melee attack damage of all cavalry within a 5-tile radius by +2.',
+    unique: true,
+    effects: [
+      { property: 'meleeAttack', select: { class: [['cavalry']], excludeId: ['hippodrome-horseman'] }, effect: 'change', value: 2, type: 'ability' },
+    ],
+    variations: [{
+      id: 'ability-horseman-champion-aura-1',
+      baseId: 'ability-horseman-champion-aura',
+      type: 'ability',
+      name: 'Horseman Champion Aura',
+      pbgid: 999502,
+      attribName: 'ability-horseman-champion-aura',
+      age: 2, civs: ['mac'],
+      description: 'Increases the melee attack damage of all cavalry within a 5-tile radius by +2.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [], effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createUnwaveringFocus(): Ability {
+  return {
+    id: 'ability-unwavering-focus',
+    name: 'Unwavering Focus',
+    type: 'ability',
+    civs: ['mac'],
+    displayClasses: [], classes: [],
+    minAge: 2, active: 'manual',
+    icon: 'public/abilities/Unwavering_Focus_AoE4.png',
+    description: 'Attacks ignore 2 armor, but move speed is reduced by 50% for 10 seconds. Unwavering Focus has a 30 second cooldown for each individual Bogmaðr.',
+    unique: true,
+    effects: [
+      { property: 'armorPenetration', select: { id: ['bogmadr'] }, effect: 'change', value: 2, type: 'ability', duration: 10 },
+      { property: 'moveSpeed', select: { id: ['bogmadr'] }, effect: 'multiply', value: 0.5, type: 'ability', duration: 10 },
+    ],
+    variations: [{
+      id: 'ability-unwavering-focus-2',
+      baseId: 'ability-unwavering-focus',
+      type: 'ability',
+      name: 'Unwavering Focus',
+      pbgid: 999503,
+      attribName: 'ability-unwavering-focus',
+      age: 2, civs: ['mac'],
+      description: 'Attacks ignore 2 armor, but move speed is reduced by 50% for 10 seconds.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [], effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
 export function applyAbilityPatches(abilities: Ability[]): Ability[] {
   // Add the created synthetic abilities
   const chargeAttackAbility = createChargeAttackAbility();
@@ -2257,6 +2587,15 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createStreltsyBerdysh(),
     createStreltsyHandcannon(),
     createAbbeyOfTheTrinityAbility(),
+    createRunestones(),
+    createStrongerTogether(),
+    createRiddariChampionAura(),
+    createHorsemanChampionAura(),
+    createUnwaveringFocus(),
+    createRiddariMelee(),
+    createRiddariThrownAxes(),
+    createProlongedSiege(),
+    createCheirosiphonGarrison(),
   ];
 
   return abilitiesWithCharge.map(ability => {

@@ -61,6 +61,7 @@ interface UnitCardProps {
   showSecondaryWeaponRow?: boolean; // true if at least one side has secondary weapons (for alignment)
   opponentArmorPenetration?: number; // opponent's armorPenetration — reduces this unit's effective armor
   opponentAttackSpeedDebuff?: number; // opponent's AS debuff — multiplies this unit's attack interval by (1 + value)
+  opponentVersusDebuff?: number; // opponent's versusOpponentDamageDebuff — multiplies this unit's damage output
 }
 
 // ── Formula parser ────────────────────────────────────────────────────────────
@@ -196,6 +197,7 @@ export const UnitCard = ({
   showSecondaryWeaponRow,
   opponentArmorPenetration,
   opponentAttackSpeedDebuff,
+  opponentVersusDebuff,
   className
 }: UnitCardProps) => {
   const [showFormula, setShowFormula] = useState(false);
@@ -210,6 +212,8 @@ export const UnitCard = ({
   const effectiveRangedArmor = armorPen > 0 ? Math.max(0, rangedArmor - armorPen) : null;
   const asDebuff = opponentAttackSpeedDebuff ?? 0;
   const effectiveAttackSpeed = (asDebuff > 0 && primaryWeapon?.speed) ? primaryWeapon.speed * (1 + asDebuff) : null;
+  const versusDebuff = opponentVersusDebuff ?? 1;
+  const effectiveAttackDmg = (versusDebuff < 1 && primaryWeapon) ? Math.round((primaryWeapon.damage || 0) * versusDebuff) : null;
   const rangedResistance = getResistanceValue(displayData, 'ranged');
   const gunpowderResistance = getResistanceValue(displayData, 'gunpowder');
   const meleeResistanceRaw = getResistanceValue(displayData, 'melee');
@@ -345,6 +349,11 @@ export const UnitCard = ({
                   <span className={cn('flex items-center gap-1', getComparisonColor((primaryWeapon.damage || 0) * (primaryWeapon.burst?.count || 1), compareAttack).color)}>
                     {getComparisonColor((primaryWeapon.damage || 0) * (primaryWeapon.burst?.count || 1), compareAttack).symbol && <span className="text-xs">{getComparisonColor((primaryWeapon.damage || 0) * (primaryWeapon.burst?.count || 1), compareAttack).symbol}</span>}
                     {Math.round(primaryWeapon.damage || 0)}{primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 ? ` × ${primaryWeapon.burst.count}` : ''} ({primaryWeapon.type})
+                    {effectiveAttackDmg !== null && (
+                      <span className="text-orange-400">
+                        (→{effectiveAttackDmg})
+                      </span>
+                    )}
                   </span>
                 </div>
                 {showSecondaryWeaponRow && (
@@ -421,7 +430,11 @@ export const UnitCard = ({
                         <div key={idx} className="flex justify-between text-xs">
                           <span className={cn('flex items-center gap-1', comparison.color)}>
                             {comparison.symbol && <span className="text-[10px]">{comparison.symbol}</span>}
-                            +{Math.round(modifier.value)} vs
+                            +{Math.round(modifier.value)}{versusDebuff < 1 && (
+                              <span className="text-orange-400">
+                                (→{Math.round(modifier.value * versusDebuff)})
+                              </span>
+                            )} vs
                           </span>
                           <span>{targetName}</span>
                         </div>
@@ -960,7 +973,7 @@ export const UnitCard = ({
               <div>
                 {primaryWeapon ? (
                   <>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Atk</span><span>{Math.round(primaryWeapon.damage || 0)}{primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 ? `×${primaryWeapon.burst.count}` : ''}{applicableBonus > 0 && ` + ${Math.round(applicableBonus)}`}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Atk</span><span className={effectiveAttackDmg !== null ? 'text-orange-400' : undefined}>{effectiveAttackDmg !== null ? effectiveAttackDmg : Math.round(primaryWeapon.damage || 0)}{primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 ? `×${primaryWeapon.burst.count}` : ''}{applicableBonus > 0 && ` + ${Math.round(versusDebuff < 1 ? applicableBonus * versusDebuff : applicableBonus)}`}</span></div>
                     {secondaryWeapons && secondaryWeapons.length > 0 && secondaryWeapons.map((w: any, i: number) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
                       <div key={i} className="flex justify-end"><span>{(() => {
                         const applicableSecondaryBonus = computeApplicableBonus(w.modifiers || []);

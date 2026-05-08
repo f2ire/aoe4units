@@ -658,7 +658,7 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       const makeVariation = (age: number, hp: number, swordDmg: number, meleeArmor: number, rangedArmor: number) => ({
         ...base,
         age,
-        id: `yumi-bannerman-${age}`,
+        id: `uma-bannerman-${age}`,
         hitpoints: hp,
         weapons: base.weapons.map((w: any, i: number) => i === 0 ? { ...w, damage: swordDmg } : w),
         armor: [{ type: 'melee', value: meleeArmor }, { type: 'ranged', value: rangedArmor }],
@@ -828,6 +828,85 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       return u;
     },
   },
+
+  //_____________________
+  //
+  // MACEDONIAN DYNASTY
+  //
+  //_____________________
+
+  {
+    id: 'hippodrome-horseman',
+    reason: 'Raw data is a placeholder with no stats. Adding age 2-3/4 variations per in-game. minAge set to 2.',
+    after: (unit: any) => {
+      const base = unit.variations[0];
+      const makeVariation = (age: number, hp: number) => ({
+        ...base,
+        age,
+        id: `hippodrome-horseman-${age}`,
+        hitpoints: hp,
+        healingRatePerSecond: 1,
+      });
+      return {
+        ...unit,
+        minAge: 2,
+        variations: [
+          { ...base, age: 2, id: 'hippodrome-horseman-2', healingRatePerSecond: 1 },
+          makeVariation(3, 264),
+          makeVariation(4, 308),
+        ],
+      };
+    },
+  },
+
+  {
+    id: 'hippodrome-riddari',
+    reason: 'Raw data is a placeholder with no stats. Adding age -3/4 variations per in-game.',
+    after: (unit: any) => {
+      const base = unit.variations[0];
+      const makeVariation = (age: number, hp: number, meleeArmor: number, rangedArmor: number) => ({
+        ...base,
+        age,
+        id: `hippodrome-riddari-${age}`,
+        hitpoints: hp,
+        healingRatePerSecond: 1,
+        armor: [{ type: 'melee', value: meleeArmor }, { type: 'ranged', value: rangedArmor }],
+      });
+      return {
+        ...unit,
+        variations: [
+          { ...base, age: 2, id: 'hippodrome-riddari-2', healingRatePerSecond: 1 },
+          makeVariation(3, 336, 4, 4),
+          makeVariation(4, 392, 5, 5),
+        ],
+      };
+    },
+  },
+
+  {
+    id: 'hippodrome-scout',
+    reason: 'Raw data is a placeholder with no stats. Adding age 2-3/4 variations per in-game. minAge set to 2.',
+    after: (unit: any) => {
+      const base = unit.variations[0];
+      const makeVariation = (age: number, hp: number) => ({
+        ...base,
+        age,
+        id: `hippodrome-scout-${age}`,
+        hitpoints: hp,
+        healingRatePerSecond: 1,
+      });
+      return {
+        ...unit,
+        minAge: 2,
+        variations: [
+          { ...base, age: 2, id: 'hippodrome-scout-2', healingRatePerSecond: 1 },
+          makeVariation(3, 264),
+          makeVariation(4, 308),
+        ],
+      };
+    },
+  },
+
 
   //_________________
   //

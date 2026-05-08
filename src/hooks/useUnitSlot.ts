@@ -127,6 +127,7 @@ export function useUnitSlot() {
     ['ability-desert-raider-blade', 'ability-desert-raider-bow'],
     ['ability-swap-weapon-kinetic', 'ability-swap-weapon-incendiary'],
     ['ability-streltsy-berdysh', 'ability-streltsy-handcannon'],
+    ['ability-riddari-melee', 'ability-riddari-thrown-axes'],
   ];
 
   // Default weapon ability per weapon-swap unit (activated on first load)
@@ -134,6 +135,8 @@ export function useUnitSlot() {
     'desert-raider': 'ability-desert-raider-bow',
     'manjaniq': 'ability-swap-weapon-kinetic',
     'streltsy': 'ability-streltsy-handcannon',
+    'riddari': 'ability-riddari-melee',
+    'hippodrome-riddari': 'ability-riddari-melee',
   };
 
   // Ability dependencies: a dependent ability can only be active when its required ability is active
@@ -271,6 +274,23 @@ export function useUnitSlot() {
     }
   }, [unit, selectedCiv, selectedAge]);
 
+  // Deactivate technologies whose minAge exceeds the current selected age
+  useEffect(() => {
+    setActiveTechnologies(prev => {
+      if (prev.size === 0) return prev;
+      const next = new Set(prev);
+      let changed = false;
+      for (const techId of [...next]) {
+        const tech = allTechnologies.find(t => t.id === techId);
+        if (tech && tech.minAge > selectedAge) {
+          next.delete(techId);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [selectedAge]);
+
   const EXCLUDED_UNIT_IDS = new Set([
     'clocktower-battering-ram',
     'clocktower-bombard',
@@ -395,7 +415,9 @@ export function useUnitSlot() {
       unit.id === 'jeanne-darc-mounted-archer' ||
       unit.id === 'jeanne-darc-blast-cannon' ||
       unit.id === 'serjeant' ||
-      unit.id === 'streltsy'
+      unit.id === 'streltsy' ||
+      unit.id === 'riddari' ||
+      unit.id === 'hippodrome-riddari'
     )
       ? all.filter(a => a.id !== 'charge-attack')
       : all;
@@ -532,6 +554,18 @@ export function useUnitSlot() {
       return variation;
     }
 
+    // Riddari / Hippodrome-Riddari: Sword (melee) vs Throwing Axe
+    if (unit?.id === 'riddari' || unit?.id === 'hippodrome-riddari') {
+      const useThrown = activeAbilities.has('ability-riddari-thrown-axes');
+      const thrownAxe = variation.weapons.find(w => w.name === 'Throwing Axe');
+      const torchWeapon = variation.weapons.find(w => w.type === 'fire');
+      const meleeWeapons = variation.weapons.filter(w => w !== thrownAxe && w !== torchWeapon);
+      if (useThrown && thrownAxe) {
+        return { ...variation, weapons: [thrownAxe, ...(torchWeapon ? [torchWeapon] : [])] };
+      }
+      return { ...variation, weapons: [...meleeWeapons, ...(torchWeapon ? [torchWeapon] : [])] };
+    }
+
     return variation;
   }, [variation, activeAbilities, unit]);
 
@@ -564,6 +598,7 @@ export function useUnitSlot() {
       healingRatePerSecond: (data as any).healingRatePerSecond ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
       armorPenetration: 0,
       opponentAttackSpeedDebuff: 0,
+      versusOpponentDamageDebuff: 1,
     };
 
     const techVariations = getActiveTechnologyVariationsWithTiers(activeTechnologies, selectedCiv, selectedAge);
@@ -594,6 +629,10 @@ export function useUnitSlot() {
       }
     }
 
+    if (unit?.id === 'varangian-guard' && selectedAge === 2 && selectedCiv === 'mac' && activeAbilities.has('ability-berserking')) {
+      result = { ...result, meleeAttack: result.meleeAttack - 1 };
+    }
+
     if (
       activeAbilities.has('ability-royal-knight-charge-damage') &&
       activeAbilities.has('charge-attack') &&
@@ -611,6 +650,8 @@ export function useUnitSlot() {
     }
 
     if (result.moveSpeed > 2) result = { ...result, moveSpeed: 2 };
+    if (result.meleeArmor < 0) result = { ...result, meleeArmor: 0 };
+    if (result.rangedArmor < 0) result = { ...result, rangedArmor: 0 };
 
     // Fixed attack speed overrides — ability sets an absolute AS regardless of techs
     if (activeAbilities.has('ability-arrow-volley')) {
@@ -624,11 +665,16 @@ export function useUnitSlot() {
       const count = abilityCounters.get(ability.id) ?? 0;
       if (count === 0) continue;
       const step = (unit?.id ? ability.unitCounterStep?.[unit.id] : undefined) ?? ability.counterStep ?? 0.05;
-      const effectiveValue = ability.counterDirection === 'increase'
-        ? 1 + count * step
-        : ability.counterDirection === 'additive'
-          ? count * step
-          : 1 / (1 + count * step);
+      const stepsSum = ability.counterSteps !== undefined
+        ? ability.counterSteps.slice(0, count).reduce((a, b) => a + b, 0)
+        : undefined;
+      const effectiveValue = stepsSum !== undefined
+        ? (ability.counterDirection === 'additive' ? stepsSum : 1 + stepsSum)
+        : ability.counterDirection === 'increase'
+          ? 1 + count * step
+          : ability.counterDirection === 'additive'
+            ? count * step
+            : 1 / (1 + count * step);
       const counterVariation = getAbilityVariation(ability.id, selectedCiv, ability.minAge);
       if (!counterVariation) continue;
       const syntheticVariation = {
@@ -661,7 +707,13 @@ export function useUnitSlot() {
       return v?.effects?.some((e: any) => 'duration' in e); // eslint-disable-line @typescript-eslint/no-explicit-any
     });
     if (!hasTimedEffects) return modifiedStats;
-    const data = effectiveVariation || unit;
+    const timedAbilityIsWeaponSwap = [...activeAbilities].some(id => {
+      const isSwap = WEAPON_SWAP_GROUPS.some(g => g.includes(id));
+      if (!isSwap) return false;
+      const v = getAbilityVariation(id, selectedCiv, selectedAge);
+      return v?.effects?.some((e: any) => 'duration' in e); // eslint-disable-line @typescript-eslint/no-explicit-any
+    });
+    const data = (timedAbilityIsWeaponSwap ? variation : effectiveVariation) || unit;
     if (!data) return modifiedStats;
     const weapon = getPrimaryWeapon(data);
     const baseStats: UnitStats = {
@@ -685,6 +737,7 @@ export function useUnitSlot() {
       healingRatePerSecond: (data as any).healingRatePerSecond ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
       armorPenetration: 0,
       opponentAttackSpeedDebuff: 0,
+      versusOpponentDamageDebuff: 1,
     };
     const techVariations = getActiveTechnologyVariationsWithTiers(activeTechnologies, selectedCiv, selectedAge);
     const counterAbilityIds = new Set(abilities.filter(a => a.counterMax !== undefined).map(a => a.id));
@@ -704,12 +757,19 @@ export function useUnitSlot() {
         result = interaction.apply(result);
       }
     }
+
+    if (unit?.id === 'varangian-guard' && selectedAge === 2 && selectedCiv === 'mac' && activeAbilities.has('ability-berserking')) {
+      result = { ...result, meleeAttack: result.meleeAttack - 1 };
+    }
+
     const isHREInfantry = selectedCiv === 'hr' && effectiveClasses.some(c => c === 'infantry' || c.includes('infantry'));
     const isLandsknecht = unit?.id === 'landsknecht' && selectedCiv === 'by';
     if (isHREInfantry || isLandsknecht) {
       result = { ...result, moveSpeed: result.moveSpeed * (selectedAge === 1 ? 1.05 : 1.1) };
     }
     if (result.moveSpeed > 2) result = { ...result, moveSpeed: 2 };
+    if (result.meleeArmor < 0) result = { ...result, meleeArmor: 0 };
+    if (result.rangedArmor < 0) result = { ...result, rangedArmor: 0 };
     if (activeAbilities.has('ability-arrow-volley')) {
       result = { ...result, attackSpeed: 0.6 };
     }
@@ -718,11 +778,16 @@ export function useUnitSlot() {
       const count = abilityCounters.get(ability.id) ?? 0;
       if (count === 0) continue;
       const step = (unit?.id ? ability.unitCounterStep?.[unit.id] : undefined) ?? ability.counterStep ?? 0.05;
-      const effectiveValue = ability.counterDirection === 'increase'
-        ? 1 + count * step
-        : ability.counterDirection === 'additive'
-          ? count * step
-          : 1 / (1 + count * step);
+      const stepsSum = ability.counterSteps !== undefined
+        ? ability.counterSteps.slice(0, count).reduce((a, b) => a + b, 0)
+        : undefined;
+      const effectiveValue = stepsSum !== undefined
+        ? (ability.counterDirection === 'additive' ? stepsSum : 1 + stepsSum)
+        : ability.counterDirection === 'increase'
+          ? 1 + count * step
+          : ability.counterDirection === 'additive'
+            ? count * step
+            : 1 / (1 + count * step);
       const counterVariation = getAbilityVariation(ability.id, selectedCiv, ability.minAge);
       if (!counterVariation) continue;
       const syntheticVariation = {
@@ -732,7 +797,7 @@ export function useUnitSlot() {
       result = applyTechnologyEffects(result, effectiveClasses, [syntheticVariation], unit?.id);
     }
     return result;
-  }, [modifiedStats, activeAbilities, unit, effectiveVariation, effectiveClasses, activeTechnologies, selectedCiv, selectedAge, abilities, abilityCounters]);
+  }, [modifiedStats, activeAbilities, unit, variation, effectiveVariation, effectiveClasses, activeTechnologies, selectedCiv, selectedAge, abilities, abilityCounters]);
 
   const secondaryWeapons = useMemo((): UnifiedWeapon[] => {
     const weapons: UnifiedWeapon[] = [];

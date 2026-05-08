@@ -23,6 +23,7 @@ export interface CombatEntity {
   healingRatePerSecond?: number; // HP healed per second (e.g. Triumph: 2 HP/s)
   armorPenetration?: number; // Enemy armor reduced by this amount on each hit (clamped ≥ 0)
   opponentAttackSpeedDebuff?: number; // Opponent's attack interval multiplied by (1 + value), e.g. 0.20 = 20% slower
+  versusOpponentDamageDebuff?: number; // Multiplier on damage dealt by attackers (e.g. 0.8 = −20%); default 1
   chargeBonusBurst?: number; // Burst count for first-hit bonus display (e.g. 2 daggers for Earl's Guard)
   chargeArmorType?: 'ranged' | 'none'; // 'ranged': charge uses ranged armor (dagger); 'none': charge ignores armor+resistance entirely (holy wrath)
   continuousMovement?: boolean; // unit can move throughout entire attack cycle (e.g. Mangudai)
@@ -70,6 +71,7 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     healingRatePerSecond: (source as any).healingRatePerSecond ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     armorPenetration: (source as any).armorPenetration ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     opponentAttackSpeedDebuff: (source as any).opponentAttackSpeedDebuff ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
+    versusOpponentDamageDebuff: (source as any).versusOpponentDamageDebuff ?? 1, // eslint-disable-line @typescript-eslint/no-explicit-any
     chargeBonusBurst: (source as any).chargeBonusBurst ?? 1, // eslint-disable-line @typescript-eslint/no-explicit-any
     chargeArmorType: (source as any).chargeArmorType, // eslint-disable-line @typescript-eslint/no-explicit-any
     continuousMovement: (source as any).continuousMovement ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -258,8 +260,9 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
   // Armor is applied to each projectile individually
   let damagePerProjectile = effectiveBaseDamage + bonusDamage + chargeInPrimary - armorValue;
 
-  // Apply versus debuffs (e.g. Camel Unease)
-  const debuffMultiplier = getVersusDebuffMultiplier(attacker.classes, defender.activeAbilities || []);
+  // Apply versus debuffs (e.g. Camel Unease, Ruinous Blinding)
+  const debuffMultiplier = getVersusDebuffMultiplier(attacker.classes, defender.activeAbilities || [])
+    * (defender.versusOpponentDamageDebuff ?? 1);
   if (debuffMultiplier !== 1.0) {
     damagePerProjectile = damagePerProjectile * debuffMultiplier;
   }

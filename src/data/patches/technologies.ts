@@ -529,7 +529,8 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
           type: "passive"
         }
       ]
-    }
+    },
+    after: (tech) => ({ ...tech, civs: [...tech.civs, 'mac'], variations: tech.variations.map(v => ({ ...v, civs: [...v.civs, 'mac'] })) }),
   },
   {
     id: "numeri",
@@ -1801,6 +1802,151 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
       }))
     })
   },
+
+  //_____________________
+  //
+  // MACEDONIAN DYNASTY
+  //
+  //_____________________
+
+
+  // 6-stack counter line for melee infantry (mac). Each stack: +1 meleeArmor, +1 rangedArmor, ×1.05 HP.
+  // counterMax on tier1 signals TechnologySelector to render the whole line as a counter widget.
+  // Max available at runtime is age-limited: 2 stacks at age II, 4 at age III, 6 at age IV.
+  ...(['butted-chainmail-tier1', 'butted-chainmail-tier2', 'butted-chainmail-tier3',
+    'butted-chainmail-tier4', 'butted-chainmail-tier5', 'butted-chainmail-tier6'] as const).map((id, i) => ({
+      id,
+      reason: `Raw effects empty. Tier ${i + 1}/6: +1 meleeArmor, +1 rangedArmor, ×1.05 HP for melee infantry.${i === 0 ? ' counterMax on tier1 signals counter widget rendering.' : ''}`,
+      update: {
+        displayClasses: [`Butted Chainmail ${i + 1}/6`],
+        counterMax: i === 0 ? 6 : undefined,
+        effects: [
+          { property: 'meleeArmor', select: { class: [['melee', 'infantry']] }, effect: 'change', value: 1, type: 'passive' },
+          { property: 'rangedArmor', select: { class: [['melee', 'infantry']] }, effect: 'change', value: 1, type: 'passive' },
+          { property: 'hitpoints', select: { class: [['melee', 'infantry']] }, effect: 'multiply', value: 1.05, type: 'passive' },
+        ] as any
+      }
+    })),
+
+  ...(['lamellar-armor-tier1', 'lamellar-armor-tier2', 'lamellar-armor-tier3',
+    'lamellar-armor-tier4', 'lamellar-armor-tier5', 'lamellar-armor-tier6'] as const).map((id, i) => ({
+      id,
+      reason: `Raw effects empty. Tier ${i + 1}/6: +1 meleeArmor, +1 rangedArmor, ×1.05 HP for ranged infantry.${i === 0 ? ' counterMax on tier1 signals counter widget rendering.' : ''}`,
+      update: {
+        displayClasses: [`Lamellar Armor ${i + 1}/6`],
+        counterMax: i === 0 ? 6 : undefined,
+        effects: [
+          { property: 'meleeArmor', select: { class: [['ranged', 'infantry']] }, effect: 'change', value: 1, type: 'passive' },
+          { property: 'rangedArmor', select: { class: [['ranged', 'infantry']] }, effect: 'change', value: 1, type: 'passive' },
+          { property: 'hitpoints', select: { class: [['ranged', 'infantry']] }, effect: 'multiply', value: 1.05, type: 'passive' },
+        ] as any
+      }
+    })),
+
+  ...(['scale-barding-tier1', 'scale-barding-tier2', 'scale-barding-tier3',
+    'scale-barding-tier4', 'scale-barding-tier5', 'scale-barding-tier6'] as const).map((id, i) => ({
+      id,
+      reason: `Raw effects empty. Tier ${i + 1}/6: +1 meleeArmor, +1 rangedArmor, ×1.05 HP for cavalry.${i === 0 ? ' counterMax on tier1 signals counter widget rendering.' : ''}`,
+      update: {
+        displayClasses: [`Scale Barding ${i + 1}/6`],
+        counterMax: i === 0 ? 6 : undefined,
+        effects: [
+          { property: 'meleeArmor', select: { class: [['cavalry']] }, effect: 'change', value: 1, type: 'passive' },
+          { property: 'rangedArmor', select: { class: [['cavalry']] }, effect: 'change', value: 1, type: 'passive' },
+          { property: 'hitpoints', select: { class: [['cavalry']] }, effect: 'multiply', value: 1.05, type: 'passive' },
+        ] as any
+      }
+    })),
+
+  ...(['pattern-welding-tier1', 'pattern-welding-tier2', 'pattern-welding-tier3',
+    'pattern-welding-tier4', 'pattern-welding-tier5', 'pattern-welding-tier6'] as const).map((id, i) => ({
+      id,
+      reason: `Raw effects empty. Tier ${i + 1}/6: +1 meeleAttack.${i === 0 ? ' counterMax on tier1 signals counter widget rendering.' : ''}`,
+      update: {
+        displayClasses: [`Pattern Welding ${i + 1}/6`],
+        counterMax: i === 0 ? 6 : undefined,
+        effects: [
+          { property: 'meleeAttack', select: { class: [['melee', 'infantry']] }, effect: 'change', value: 1, type: 'passive' },
+        ] as any
+      }
+    })),
+
+  ...(['sharpening-stones-tier1', 'sharpening-stones-tier2', 'sharpening-stones-tier3',
+    'sharpening-stones-tier4', 'sharpening-stones-tier5', 'sharpening-stones-tier6'] as const).map((id, i) => ({
+      id,
+      reason: `Raw effects empty. Tier ${i + 1}/6: +1 meeleAttack.${i === 0 ? ' counterMax on tier1 signals counter widget rendering.' : ''}`,
+      update: {
+        displayClasses: [`Sharpening Stones ${i + 1}/6`],
+        counterMax: i === 0 ? 6 : undefined,
+        effects: [
+          { property: 'rangedAttack', select: { class: [['ranged', 'infantry']], id: ['galley', 'dromon'] }, effect: 'change', value: 1, type: 'passive' },
+          { property: 'siegeAttack', select: { id: ['dromon'] }, effect: 'change', value: 1, type: 'passive' },
+        ] as any
+      }
+    })),
+
+  ...(['blade-inlaying-tier1', 'blade-inlaying-tier2', 'blade-inlaying-tier3',
+    'blade-inlaying-tier4', 'blade-inlaying-tier5', 'blade-inlaying-tier6'] as const).map((id, i) => ({
+      id,
+      reason: `Raw effects empty. Tier ${i + 1}/6: +1 meeleAttack.${i === 0 ? ' counterMax on tier1 signals counter widget rendering.' : ''}`,
+      update: {
+        displayClasses: [`Blade Inlaying ${i + 1}/6`],
+        counterMax: i === 0 ? 6 : undefined,
+        effects: [
+          { property: 'meleeAttack', select: { class: [['cavalry']] }, effect: 'change', value: 1, type: 'passive' },
+        ] as any
+      }
+    })),
+
+  ...(['iron-fittings-tier1', 'iron-fittings-tier2', 'iron-fittings-tier3',
+    'iron-fittings-tier4', 'iron-fittings-tier5', 'iron-fittings-tier6'] as const).map((id, i) => ({
+      id,
+      reason: `Raw effects empty. Tier ${i + 1}/6: ×1.05 HP for cavalry.${i === 0 ? ' counterMax on tier1 signals counter widget rendering.' : ''}`,
+      update: {
+        displayClasses: [`Iron Fittings ${i + 1}/6`],
+        counterMax: i === 0 ? 6 : undefined,
+        effects: [
+          { property: 'hitpoints', select: { class: [['siege_range']], id: ['cheirosiphon'] }, effect: 'multiply', value: 1.05, type: 'passive' },
+        ] as any
+      }
+    })),
+
+  {
+    id: 'ruinous-blinding',
+    reason: 'Raw effects empty. Models −20% damage debuff on any opponent hit by Bogmaðr for 5s.',
+    update: {
+      effects: [
+        { property: 'versusOpponentDamageDebuff', select: { id: ['bogmadr'] }, effect: 'multiply', value: 0.8, type: 'passive', duration: 5 },
+      ] as any
+    }
+  },
+
+  {
+    id: 'rhomphaia',
+    reason: 'Raw effects empty. +3 bonus melee damage vs infantry for Varangian Guard.',
+    update: {
+      effects: [
+        { property: 'meleeAttack', select: { id: ['varangian-guard', 'riddari', 'hippodrome-riddari'] }, effect: 'change', value: 3, type: 'bonus', target: { class: [['infantry']] } },
+      ] as any
+    }
+  },
+
+  {
+    id: 'prolonged-siege',
+    reason: 'Replaced by ability-prolonged-siege counter ability in AbilitySelector.',
+    after: (tech: any) => ({ ...tech, effects: [], variations: tech.variations.map((v: any) => ({ ...v, effects: [] })) })
+  },
+
+  {
+    id: 'roman-fire',
+    reason: 'Raw effects empty. Springalds gain 15% attack speed (cycle ×1/1.15).',
+    update: {
+      effects: [
+        { property: 'attackSpeed', select: { id: ['springald'] }, effect: 'multiply', value: 1 / 1.15, type: 'passive' },
+      ] as any
+    }
+  },
+
 
 ];
 

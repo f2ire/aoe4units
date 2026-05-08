@@ -58,7 +58,7 @@ export const AbilitySelector = ({
     const isActive = count > 0;
     const max = ability.counterMax!;
     const patch = abilityPatches.find(p => p.id === ability.id);
-    const patchTooltip = !foreignEngineeringAbilityIds.has(ability.id) ? patch?.uiTooltip : undefined;
+    const patchTooltip = !foreignEngineeringAbilityIds.has(ability.id) ? (patch?.uiTooltip ?? ability.uiTooltip) : undefined;
 
     return (
       <div key={ability.id} className="w-12 flex flex-col items-center gap-1 relative">
@@ -66,10 +66,11 @@ export const AbilitySelector = ({
           <Tooltip>
             <TooltipTrigger asChild>
               <div
+                onClick={() => isActive && onSetCounter?.(ability.id, 0)}
                 className={`
                   w-12 h-12 rounded border-2 transition-all relative overflow-hidden select-none
                   ${isActive
-                    ? 'border-amber-500 bg-amber-500/10'
+                    ? 'border-amber-500 bg-amber-500/10 cursor-pointer hover:border-red-500 hover:bg-red-500/10 active:scale-95'
                     : 'border-border/50 bg-secondary/50 opacity-60'
                   }
                 `}
