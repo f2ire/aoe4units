@@ -1595,18 +1595,13 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
   {
     id: "local-knowledge",
-    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    reason: "Converted to ability-local-knowledge (duration-based). Tech hidden.",
     after: (tech) => ({
       ...tech,
-      civs: [...tech.civs, 'by'],
-      variations: tech.variations.map(v => ({
-        ...v,
-        civs: [...(v.civs || []), "by"]
-      }))
+      effects: [],
+      variations: tech.variations.map(v => ({ ...v, effects: [] }))
     }),
-    foreignEngineering: true,
-    foreignEngineeringUnits: ['musofadi-warrior'],
-    uiTooltip: "Available only with Foreign Engineering Company. And duration is not yet considered",
+    excludedUnits: ['musofadi-warrior', 'musofadi-gunner'],
   },
 
 
@@ -1947,6 +1942,35 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     }
   },
 
+  //___________
+  //
+  // MALIAN
+  //
+  //___________
+
+  {
+    id: 'farima-leadership',
+    reason: 'Converted to ability (ability-farima-leadership). Clear tech effects to avoid double-application.',
+    after: (tech) => ({ ...tech, effects: [], variations: tech.variations.map(v => ({ ...v, effects: [] })) }),
+  },
+
+  {
+    id: 'canoe-tactics',
+    reason: 'Bonus target corrected from [incendiary,ship] to [naval,fireship]. Secondary weapon: hunting-canoe bow ×(4/6) damage, burst 2.',
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: v.effects.map(e =>
+          e.type === 'bonus' && (e.target?.class ?? []).some(c => c.includes('incendiary'))
+            ? { ...e, target: { class: [['naval', 'fireship']] } }
+            : e
+        ),
+      })),
+    }),
+    injectWeapon: { unitId: 'hunting-canoe', weaponIndex: 0, damageMultiplier: 4 / 6, burstCount: 2 },
+  },
+
 
 ];
 
@@ -1955,6 +1979,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 // HOLY ROMAN EMPIRE
 //
 //__________________
+
 
 function createBurgravePalaceAgeUp(): Technology {
   return {
@@ -2035,6 +2060,105 @@ function createCrusaderFleets(): Technology {
   } as Technology;
 }
 
+//__________________
+//
+// MALIAN
+//
+//__________________
+
+function createEnlistMansaMusofadi(): Technology {
+  return {
+    id: 'enlist-mansa-musofadi',
+    name: 'Enlist Mansa Musofadi',
+    type: 'technology',
+    civs: ['ma'],
+    classes: [],
+    displayClasses: [],
+    minAge: 3,
+    icon: 'public/abilities/AoE4_EnlistMansaMusofadi.png',
+    description: 'Musofadi Warriors gain +1 melee attack, +10 HP, and +4/+5/+6 melee armor (age II/III/IV).',
+    unique: true,
+    effects: [
+      {
+        property: 'meleeAttack',
+        select: { id: ['musofadi-warrior'] },
+        effect: 'change',
+        value: 1,
+        type: 'passive',
+      },
+      {
+        property: 'hitpoints',
+        select: { id: ['musofadi-warrior'] },
+        effect: 'change',
+        value: 10,
+        type: 'passive',
+      },
+      {
+        property: 'meleeArmor',
+        select: { id: ['musofadi-warrior'] },
+        effect: 'change',
+        value: 4,
+        type: 'passive',
+      },
+    ] as TechnologyEffect[],
+    variations: [
+      {
+        id: 'enlist-mansa-musofadi-3',
+        baseId: 'enlist-mansa-musofadi',
+        pbgid: 0,
+        attribName: '',
+        civs: ['ma'],
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        effects: [] as TechnologyEffect[],
+      }
+    ],
+    shared: {}
+  } as Technology;
+}
+
+function createEnlistMansaJavelineers(): Technology {
+  return {
+    id: 'enlist-mansa-javelineers',
+    name: 'Enlist Mansa Javelineers',
+    type: 'technology',
+    civs: ['ma'],
+    classes: [],
+    displayClasses: [],
+    minAge: 3,
+    icon: 'public/technologies/AoE4_EnlistMansaJavelineers.png',
+    description: 'This increases their speed by ~5% (up to 1.31) and grants them poison tipped javelins that inflict a poison effect of 3 damage over 6 seconds.',
+    unique: true,
+    effects: [
+      {
+        property: 'moveSpeed',
+        select: { id: ['javelin-thrower'] },
+        effect: 'multiply',
+        value: 1.05,
+        type: 'passive',
+      },
+      {
+        property: 'rangedAttack',
+        select: { id: ['javelin-thrower'] },
+        effect: 'change',
+        value: 3,
+        type: 'passive',
+      },
+    ] as TechnologyEffect[],
+    variations: [
+      {
+        id: 'enlist-mansa-javelineers-3',
+        baseId: 'enlist-mansa-javelineers',
+        pbgid: 0,
+        attribName: '',
+        civs: ['ma'],
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        effects: [] as TechnologyEffect[],
+      }
+    ],
+    shared: {}
+  } as Technology;
+}
+
 // Maps tech ID → { unitId, weaponIndex, damageMultiplier?, burstCount? } for secondary weapon injection
 export const weaponInjectionMap: Map<string, { unitId: string; weaponIndex: number; damageMultiplier?: number; burstCount?: number; maxDamage?: number }> = new Map(
   technologyPatches
@@ -2073,6 +2197,8 @@ export function applyTechnologyPatches(allTechs: Technology[]): Technology[] {
     ...allTechs,
     createBurgravePalaceAgeUp(),
     createCrusaderFleets(),
+    createEnlistMansaMusofadi(),
+    createEnlistMansaJavelineers(),
   ];
 
   return allWithSynthetic.map((tech) => {

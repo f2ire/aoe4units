@@ -49,7 +49,7 @@ const DEFAULT_OPEN_CATEGORIES: Record<string, boolean> = {
 
 export function useUnitSlot() {
   const [unit, setUnitInternal] = useState<AoE4Unit | null>(null);
-  const [selectedCiv, setSelectedCiv] = useState("all");
+  const [selectedCiv, setSelectedCiv] = useState("ab");
   const [selectedAge, setSelectedAge] = useState(4);
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(DEFAULT_OPEN_CATEGORIES);
   const [variation, setVariation] = useState<UnifiedVariation | null>(null);
@@ -304,6 +304,8 @@ export function useUnitSlot() {
     'earls-retinue',
     'garrison-command',
     'gunpowder-contingent',
+    'mansa-musofadi-warrior',
+    'mansa-javelineer',
   ]);
 
   const filteredUnits = useMemo(() => {
@@ -417,7 +419,11 @@ export function useUnitSlot() {
       unit.id === 'serjeant' ||
       unit.id === 'streltsy' ||
       unit.id === 'riddari' ||
-      unit.id === 'hippodrome-riddari'
+      unit.id === 'hippodrome-riddari' ||
+      unit.id === 'musofadi-warrior' ||
+      unit.id === 'warrior-scout' ||
+      unit.id === 'sofa'
+
     )
       ? all.filter(a => a.id !== 'charge-attack')
       : all;
@@ -649,6 +655,12 @@ export function useUnitSlot() {
       result = { ...result, moveSpeed: result.moveSpeed * (selectedAge === 1 ? 1.05 : 1.1) };
     }
 
+    // enlist-mansa-musofadi: age-varying armor delta (+4 base from tech, +1 at age III, +2 at age IV)
+    if (unit?.id === 'musofadi-warrior' && activeTechnologies.has('enlist-mansa-musofadi')) {
+      const armorDelta = selectedAge >= 4 ? 2 : selectedAge >= 3 ? 1 : 0;
+      if (armorDelta > 0) result = { ...result, meleeArmor: result.meleeArmor + armorDelta };
+    }
+
     if (result.moveSpeed > 2) result = { ...result, moveSpeed: 2 };
     if (result.meleeArmor < 0) result = { ...result, meleeArmor: 0 };
     if (result.rangedArmor < 0) result = { ...result, rangedArmor: 0 };
@@ -766,6 +778,10 @@ export function useUnitSlot() {
     const isLandsknecht = unit?.id === 'landsknecht' && selectedCiv === 'by';
     if (isHREInfantry || isLandsknecht) {
       result = { ...result, moveSpeed: result.moveSpeed * (selectedAge === 1 ? 1.05 : 1.1) };
+    }
+    if (unit?.id === 'musofadi-warrior' && activeTechnologies.has('enlist-mansa-musofadi')) {
+      const armorDelta = selectedAge >= 4 ? 2 : selectedAge >= 3 ? 1 : 0;
+      if (armorDelta > 0) result = { ...result, meleeArmor: result.meleeArmor + armorDelta };
     }
     if (result.moveSpeed > 2) result = { ...result, moveSpeed: 2 };
     if (result.meleeArmor < 0) result = { ...result, meleeArmor: 0 };

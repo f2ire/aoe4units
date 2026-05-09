@@ -25,12 +25,13 @@ export interface CombatEntity {
   opponentAttackSpeedDebuff?: number; // Opponent's attack interval multiplied by (1 + value), e.g. 0.20 = 20% slower
   versusOpponentDamageDebuff?: number; // Multiplier on damage dealt by attackers (e.g. 0.8 = −20%); default 1
   chargeBonusBurst?: number; // Burst count for first-hit bonus display (e.g. 2 daggers for Earl's Guard)
-  chargeArmorType?: 'ranged' | 'none'; // 'ranged': charge uses ranged armor (dagger); 'none': charge ignores armor+resistance entirely (holy wrath)
+  chargeArmorType?: 'ranged' | 'none' | 'first-strike'; // 'ranged': charge uses ranged armor (dagger); 'none': charge ignores armor+resistance entirely (holy wrath); 'first-strike': label only, normal melee damage path
   continuousMovement?: boolean; // unit can move throughout entire attack cycle (e.g. Mangudai)
   selfDestructs?: boolean; // unit self-destructs on first hit — if hitsToKill > 1, it can never kill
   secondaryWeapons?: UnifiedWeapon[]; // additional weapons fired simultaneously (e.g. thunderclap-bombs)
   firstHitBlocked?: boolean; // defender absorbs first attack completely (0 damage, charge also nullified)
   postChargeMeleeBonus?: number; // melee attack bonus active from hit 2 onward only — subtracted from hit 1 (charge hit)
+  chargeModifiers?: Array<{ target: { class: string[][] }; value: number }>; // class-specific bonus damage applied to the dagger/javelin hit (before ranged armor)
 }
 
 export interface VersusMetrics {
@@ -79,6 +80,7 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     secondaryWeapons: (source as any).secondaryWeapons ?? [], // eslint-disable-line @typescript-eslint/no-explicit-any
     firstHitBlocked: (source as any).firstHitBlocked ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
     postChargeMeleeBonus: (source as any).postChargeMeleeBonus ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
+    chargeModifiers: (source as any).chargeModifiers, // eslint-disable-line @typescript-eslint/no-explicit-any
   };
 }
 
@@ -292,9 +294,30 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
   if (isDaggerCharge) {
     const daggerBurst = attacker.chargeBonusBurst ?? 1;
     const perDagger = chargeBonus_applied / daggerBurst;
+    let chargeModBonus = 0;
+    if (attacker.chargeModifiers?.length && defender.classes?.length) {
+      const defTokens = new Set<string>();
+      for (const cls of defender.classes) {
+        const lc = cls.toLowerCase();
+        defTokens.add(lc);
+        const parts = lc.split('_');
+        const negated = new Set<string>();
+        for (let i = 0; i < parts.length - 1; i++) {
+          if (parts[i] === 'non') negated.add(parts[i + 1]);
+        }
+        for (const p of parts) {
+          if (p && p !== 'non' && !negated.has(p)) defTokens.add(p);
+        }
+      }
+      for (const mod of attacker.chargeModifiers) {
+        if (mod.target.class.some(g => g.every(r => defTokens.has(r.toLowerCase())))) {
+          chargeModBonus += mod.value;
+        }
+      }
+    }
     const rangedArmorVal = getArmorValue(defender as unknown as AoE4Unit, 'ranged');
     const rangedResPct = getResistanceValue(defender as unknown as AoE4Unit, 'ranged');
-    const perDaggerEff = Math.max(0, perDagger - rangedArmorVal);
+    const perDaggerEff = Math.max(0, perDagger + chargeModBonus - rangedArmorVal);
     daggerExtra = perDaggerEff * daggerBurst * (rangedResPct !== 0 ? (1 - rangedResPct / 100) : 1);
   }
 
@@ -715,10 +738,10 @@ function computeMetrics(
     const noTimerData = computeEffectiveDamage(attackerNoTimer, defender, 0, false);
     const noTimerDmgPerHit = noTimerData.value * attackerMultiplier;
     const noTimerAttackSpeed = (noTimerData.weapon?.speed ?? rawSpeed) * asDebuffFactor;
-    if (noTimerDmgPerHit > 0 && noTimerAttackSpeed > 0) {
+    const normalDmgPerHit = normalAttackData.value * attackerMultiplier;
+    if (noTimerDmgPerHit > 0 && noTimerAttackSpeed > 0 && (noTimerDmgPerHit !== normalDmgPerHit || noTimerAttackSpeed !== attackSpeed)) {
       const totalDefHP = defender.hitpoints * defenderMultiplier;
       const hitsInDuration = Math.floor(timedDurationAttacker / attackSpeed);
-      const normalDmgPerHit = normalAttackData.value * attackerMultiplier;
       const firstDmgPerHit = firstAttackData.value * attackerMultiplier;
       // Hit 1 carries the charge bonus (includes holy wrath); remaining hits are normal
       const dmgInDuration = hitsInDuration >= 1
@@ -755,6 +778,34 @@ function computeMetrics(
     }
   }
 
+  // Phase-based duration correction: defender timed healingRate expires before the fight ends.
+  // Phase 1 (0 → timedDurationDefender): defender heals at the timed rate (reducing effective attacker DPS).
+  // Phase 2 (remainder): defender heals at the base rate (without timed ability).
+  if (defenderNoTimer && timedDurationDefender !== undefined && timeToKill !== null && timeToKill > timedDurationDefender && !bugAttackSpeed && !attacker.selfDestructs) {
+    const phase1HealRate = defender.healingRate ?? 0;
+    const phase2HealRate = defenderNoTimer.healingRate ?? 0;
+    if (phase1HealRate !== phase2HealRate && attackSpeed > 0) {
+      const defenderAS = (defender.weapons[0]?.speed ?? 0) * (1 + (attacker.opponentAttackSpeedDebuff ?? 0));
+      const rawDmgPerHit = normalAttackData.value * attackerMultiplier;
+      const totalDefHP = defender.hitpoints * defenderMultiplier;
+      const hitsInDuration = Math.floor(timedDurationDefender / attackSpeed);
+      const phase1Time = hitsInDuration * attackSpeed;
+      const healPerS1 = defenderAS > 0 ? phase1HealRate / defenderAS : 0;
+      const healPerS2 = defenderAS > 0 ? phase2HealRate / defenderAS : 0;
+      const netDmgPhase1 = hitsInDuration * rawDmgPerHit - phase1Time * healPerS1;
+      if (netDmgPhase1 < totalDefHP) {
+        const remainingHP = totalDefHP - netDmgPhase1;
+        const netDmgPerHitPhase2 = rawDmgPerHit - healPerS2 * attackSpeed;
+        if (netDmgPerHitPhase2 > 0) {
+          const remainingHits = Math.ceil(remainingHP / netDmgPerHitPhase2);
+          hitsToKill = hitsInDuration + remainingHits;
+          timeToKill = round(phase1Time + remainingHits * attackSpeed, 1);
+          dps = round(totalDefHP / timeToKill, 2);
+        }
+      }
+    }
+  }
+
   // Special case: attacker cannot attack units (e.g. ram)
   if (normalAttackData.cannotAttack) {
     return {
@@ -775,7 +826,8 @@ function computeMetrics(
   const isBleedUnit = attacker.classes.some(c => c.toLowerCase() === 'kipchak_archer');
   const isDaggerUnit = attacker.classes.some(c => c.toLowerCase() === 'lancaster_champion');
   const isStrikeUnit = attacker.chargeArmorType === 'none';
-  const chargeLabel = isStrikeUnit ? 'Strike' : isBleedUnit ? 'Bleed' : isDaggerUnit ? 'Dagger' : 'Charge';
+  const isFirstStrikeUnit = attacker.chargeArmorType === 'first-strike';
+  const chargeLabel = isFirstStrikeUnit ? 'First Strike' : isStrikeUnit ? 'Strike' : isBleedUnit ? 'Bleed' : isDaggerUnit ? 'Dagger' : 'Charge';
   const chargeBonusBurst = attacker.chargeBonusBurst ?? 1;
   const chargeBonusDisplay = chargeBonusBurst > 1
     ? `${Math.round(chargeBonus / chargeBonusBurst)}×${chargeBonusBurst}`
@@ -851,6 +903,30 @@ export function calculateEqualCostMultipliers(costA: number, costB: number): { m
   };
 }
 
+// Returns actual damage dealt by attacker to defender over a given duration,
+// modelling hits discretely: first hit (with charge bonus) then normal hits.
+// Secondary weapons are approximated as continuous DPS.
+function computeDamageInTime(attacker: CombatEntity, defender: CombatEntity, chargeBonus: number, duration: number): number {
+  const firstData = computeEffectiveDamage(attacker, defender, chargeBonus, true);
+  const normalData = computeEffectiveDamage(attacker, defender, 0, false);
+  const rawSpeed = normalData.weapon?.speed ?? 0;
+  const asDebuffFactor = 1 + (defender.opponentAttackSpeedDebuff ?? 0);
+  const attackSpeed = rawSpeed * asDebuffFactor;
+  if (attackSpeed <= 0) return 0;
+  const chargeWeapon = getChargeWeapon(attacker);
+  const hasChargeWeapon = !!chargeWeapon && (attacker.activeAbilities?.includes('charge-attack') ?? false);
+  const firstHitSpeed = (hasChargeWeapon ? (chargeWeapon!.speed || rawSpeed) : rawSpeed) * asDebuffFactor;
+  if (duration < firstHitSpeed) return 0;
+  const additionalHits = Math.floor((duration - firstHitSpeed) / attackSpeed);
+  let total = firstData.value + additionalHits * normalData.value;
+  for (const secWeapon of (attacker.secondaryWeapons ?? [])) {
+    if (!secWeapon.speed || secWeapon.speed <= 0) continue;
+    const secData = computeEffectiveDamage(attacker, defender, 0, false, secWeapon);
+    total += (secData.value / secWeapon.speed) * duration;
+  }
+  return total;
+}
+
 export function computeVersus(
   a: AoE4Unit | UnifiedVariation,
   b: AoE4Unit | UnifiedVariation,
@@ -899,10 +975,18 @@ export function computeVersus(
     }
   }
 
+  let winnerHpRemaining: number | undefined;
+  if (winner === "attacker" && metricsA.timeToKill !== null) {
+    winnerHpRemaining = Math.max(0, A.hitpoints - computeDamageInTime(B, A, chargeBonusB, metricsA.timeToKill));
+  } else if (winner === "defender" && metricsB.timeToKill !== null) {
+    winnerHpRemaining = Math.max(0, B.hitpoints - computeDamageInTime(A, B, chargeBonusA, metricsB.timeToKill));
+  }
+
   return {
     attacker: metricsA,
     defender: metricsB,
     winner,
+    winnerHpRemaining,
   };
 }
 

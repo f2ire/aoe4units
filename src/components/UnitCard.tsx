@@ -931,17 +931,15 @@ export const UnitCard = ({
                 {/* Error message removed - base stats always display */}
               </div>
 
-              {/* Additional information for the winner in At Equal Cost mode */}
-              {versusMetrics.isWinner && versusMetrics.multiplier && versusMetrics.multiplier > 1 && versusMetrics.winnerHpRemaining !== undefined && (
+              {/* Winner stats — shown in both 1v1 and At Equal Cost modes */}
+              {versusMetrics.isWinner && versusMetrics.winnerHpRemaining !== undefined && (
                 <div className="mt-3 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded text-xs space-y-1">
                   <div className="font-semibold text-yellow-700 dark:text-yellow-300">🏆 Winner Stats:</div>
                   {(() => {
-                    const totalHp = versusMetrics.multiplier * displayData.hitpoints;
-                    const totalUnits = versusMetrics.multiplier;
+                    const effectiveMultiplier = versusMetrics.multiplier && versusMetrics.multiplier > 1 ? versusMetrics.multiplier : 1;
+                    const totalHp = effectiveMultiplier * displayData.hitpoints;
                     const totalCost = versusMetrics.totalCost || 0;
                     const hpPercentage = totalHp > 0 ? ((versusMetrics.winnerHpRemaining / totalHp) * 100).toFixed(1) : '0';
-                    const unitsPercentage = totalUnits > 0 ? ((versusMetrics.winnerUnitsRemaining! / totalUnits) * 100).toFixed(1) : '0';
-                    const resourcePercentage = totalCost > 0 ? (((versusMetrics.resourceDifference || 0) / totalCost) * 100).toFixed(1) : '0';
 
                     return (
                       <>
@@ -949,14 +947,18 @@ export const UnitCard = ({
                           <span className="text-muted-foreground">HP Remaining:</span>
                           <span className="font-medium">{Math.round(versusMetrics.winnerHpRemaining)} ({hpPercentage}%)</span>
                         </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Units Remaining:</span>
-                          <span className="font-medium">{versusMetrics.winnerUnitsRemaining} ({unitsPercentage}%)</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Resource Saved:</span>
-                          <span className="font-medium text-green-600">{Math.round(versusMetrics.resourceDifference || 0)} ({resourcePercentage}%)</span>
-                        </div>
+                        {effectiveMultiplier > 1 && (
+                          <>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Units Remaining:</span>
+                              <span className="font-medium">{versusMetrics.winnerUnitsRemaining} ({((versusMetrics.winnerUnitsRemaining! / effectiveMultiplier) * 100).toFixed(1)}%)</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Resource Saved:</span>
+                              <span className="font-medium text-green-600">{Math.round(versusMetrics.resourceDifference || 0)} ({totalCost > 0 ? (((versusMetrics.resourceDifference || 0) / totalCost) * 100).toFixed(1) : '0'}%)</span>
+                            </div>
+                          </>
+                        )}
                       </>
                     );
                   })()}

@@ -301,6 +301,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
       }))
     })
   },
+
   {
     id: "ability-trample",
     reason: 'Trample is a charge-style ability — +12 bonus on first hit only (handled by getChargeBonus in Sandbox.tsx). Raw meleeAttack +12 zeroed in variations to avoid permanent buff. Speed boost +25% on variations (update.effects alone is ignored by getActiveAbilityVariations).',
@@ -1160,6 +1161,78 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         }]
       }))
     }),
+  },
+
+  //___________
+  //
+  // MALIAN
+  //
+  //___________
+
+
+  {
+    id: "ability-first-strike",
+    reason: "Charge-style ability — 3× base melee on first hit only for musofadi-warrior (getChargeBonus in Sandbox.tsx). Raw multiply-2 effects replaced by zero-change placeholder to keep selector visibility without permanent buff. Active set to manual.",
+    after: (ability: Ability) => ({
+      ...ability,
+      active: "manual",
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        active: "manual",
+        effects: [
+          {
+            property: 'meleeAttack',
+            select: { id: ['musofadi-warrior', 'musofadi-gunner'] },
+            effect: 'change',
+            value: 0,
+            type: 'ability',
+          }
+        ]
+      }))
+    })
+  },
+
+  {
+    id: "ability-activate-stealth",
+    reason: 'Useless for this app.',
+    after: (ability) => ({ ...ability, hidden: true })
+  },
+
+  {
+    id: "ability-military-festival",
+    reason: 'Useless for this app.',
+    after: (ability) => ({ ...ability, hidden: true })
+  },
+
+  {
+    id: "ability-siege-festival",
+    reason: "First effect select was wrong (melee/cavalry/villager). Fix to target siege_range class.",
+    after: (ability) => ({
+      ...ability,
+      variations: ability.variations.map(v => ({
+        ...v,
+        effects: v.effects.map((e, i) =>
+          i === 0
+            ? { ...e, select: { class: [['siege_range']] } }
+            : e
+        ),
+      })),
+    }),
+  },
+
+  {
+    id: "ability-local-knowledge",
+    reason: "Available for Byzantines after building Foreign Engineering Company",
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['musofadi-warrior'],
+    uiTooltip: 'Available only with Foreign Engineering Company.',
+    after: (ability) => ({ ...ability, civs: [...ability.civs, 'by'], variations: ability.variations.map(v => ({ ...v, civs: [...v.civs, 'by'] })) }),
+  },
+
+  {
+    id: 'ability-coastal-navigation',
+    reason: 'Set to manual so the ability can be toggled in the selector.',
+    after: (ability) => ({ ...ability, variations: ability.variations.map(v => ({ ...v, active: 'manual' })) }),
   },
 
 ];
@@ -2557,6 +2630,142 @@ function createUnwaveringFocus(): Ability {
   } as Ability;
 }
 
+//_____________________
+//
+// MALIAN
+//
+//_____________________
+
+function createFarimaLeadershipAbility(): Ability {
+  return {
+    id: 'ability-farima-leadership',
+    name: 'Farima Leadership',
+    type: 'ability',
+    civs: ['ma'],
+    displayClasses: [],
+    classes: [],
+    minAge: 4,
+    active: 'manual',
+    icon: 'https://data.aoe4world.com/images/technologies/farima-leadership-4.png',
+    description: 'Sofa increase the movement speed of nearby infantry by +15%.',
+    unique: true,
+    effects: [
+      {
+        property: 'moveSpeed',
+        select: { class: [['infantry']] },
+        effect: 'multiply',
+        value: 1.15,
+        type: 'ability',
+      }
+    ],
+    variations: [
+      {
+        id: 'ability-farima-leadership-4',
+        baseId: 'ability-farima-leadership',
+        type: 'ability',
+        name: 'Farima Leadership',
+        pbgid: 0,
+        attribName: '',
+        age: 4,
+        civs: ['ma'],
+        description: 'Sofa increase the movement speed of nearby infantry by +15%.',
+        classes: [],
+        displayClasses: [],
+        unique: true,
+        costs: { food: 250, wood: 0, stone: 0, gold: 500, vizier: 0, oliveoil: 0, total: 750, popcap: 0, time: 60 },
+        producedBy: ['stable'],
+        effects: [],
+      }
+    ],
+    shared: {}
+  } as Ability;
+}
+
+function createLocalKnowledgeAbility(): Ability {
+  return {
+    id: 'ability-local-knowledge',
+    name: 'Local Knowledge',
+    type: 'ability',
+    civs: ['ma'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    active: 'manual',
+    icon: 'https://data.aoe4world.com/images/technologies/local-knowledge-2.png',
+    description: 'Musofadi Warriors and Musofadi Gunners gain +5 healing per attack for 5 seconds after coming out of stealth.',
+    unique: false,
+    effects: [
+      {
+        property: 'healingRate',
+        select: { id: ['musofadi-warrior', 'musofadi-gunner'] },
+        effect: 'change',
+        value: 5,
+        type: 'ability',
+        duration: 5,
+      }
+    ],
+    variations: [
+      {
+        id: 'ability-local-knowledge-2',
+        baseId: 'ability-local-knowledge',
+        type: 'ability',
+        name: 'Local Knowledge',
+        pbgid: 0,
+        attribName: '',
+        age: 2,
+        civs: ['ma'],
+        description: 'Musofadi Warriors and Musofadi Gunners gain +5 healing per attack for 5 seconds after coming out of stealth.',
+        classes: [],
+        displayClasses: [],
+        unique: false,
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        producedBy: [],
+        effects: [],
+      }
+    ],
+    shared: {}
+  } as Ability;
+}
+
+function createJavelinThrow(): Ability {
+  return {
+    id: 'javelin-throw',
+    name: 'Javelin Throw',
+    type: 'ability',
+    civs: ['ma'],
+    displayClasses: [],
+    classes: [],
+    minAge: 1,
+    active: 'always',
+    icon: '/abilities/AoE4_JavelinThrow.png',
+    description: 'If the target enemy unit is further than 2.5 tiles away, the Donso will throw a javelin at it and then immediately move in to engage in melee mode. The ability has a 15 second cooldown. To throw another javelin, the Donso must then move out of its minimum range again.',
+    unique: false,
+    effects: [{
+      property: 'unknown',
+      select: { id: ['donso'] },
+      effect: 'change',
+      value: 0,
+      type: 'ability',
+    }],
+    variations: [{
+      id: 'javelin-throw-1',
+      baseId: 'javelin-throw',
+      type: 'ability',
+      name: 'Javelin Throw',
+      pbgid: 999301,
+      attribName: 'ability_javelin_throw',
+      age: 1,
+      civs: ['ma'],
+      description: 'If the target enemy unit is further than 2.5 tiles away, the Donso will throw a javelin at it and then immediately move in to engage in melee mode. The ability has a 15 second cooldown. To throw another javelin, the Donso must then move out of its minimum range again.',
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
 export function applyAbilityPatches(abilities: Ability[]): Ability[] {
   // Add the created synthetic abilities
   const chargeAttackAbility = createChargeAttackAbility();
@@ -2575,6 +2784,7 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createKharashAura(),
     createLordOfLancasterInspiration(),
     createDaggerThrow(),
+    createJavelinThrow(),
     createHouseUnified(),
     createBuddhistConversion(),
     createNehan(),
@@ -2596,6 +2806,8 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createRiddariThrownAxes(),
     createProlongedSiege(),
     createCheirosiphonGarrison(),
+    createLocalKnowledgeAbility(),
+    createFarimaLeadershipAbility(),
   ];
 
   return abilitiesWithCharge.map(ability => {

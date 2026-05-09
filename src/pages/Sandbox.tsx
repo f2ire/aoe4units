@@ -93,6 +93,18 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
   // Special ability used like charge 
   // ________________________________
 
+  if (activeAbilities.has('ability-first-strike') && baseId === 'musofadi-warrior') {
+    const base = modifiedMeleeAttack || (age >= 4 ? 12 : age >= 3 ? 9 : 8);
+    return base * 2;
+  }
+
+
+  if (activeAbilities.has('ability-first-strike') && baseId === 'musofadi-gunner') {
+    const base = modifiedMeleeAttack || 41;
+    return base;
+  }
+
+
   if (activeAbilities.has('ability-trample') && baseId === 'cataphract') return 12;
   if (baseId === 'kipchak-archer') return 12 + (activeTechnologies.has('incendiary-arrows') ? 7.2 : 0);
 
@@ -103,6 +115,12 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
     const daggerBase = (age >= 4 ? 22 : 16) + (hasDrills ? 2 : 0) + castleBonus + rangedTechBonus;
     const burstCount = hasDrills ? 2 : 1;
     return daggerBase * burstCount;
+  }
+
+  if (activeAbilities.has('javelin-throw') && baseId === 'donso') {
+    const rangedTechBonus = modifiedRangedAttack ?? 0;
+    const javelinBase = age >= 4 ? 10 : age === 3 ? 8 : age === 2 ? 7 : 5;
+    return javelinBase + rangedTechBonus;
   }
   // ________________________________
   //
@@ -211,13 +229,8 @@ const Sandbox = () => {
   const [isVersus, setIsVersus] = useState<boolean>(false);
   const [atEqualCost, setAtEqualCost] = useState<boolean>(false);
   const [allowKiting, setAllowKiting] = useState<boolean>(false);
-  const [showDurationEffect, setShowDurationEffect] = useState<boolean>(false);
   const [startDistancePreset, setStartDistancePreset] = useState<string>("medium");
   const [customDistance, setCustomDistance] = useState<number>(5);
-  const startDistance = startDistancePreset === "melee" ? 0
-    : startDistancePreset === "medium" ? 5
-      : startDistancePreset === "long" ? 9
-        : Math.max(0, Math.min(30, customDistance));
 
   const civ1 = useUnitSlot();
   const civ2 = useUnitSlot();
@@ -273,6 +286,13 @@ const Sandbox = () => {
     lockedTechnologies: lockedTechnologies2,
     secondaryWeapons: secondaryWeapons2,
   } = civ2;
+
+  const maxRangeDistance = Math.max(modifiedStats1.maxRange || 0, modifiedStats2.maxRange || 0);
+  const startDistance = startDistancePreset === "melee" ? 0
+    : startDistancePreset === "medium" ? 5
+      : startDistancePreset === "long" ? 9
+        : startDistancePreset === "max" ? maxRangeDistance
+          : Math.max(0, Math.min(30, customDistance));
 
   // Filter bonusDamage entries by weapon type — prevents ranged bonuses (e.g. Howdahs) from
   // applying to melee weapons (e.g. Tusks) and vice-versa.
@@ -332,8 +352,13 @@ const Sandbox = () => {
       firstHitBlocked: activeAbilities1.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(variation1, activeTechnologies1),
       chargeArmorType: variation1.baseId === 'earls-guard' ? 'ranged' as const :
-        (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(variation1.baseId) && (abilityCounters1?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
-          (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(variation1.baseId) && (abilityCounters1?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const : undefined,
+        (variation1.baseId === 'donso' && activeAbilities1.has('javelin-throw')) ? 'ranged' as const :
+          (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(variation1.baseId) && (abilityCounters1?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
+            (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(variation1.baseId) && (abilityCounters1?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const :
+              (['musofadi-warrior', 'musofadi-gunner'].includes(variation1.baseId) && activeAbilities1.has('ability-first-strike')) ? 'first-strike' as const : undefined,
+      chargeModifiers: (variation1.baseId === 'donso' && activeAbilities1.has('javelin-throw'))
+        ? [{ target: { class: [['cavalry']] }, value: selectedAge1 >= 4 ? 10 : selectedAge1 === 3 ? 8 : selectedAge1 === 2 ? 7 : 5 }]
+        : undefined,
       secondaryWeapons: (() => {
         const primaryWeapon1 = getPrimaryWeapon(variation1);
         const primaryBaseDamage = primaryWeapon1?.damage || 0;
@@ -410,8 +435,13 @@ const Sandbox = () => {
       firstHitBlocked: activeAbilities2.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(variation2, activeTechnologies2),
       chargeArmorType: variation2.baseId === 'earls-guard' ? 'ranged' as const :
-        (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(variation2.baseId) && (abilityCounters2?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
-          (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(variation2.baseId) && (abilityCounters2?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const : undefined,
+        (variation2.baseId === 'donso' && activeAbilities2.has('javelin-throw')) ? 'ranged' as const :
+          (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(variation2.baseId) && (abilityCounters2?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
+            (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(variation2.baseId) && (abilityCounters2?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const :
+              (['musofadi-warrior', 'musofadi-gunner'].includes(variation2.baseId) && activeAbilities2.has('ability-first-strike')) ? 'first-strike' as const : undefined,
+      chargeModifiers: (variation2.baseId === 'donso' && activeAbilities2.has('javelin-throw'))
+        ? [{ target: { class: [['cavalry']] }, value: selectedAge2 >= 4 ? 10 : selectedAge2 === 3 ? 8 : selectedAge2 === 2 ? 7 : 5 }]
+        : undefined,
       secondaryWeapons: (() => {
         const primaryWeapon2 = getPrimaryWeapon(variation2);
         const primaryBaseDamage = primaryWeapon2?.damage || 0;
@@ -485,8 +515,13 @@ const Sandbox = () => {
       firstHitBlocked: activeAbilities1.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(unit1, activeTechnologies1),
       chargeArmorType: unit1.id === 'earls-guard' ? 'ranged' as const :
-        (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(unit1.id) && (abilityCounters1?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
-          (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(unit1.id) && (abilityCounters1?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const : undefined,
+        (unit1.id === 'donso' && activeAbilities1.has('javelin-throw')) ? 'ranged' as const :
+          (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(unit1.id) && (abilityCounters1?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
+            (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(unit1.id) && (abilityCounters1?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const :
+              (['musofadi-warrior', 'musofadi-gunner'].includes(unit1.id) && activeAbilities1.has('ability-first-strike')) ? 'first-strike' as const : undefined,
+      chargeModifiers: (unit1.id === 'donso' && activeAbilities1.has('javelin-throw'))
+        ? [{ target: { class: [['cavalry']] }, value: selectedAge1 >= 4 ? 10 : selectedAge1 === 3 ? 8 : selectedAge1 === 2 ? 7 : 5 }]
+        : undefined,
       secondaryWeapons: (() => {
         const primaryWeaponU1 = getPrimaryWeapon(unit1);
         const primaryBaseDamage = primaryWeaponU1?.damage || 0;
@@ -556,8 +591,13 @@ const Sandbox = () => {
       firstHitBlocked: activeAbilities2.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(unit2, activeTechnologies2),
       chargeArmorType: unit2.id === 'earls-guard' ? 'ranged' as const :
-        (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(unit2.id) && (abilityCounters2?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
-          (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(unit2.id) && (abilityCounters2?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const : undefined,
+        (unit2.id === 'donso' && activeAbilities2.has('javelin-throw')) ? 'ranged' as const :
+          (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(unit2.id) && (abilityCounters2?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
+            (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(unit2.id) && (abilityCounters2?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const :
+              (['musofadi-warrior', 'musofadi-gunner'].includes(unit2.id) && activeAbilities2.has('ability-first-strike')) ? 'first-strike' as const : undefined,
+      chargeModifiers: (unit2.id === 'donso' && activeAbilities2.has('javelin-throw'))
+        ? [{ target: { class: [['cavalry']] }, value: selectedAge2 >= 4 ? 10 : selectedAge2 === 3 ? 8 : selectedAge2 === 2 ? 7 : 5 }]
+        : undefined,
       secondaryWeapons: (() => {
         const primaryWeaponU2 = getPrimaryWeapon(unit2);
         const primaryBaseDamage = primaryWeaponU2?.damage || 0;
@@ -585,8 +625,8 @@ const Sandbox = () => {
   })() : undefined;
 
   // noTimer variations: same structure as originals but with duration-tagged ability effects excluded.
-  // Only built when showDurationEffect is ON and a timed ability is active on that side.
-  const modifiedVariation1NoTimer = (showDurationEffect && timedDuration1 && modifiedVariation1 && variation1) ? (() => {
+  // Built whenever a timed ability is active on that side.
+  const modifiedVariation1NoTimer = (timedDuration1 && modifiedVariation1 && variation1) ? (() => {
     const s = modifiedStats1NoTimer;
     const debuffMult = unit2 && activeAbilities2.size > 0 ? getVersusDebuffMultiplier(variation1.classes || [], Array.from(activeAbilities2)) : 1.0;
     return {
@@ -615,7 +655,7 @@ const Sandbox = () => {
     };
   })() : undefined;
 
-  const modifiedVariation2NoTimer = (showDurationEffect && timedDuration2 && modifiedVariation2 && variation2) ? (() => {
+  const modifiedVariation2NoTimer = (timedDuration2 && modifiedVariation2 && variation2) ? (() => {
     const s = modifiedStats2NoTimer;
     const debuffMult = unit1 && activeAbilities1.size > 0 ? getVersusDebuffMultiplier(variation2.classes || [], Array.from(activeAbilities1)) : 1.0;
     return {
@@ -644,7 +684,7 @@ const Sandbox = () => {
     };
   })() : undefined;
 
-  const modifiedUnit1NoTimer = (showDurationEffect && timedDuration1 && unit1 && !variation1) ? (() => {
+  const modifiedUnit1NoTimer = (timedDuration1 && unit1 && !variation1) ? (() => {
     const s = modifiedStats1NoTimer;
     const debuffMult = unit2 && activeAbilities2.size > 0 ? getVersusDebuffMultiplier(unit1.classes || [], Array.from(activeAbilities2)) : 1.0;
     return {
@@ -673,7 +713,7 @@ const Sandbox = () => {
     };
   })() : undefined;
 
-  const modifiedUnit2NoTimer = (showDurationEffect && timedDuration2 && unit2 && !variation2) ? (() => {
+  const modifiedUnit2NoTimer = (timedDuration2 && unit2 && !variation2) ? (() => {
     const s = modifiedStats2NoTimer;
     const debuffMult = unit1 && activeAbilities1.size > 0 ? getVersusDebuffMultiplier(unit2.classes || [], Array.from(activeAbilities1)) : 1.0;
     return {
@@ -811,8 +851,8 @@ const Sandbox = () => {
 
   // Charge row — only pushed if at least one side has it
   if (hasChargeOnly1 || hasChargeOnly2) {
-    const chargeLabel1 = baseId1 === 'kipchak-archer' ? 'Bleed' : baseId1 === 'earls-guard' ? 'Dagger' : 'Charge';
-    const chargeLabel2 = baseId2 === 'kipchak-archer' ? 'Bleed' : baseId2 === 'earls-guard' ? 'Dagger' : 'Charge';
+    const chargeLabel1 = baseId1 === 'kipchak-archer' ? 'Bleed' : baseId1 === 'earls-guard' ? 'Dagger' : baseId1 === 'donso' ? 'Javelin' : ['musofadi-warrior', 'musofadi-gunner'].includes(baseId1) ? 'First Strike' : 'Charge';
+    const chargeLabel2 = baseId2 === 'kipchak-archer' ? 'Bleed' : baseId2 === 'earls-guard' ? 'Dagger' : baseId2 === 'donso' ? 'Javelin' : ['musofadi-warrior', 'musofadi-gunner'].includes(baseId2) ? 'First Strike' : 'Charge';
 
     alignedBonuses1.push(hasChargeOnly1
       ? { isChargeBonus: true, value: chargeOnly1, chargeBonusLabel: chargeLabel1, chargeBonusBurst: getChargeBonusBurst(data1, activeTechnologies1) }
@@ -970,42 +1010,50 @@ const Sandbox = () => {
                   </label>
                 </div>
                 {allowKiting && (
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card">
-                    <label className="text-sm font-medium">Start Distance:</label>
-                    <select
-                      value={startDistancePreset}
-                      onChange={(e) => setStartDistancePreset(e.target.value)}
-                      className="text-sm bg-transparent border-none outline-none cursor-pointer"
-                    >
-                      <option value="melee">Melee (0)</option>
-                      <option value="medium">Medium (5)</option>
-                      <option value="long">Long (9)</option>
-                      <option value="custom">Custom</option>
-                    </select>
+                  <div className="inline-flex items-center rounded-md border border-border overflow-hidden bg-card">
+                    <span className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-r border-border">
+                      Distance
+                    </span>
+                    {([
+                      { value: "max", label: "Max", desc: maxRangeDistance > 0 ? String(maxRangeDistance) : null },
+                      { value: "medium", label: "Medium", desc: "5" },
+                      { value: "long", label: "Long", desc: "9" },
+                      { value: "custom", label: "Custom", desc: null },
+                    ] as { value: string; label: string; desc: string | null }[]).map((opt, i) => (
+                      <React.Fragment key={opt.value}>
+                        {i > 0 && <div className="w-px bg-border self-stretch" />}
+                        <button
+                          type="button"
+                          onClick={() => setStartDistancePreset(opt.value)}
+                          className={`px-3 py-2 text-sm font-medium transition-colors ${startDistancePreset === opt.value
+                            ? "bg-primary text-background"
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                            }`}
+                        >
+                          {opt.label}
+                          {opt.desc && (
+                            <span className={`ml-1 text-xs ${startDistancePreset === opt.value ? "opacity-75" : "opacity-50"}`}>
+                              ({opt.desc})
+                            </span>
+                          )}
+                        </button>
+                      </React.Fragment>
+                    ))}
                     {startDistancePreset === "custom" && (
-                      <input
-                        type="number"
-                        min={0}
-                        max={30}
-                        value={customDistance}
-                        onChange={(e) => setCustomDistance(Number(e.target.value))}
-                        className="w-16 text-sm bg-transparent border border-border rounded px-1 outline-none"
-                      />
+                      <>
+                        <div className="w-px bg-border self-stretch" />
+                        <input
+                          type="number"
+                          min={0}
+                          max={30}
+                          value={customDistance}
+                          onChange={(e) => setCustomDistance(Number(e.target.value))}
+                          className="w-14 text-sm bg-transparent px-2 py-2 outline-none text-center"
+                        />
+                      </>
                     )}
                   </div>
                 )}
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card">
-                  <input
-                    type="checkbox"
-                    id="showDurationEffect"
-                    checked={showDurationEffect}
-                    onChange={(e) => setShowDurationEffect(e.target.checked)}
-                    className="w-4 h-4 rounded border-border"
-                  />
-                  <label htmlFor="showDurationEffect" className="text-sm font-medium cursor-pointer">
-                    ⏱ Duration
-                  </label>
-                </div>
               </div>
             )}
           </div>
@@ -1018,36 +1066,19 @@ const Sandbox = () => {
             <Select value={selectedCiv1} onValueChange={setSelectedCiv1}>
               <SelectTrigger className="bg-secondary border-border h-14">
                 <SelectValue>
-                  {selectedCiv1 === "all" ? (
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 flex items-center justify-center bg-muted rounded">
-                        <span className="text-xl">?</span>
-                      </div>
-                      <span className="font-medium">All Civilizations</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={CIVILIZATIONS.find(c => c.abbr === selectedCiv1)?.flagPath}
-                        alt=""
-                        className="w-8 h-8 object-contain"
-                      />
-                      <span className="font-medium">
-                        {CIVILIZATIONS.find(c => c.abbr === selectedCiv1)?.name}
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={CIVILIZATIONS.find(c => c.abbr === selectedCiv1)?.flagPath}
+                      alt=""
+                      className="w-8 h-8 object-contain"
+                    />
+                    <span className="font-medium">
+                      {CIVILIZATIONS.find(c => c.abbr === selectedCiv1)?.name}
+                    </span>
+                  </div>
                 </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-popover border-border max-h-[400px]">
-                <SelectItem value="all" className="data-[state=checked]:font-bold py-3 group">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 flex items-center justify-center bg-muted rounded">
-                      <span className="text-xl text-white group-hover:text-black transition-colors">?</span>
-                    </div>
-                    <span className="font-medium text-white group-hover:text-black transition-colors">All Civilizations</span>
-                  </div>
-                </SelectItem>
                 {CIVILIZATIONS.map((civ) => (
                   <SelectItem key={civ.abbr} value={civ.abbr} className="data-[state=checked]:font-bold py-3 group">
                     <div className="flex items-center gap-3">
@@ -1163,36 +1194,19 @@ const Sandbox = () => {
             <Select value={selectedCiv2} onValueChange={setSelectedCiv2}>
               <SelectTrigger className="bg-secondary border-border h-14">
                 <SelectValue>
-                  {selectedCiv2 === "all" ? (
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 flex items-center justify-center bg-muted rounded">
-                        <span className="text-xl">?</span>
-                      </div>
-                      <span className="font-medium">All Civilizations</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={CIVILIZATIONS.find(c => c.abbr === selectedCiv2)?.flagPath}
-                        alt=""
-                        className="w-8 h-8 object-contain"
-                      />
-                      <span className="font-medium">
-                        {CIVILIZATIONS.find(c => c.abbr === selectedCiv2)?.name}
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={CIVILIZATIONS.find(c => c.abbr === selectedCiv2)?.flagPath}
+                      alt=""
+                      className="w-8 h-8 object-contain"
+                    />
+                    <span className="font-medium">
+                      {CIVILIZATIONS.find(c => c.abbr === selectedCiv2)?.name}
+                    </span>
+                  </div>
                 </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-popover border-border max-h-[400px]">
-                <SelectItem value="all" className="data-[state=checked]:font-bold py-3 group">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 flex items-center justify-center bg-muted rounded">
-                      <span className="text-xl text-white group-hover:text-black transition-colors">?</span>
-                    </div>
-                    <span className="font-medium text-white group-hover:text-black transition-colors">All Civilizations</span>
-                  </div>
-                </SelectItem>
                 {CIVILIZATIONS.map((civ) => (
                   <SelectItem key={civ.abbr} value={civ.abbr} className="data-[state=checked]:font-bold py-3 group">
                     <div className="flex items-center gap-3">
@@ -1468,8 +1482,8 @@ const Sandbox = () => {
               const charge1 = getChargeBonus(data1, activeAbilities1, selectedAge1, activeTechnologies1, modifiedStats1.chargeMultiplier, modifiedStats1.meleeAttack, abilityCounters1, modifiedStats1.rangedAttack, modifiedStats1.chargeChange);
               const charge2 = getChargeBonus(data2, activeAbilities2, selectedAge2, activeTechnologies2, modifiedStats2.chargeMultiplier, modifiedStats2.meleeAttack, abilityCounters2, modifiedStats2.rangedAttack, modifiedStats2.chargeChange);
 
-              const noTimerData1 = showDurationEffect ? (modifiedVariation1NoTimer || modifiedUnit1NoTimer) : undefined;
-              const noTimerData2 = showDurationEffect ? (modifiedVariation2NoTimer || modifiedUnit2NoTimer) : undefined;
+              const noTimerData1 = modifiedVariation1NoTimer || modifiedUnit1NoTimer;
+              const noTimerData2 = modifiedVariation2NoTimer || modifiedUnit2NoTimer;
 
               if (atEqualCost) {
                 const result = computeVersusAtEqualCost(
@@ -1496,13 +1510,13 @@ const Sandbox = () => {
                   startDistance,
                   noTimerData1,
                   noTimerData2,
-                  showDurationEffect ? timedDuration1 : undefined,
-                  showDurationEffect ? timedDuration2 : undefined,
+                  timedDuration1,
+                  timedDuration2,
                 );
               }
 
-              // For delta display: also compute without duration correction when toggle is ON
-              const hasActiveDuration = showDurationEffect && !atEqualCost && (!!timedDuration1 || !!timedDuration2);
+              // For delta display: also compute without duration correction when a timed ability is active
+              const hasActiveDuration = !atEqualCost && (!!timedDuration1 || !!timedDuration2);
               const versusDataOriginal = hasActiveDuration ? computeVersus(
                 modifiedVariation1 || modifiedUnit1!,
                 modifiedVariation2 || modifiedUnit2!,
@@ -1644,7 +1658,7 @@ const Sandbox = () => {
                           secondaryWeapons={modifiedVariation1?.secondaryWeapons ?? secondaryWeapons1}
                           opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
                           opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
-                      opponentVersusDebuff={modifiedStats2.versusOpponentDamageDebuff ?? 1}
+                          opponentVersusDebuff={modifiedStats2.versusOpponentDamageDebuff ?? 1}
                         />
                       </div>
                     </div>
@@ -1667,7 +1681,7 @@ const Sandbox = () => {
                           secondaryWeapons={modifiedVariation2?.secondaryWeapons ?? secondaryWeapons2}
                           opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
                           opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
-                      opponentVersusDebuff={modifiedStats1.versusOpponentDamageDebuff ?? 1}
+                          opponentVersusDebuff={modifiedStats1.versusOpponentDamageDebuff ?? 1}
                         />
                       </div>
                       <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
@@ -1705,14 +1719,14 @@ const Sandbox = () => {
                   </motion.div>
                   {versusDataOriginal && (
                     <div className="col-span-2 flex flex-wrap justify-center gap-4 mt-2 text-xs text-muted-foreground">
-                      {timedDuration1 && versusDataOriginal.attacker.timeToKill !== versusData.attacker.timeToKill && (
+                      {versusDataOriginal.attacker.timeToKill !== versusData.attacker.timeToKill && (
                         <span className="text-orange-400">
-                          Civ 1 TTK: {versusDataOriginal.attacker.timeToKill}s → {versusData.attacker.timeToKill}s ({timedDuration1}s ability)
+                          Civ 1 TTK: {versusDataOriginal.attacker.timeToKill}s → {versusData.attacker.timeToKill}s ({timedDuration1 ?? timedDuration2}s ability)
                         </span>
                       )}
-                      {timedDuration2 && versusDataOriginal.defender.timeToKill !== versusData.defender.timeToKill && (
+                      {versusDataOriginal.defender.timeToKill !== versusData.defender.timeToKill && (
                         <span className="text-orange-400">
-                          Civ 2 TTK: {versusDataOriginal.defender.timeToKill}s → {versusData.defender.timeToKill}s ({timedDuration2}s ability)
+                          Civ 2 TTK: {versusDataOriginal.defender.timeToKill}s → {versusData.defender.timeToKill}s ({timedDuration2 ?? timedDuration1}s ability)
                         </span>
                       )}
                       {!timedDuration1 && !timedDuration2 && (
