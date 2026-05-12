@@ -191,7 +191,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
       effects: [
         {
           property: 'maxRange',
-          select: { id: ['longbowman', 'wynguard-ranger', 'archer', 'gilded-archer', 'yumi-ashigaru', 'yumi-bannerman'] },
+          select: { id: ['longbowman', 'wynguard-ranger', 'archer', 'gilded-archer', 'yumi-ashigaru', 'yumi-bannerman', 'khan'] },
           effect: 'change',
           value: 1.5,
           type: 'passive'
@@ -585,6 +585,35 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   // CHINESE
   //
   //___________
+
+  {
+    id: 'additional-barrels',
+    reason: 'Available for Mongols. Extended to khaganate-nest-of-bees.',
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'mo'],
+      effects: (tech.effects || []).map(e =>
+        e.select?.id ? { ...e, select: { ...e.select, id: [...e.select.id, 'khaganate-nest-of-bees'] } } : e
+      ),
+      variations: tech.variations.map(v => ({ ...v, civs: [...(v.civs || []), 'mo'] }))
+    }),
+  },
+
+  {
+    id: 'battle-hardened',
+    reason: 'Available for Mongols (palace-guard accessible via Foreign Engineering Company). Extended to khaganate-palace-guard.',
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'mo'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), 'mo'],
+        effects: v.effects.map(e =>
+          e.select?.id ? { ...e, select: { ...e.select, id: [...e.select.id, 'khaganate-palace-guard'] } } : e
+        ),
+      }))
+    }),
+  },
 
   {
     id: 'thunderclap-bombs',
@@ -1571,232 +1600,6 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     })
   },
 
-  //___________
-  //
-  // MALIANS
-  //
-  //___________
-
-  {
-    id: "precision-training",
-    reason: "Available for Byzantines after building Foreign Engineering Company.",
-    after: (tech) => ({
-      ...tech,
-      civs: [...tech.civs, 'by'],
-      variations: tech.variations.map(v => ({
-        ...v,
-        civs: [...(v.civs || []), "by"]
-      }))
-    }),
-    foreignEngineering: true,
-    foreignEngineeringUnits: ['javelin-thrower'],
-    uiTooltip: "Available only with Foreign Engineering Company",
-  },
-
-  {
-    id: "local-knowledge",
-    reason: "Converted to ability-local-knowledge (duration-based). Tech hidden.",
-    after: (tech) => ({
-      ...tech,
-      effects: [],
-      variations: tech.variations.map(v => ({ ...v, effects: [] }))
-    }),
-    excludedUnits: ['musofadi-warrior', 'musofadi-gunner'],
-  },
-
-
-
-  //___________
-  //
-  // MONGOLS
-  //
-  //___________
-
-  {
-    id: "biology-improved",
-    reason: "Tier 2 of the Biology line. When selected, the tier system also applies Biology (tier 1) first. Available for Byzantines after building Foreign Engineering Company.",
-    update: {
-      effects: [
-        {
-          "property": "hitpoints",
-          "select": {
-            "class": [["cavalry"]]
-          },
-          "effect": "multiply",
-          "value": 1.1,
-          "type": "passive"
-        },
-      ],
-      displayClasses: ['Biology Technology 2/2']
-    },
-    after: (tech) => ({
-      ...tech,
-      civs: [...tech.civs, 'by'],
-      variations: tech.variations.map(v => ({
-        ...v,
-        civs: [...(v.civs || []), "by"]
-      }))
-    }),
-    foreignEngineering: true,
-    foreignEngineeringUnits: ['keshik', 'mangudai'],
-    uiTooltip: "Available only with Foreign Engineering Company",
-  },
-  {
-    id: 'biology',
-    reason: 'Biology and Biology (Improved) form a tier line: selecting Improved automatically includes Biology effects first.',
-    update: { displayClasses: ['Biology Technology 1/2'] },
-  },
-
-  {
-    id: "steppe-lancers-improved",
-    reason: "Available for Byzantines after building Foreign Engineering Company.",
-    after: (tech) => ({
-      ...tech,
-      civs: [...tech.civs, 'by'],
-      variations: tech.variations.map(v => ({
-        ...v,
-        civs: [...(v.civs || []), "by"]
-      }))
-    }),
-    foreignEngineering: true,
-    foreignEngineeringUnits: ['keshik'],
-    uiTooltip: "Available only with Foreign Engineering Company",
-  },
-  {
-    id: "siha-bow-limbs-improved",
-    reason: "Tier 2 of the Siha Bow Limbs line. Available for Byzantines after building Foreign Engineering Company.",
-    update: {
-      displayClasses: ['Siha Bow Limbs Technology 2/2']
-    },
-    after: (tech) => ({
-      ...tech,
-      civs: [...tech.civs, 'by'],
-      variations: tech.variations.map(v => ({
-        ...v,
-        civs: [...(v.civs || []), "by"]
-      }))
-    }),
-    foreignEngineering: true,
-    foreignEngineeringUnits: ['keshik', 'mangudai'],
-    uiTooltip: "Available only with Foreign Engineering Company",
-  },
-  {
-    id: 'siha-bow-limbs',
-    reason: 'Tier 1 of the Siha Bow Limbs line',
-    update: { displayClasses: ['Siha Bow Limbs Technology 1/2'] },
-  },
-
-
-  //___________
-  //
-  // RUS
-  //
-  //___________
-
-  {
-    id: "mounted-training",
-    reason: 'Available for Byzantines.',
-    after: (tech) => ({
-      ...tech,
-      civs: [...tech.civs, 'by'],
-      variations: tech.variations.map(v => ({
-        ...v,
-        civs: [...(v.civs || []), "by"]
-      }))
-    }),
-    foreignEngineering: true,
-    foreignEngineeringUnits: ['horse-archer'],
-    uiTooltip: "Available only with Foreign Engineering Company",
-  },
-
-  {
-    id: "boyars-fortitude",
-    reason: 'Available for Byzantines.',
-    after: (tech) => ({
-      ...tech,
-      civs: [...tech.civs, 'by'],
-      variations: tech.variations.map(v => ({
-        ...v,
-        civs: [...(v.civs || []), "by"]
-      }))
-    }),
-    foreignEngineering: true,
-    foreignEngineeringUnits: ['horse-archer'],
-    uiTooltip: "Available only with Foreign Engineering Company",
-  },
-
-  {
-    id: "fervor",
-    reason: 'Make it null to able interaction with Saints Blessing ability.',
-    after: (tech) => ({
-      ...tech,
-      variations: tech.variations.map(v => ({
-        ...v, effects: [
-          { property: 'meleeAttack', select: { class: [["land", "military"]], excludeId: ['warrior-monk'] }, effect: 'multiply', value: 1, type: 'passive' },
-          { property: 'rangedAttack', select: { class: [["land", "military"]], excludeId: ['warrior-monk'] }, effect: 'multiply', value: 1, type: 'passive' },
-          { property: 'siegeAttack', select: { class: [["land", "military"]], excludeId: ['warrior-monk'] }, effect: 'multiply', value: 1, type: 'passive' }
-        ]
-      }))
-    }),
-  },
-
-  {
-    id: 'upgrade-miltia-3',
-    reason: 'No UI value, age up covered automatically.',
-    after: (tech) => ({
-      ...tech,
-      effects: [],
-      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
-    })
-  },
-
-  {
-    id: 'upgrade-militia-4',
-    reason: 'No UI value, age up covered automatically.',
-    after: (tech) => ({
-      ...tech,
-      effects: [],
-      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
-    })
-  },
-
-  {
-    id: "siege-crew-training",
-    reason: "Useless for UI",
-    after: (tech) => ({
-      ...tech,
-      effects: [],
-      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
-    })
-  },
-
-  {
-    id: "fine-tuned-guns",
-    reason: "Raw data uses multiply 0.8 and multiply 0.7 — corrected to multiply 1.2 (+20%) and change +50 vs infantry.",
-    after: (tech) => ({
-      ...tech,
-      variations: tech.variations.map((v: any) => ({
-        ...v,
-        effects: [
-          {
-            property: "siegeAttack",
-            select: { id: ["bombard"] },
-            effect: "multiply",
-            value: 1.2,
-            type: "passive"
-          },
-          {
-            property: "siegeAttack",
-            select: { id: ["bombard"] },
-            target: { class: [["infantry"]] },
-            effect: "change",
-            value: 50,
-            type: "bonus"
-          }
-        ]
-      }))
-    })
-  },
 
   //_____________________
   //
@@ -1971,6 +1774,341 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     injectWeapon: { unitId: 'hunting-canoe', weaponIndex: 0, damageMultiplier: 4 / 6, burstCount: 2 },
   },
 
+  {
+    id: "precision-training",
+    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['javelin-thrower'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  {
+    id: "local-knowledge",
+    reason: "Converted to ability-local-knowledge (duration-based). Tech hidden.",
+    after: (tech) => ({
+      ...tech,
+      effects: [],
+      variations: tech.variations.map(v => ({ ...v, effects: [] }))
+    }),
+    excludedUnits: ['musofadi-warrior', 'musofadi-gunner'],
+  },
+
+
+
+  //___________
+  //
+  // MONGOLS
+  //
+  //___________
+
+  {
+    id: "biology-improved",
+    reason: "Tier 2 of the Biology line. When selected, the tier system also applies Biology (tier 1) first. Available for Byzantines after building Foreign Engineering Company.",
+    update: {
+      effects: [
+        {
+          "property": "hitpoints",
+          "select": {
+            "class": [["cavalry"]]
+          },
+          "effect": "multiply",
+          "value": 1.1,
+          "type": "passive"
+        },
+      ],
+      displayClasses: ['Biology Technology 2/2']
+    },
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['keshik', 'mangudai'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+  {
+    id: 'biology',
+    reason: 'Biology and Biology (Improved) form a tier line: selecting Improved automatically includes Biology effects first.',
+    update: { displayClasses: ['Biology Technology 1/2'] },
+  },
+
+  {
+    id: "steppe-lancers-improved",
+    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"],
+        effects: v.effects.map(e => {
+          if (e.property === 'healingRate') return { ...e, value: 1 };
+          if (e.property === 'attackSpeed') return { ...e, value: 1 / 1.1 };
+          return e;
+        }),
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['keshik'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  {
+    id: "siha-bow-limbs-improved",
+    reason: "Tier 2 of the Siha Bow Limbs line. Available for Byzantines after building Foreign Engineering Company.",
+    update: {
+      displayClasses: ['Siha Bow Limbs Technology 2/2']
+    },
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['keshik', 'mangudai'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+  {
+    id: 'siha-bow-limbs',
+    reason: 'Tier 1 of the Siha Bow Limbs line',
+    update: { displayClasses: ['Siha Bow Limbs Technology 1/2'] },
+  },
+
+
+  {
+    id: "elite-army-tactics-improved",
+    reason: "Raw data uses 1.04 (+4%); correct value is 1.05 (+5%) for both HP and damage.",
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: v.effects.map(e => ({ ...e, value: 1.05 })),
+      })),
+    }),
+  },
+
+  {
+    id: "geometry-improved",
+    reason: "Raw JSON rangedAttack → siegeAttack (trebuchets are siege type). Missing siege bonus damage effects vs buildings/naval.",
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [
+          ...v.effects.map(e =>
+            e.property === 'rangedAttack' ? { ...e, property: 'siegeAttack', value: 1.1 } : e
+          ),
+          { property: 'siegeAttack', select: { id: ['huihui-pao', 'counterweight-trebuchet', 'traction-trebuchet'] }, effect: 'multiply', value: 1.1, type: 'bonus', target: { class: [['building']] } },
+          { property: 'siegeAttack', select: { id: ['huihui-pao', 'counterweight-trebuchet', 'traction-trebuchet'] }, effect: 'multiply', value: 1.1, type: 'bonus', target: { class: [['naval', 'unit']] } },
+        ],
+      }))
+    }),
+  },
+
+  {
+    id: "roller-shutter-triggers-improved",
+    reason: "Raw JSON attackSpeed value 0.72 is incorrect; correct value is 1/1.1. Missing hitpoints +10 effect.",
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [
+          ...v.effects.map(e =>
+            e.property === 'attackSpeed' ? { ...e, value: 0.9 } : e
+          ),
+          { property: 'hitpoints', select: { id: ['springald'] }, effect: 'change', value: 10, type: 'passive' },
+        ],
+      }))
+    }),
+  },
+  {
+    id: "lightweight-beams-improved",
+    reason: "Raw JSON value 1.08 is incorrect; correct value is 1/1.1 (+10% when paired with Lightweight Beams).",
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: v.effects.map(e =>
+          e.property === 'attackSpeed' ? { ...e, value: 1 / 1.1 } : e
+        ),
+      }))
+    }),
+  },
+  {
+    id: "greased-axles-improved",
+    reason: "Raw JSON value 1.15 is incorrect; correct value is 1.1 (+10% when paired with Greased Axles).",
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: v.effects.map(e =>
+          e.property === 'moveSpeed' ? { ...e, value: 1.1 } : e
+        ),
+      }))
+    }),
+  },
+  {
+    id: "siege-works-improved",
+    reason: "Raw JSON value 1.18 is incorrect; correct value is 1.1 (+10% when paired with Siege Works).",
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: v.effects.map(e =>
+          e.property === 'hitpoints' ? { ...e, value: 1.1 } : e
+        ),
+      }))
+    }),
+  },
+
+
+  //___________
+  //
+  // RUS
+  //
+  //___________
+
+  {
+    id: "knight-poleaxes",
+    reason: 'Available for Mongols. Extended to khaganate-knight.',
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'mo'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), 'mo'],
+        effects: v.effects.map(e =>
+          e.select?.id ? { ...e, select: { ...e.select, id: [...e.select.id, 'khaganate-knight'] } } : e
+        ),
+      }))
+    }),
+  },
+
+  {
+    id: "mounted-training",
+    reason: 'Available for Byzantines and Mongols. Extended to khaganate-horse-archer.',
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by', 'mo'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by", "mo"],
+        effects: v.effects.map(e =>
+          e.select?.id ? { ...e, select: { ...e.select, id: [...e.select.id, 'khaganate-horse-archer'] } } : e
+        ),
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['horse-archer'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  {
+    id: "boyars-fortitude",
+    reason: 'Available for Byzantines and Mongols. Extended to khaganate variants.',
+    after: (tech) => ({
+      ...tech,
+      civs: [...tech.civs, 'by', 'mo'],
+      variations: tech.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by", "mo"],
+        effects: v.effects.map(e =>
+          e.select?.id ? { ...e, select: { ...e.select, id: [...e.select.id, 'khaganate-horse-archer', 'khaganate-warrior-monk', 'khaganate-knight'] } } : e
+        ),
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['horse-archer'],
+    uiTooltip: "Available only with Foreign Engineering Company",
+  },
+
+  {
+    id: "fervor",
+    reason: 'Make it null to able interaction with Saints Blessing ability.',
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v, effects: [
+          { property: 'meleeAttack', select: { class: [["land", "military"]], excludeId: ['warrior-monk'] }, effect: 'multiply', value: 1, type: 'passive' },
+          { property: 'rangedAttack', select: { class: [["land", "military"]], excludeId: ['warrior-monk'] }, effect: 'multiply', value: 1, type: 'passive' },
+          { property: 'siegeAttack', select: { class: [["land", "military"]], excludeId: ['warrior-monk'] }, effect: 'multiply', value: 1, type: 'passive' }
+        ]
+      }))
+    }),
+  },
+
+  {
+    id: 'upgrade-miltia-3',
+    reason: 'No UI value, age up covered automatically.',
+    after: (tech) => ({
+      ...tech,
+      effects: [],
+      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
+    })
+  },
+
+  {
+    id: 'upgrade-militia-4',
+    reason: 'No UI value, age up covered automatically.',
+    after: (tech) => ({
+      ...tech,
+      effects: [],
+      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
+    })
+  },
+
+  {
+    id: "siege-crew-training",
+    reason: "Useless for UI",
+    after: (tech) => ({
+      ...tech,
+      effects: [],
+      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
+    })
+  },
+
+  {
+    id: "fine-tuned-guns",
+    reason: "Raw data uses multiply 0.8 and multiply 0.7 — corrected to multiply 1.2 (+20%) and change +50 vs infantry.",
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map((v: any) => ({
+        ...v,
+        effects: [
+          {
+            property: "siegeAttack",
+            select: { id: ["bombard"] },
+            effect: "multiply",
+            value: 1.2,
+            type: "passive"
+          },
+          {
+            property: "siegeAttack",
+            select: { id: ["bombard"] },
+            target: { class: [["infantry"]] },
+            effect: "change",
+            value: 50,
+            type: "bonus"
+          }
+        ]
+      }))
+    })
+  },
 
 ];
 

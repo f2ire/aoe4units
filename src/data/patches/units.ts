@@ -957,6 +957,18 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       };
     },
   },
+
+  {
+    id: 'khan',
+    reason: 'Khan costs 1 population in-game.',
+    after: (unit: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+      ...unit,
+      variations: unit.variations.map((v: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...v,
+        costs: { ...v.costs, popcap: 1 },
+      })),
+    }),
+  },
 ];
 //   after: (unit: unknown) => {
 //     const u = unit as Record<string, unknown>;

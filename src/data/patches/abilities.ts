@@ -2,6 +2,22 @@ import { TechnologyPatch, deepMerge } from "./types";
 import { Ability, AbilityVariation } from "../unified-abilities";
 import type { UnitStats } from "../unified-technologies";
 
+
+
+// Display row grouping for AbilitySelector.
+// Each entry reserves a dedicated row with a short label.
+// Abilities not listed here share the default "ABI:" row.
+// Order matters: rows render in array order, default row first.
+export const ABILITY_ROW_GROUPS: readonly { label: string; ids: readonly string[] }[] = [
+  { label: 'KHAN', ids: ['ability-khan-warcry-2', 'ability-khan-warcry-3', 'ability-khan-warcry-4', 'ability-maneuver-arrow', 'ability-attack-speed-arrow', 'ability-defense-arrow'] },
+  { label: 'CTR', ids: ['ability-house-unified', 'ability-lord-of-lancaster-inspiration'] },
+  { label: 'CONV', ids: ['ability-buddhist-conversion', 'ability-nehan'] },
+  { label: 'WPN', ids: ['ability-streltsy-berdysh', 'ability-streltsy-handcannon'] },
+  { label: 'AGE', ids: ['ability-high-armory-production-bonus', 'ability-abbey-of-the-trinity', 'ability-kurultai-aura', 'ability-tower-of-victory-aura'] },
+  { label: 'CHAR', ids: ['charge-attack', 'ability-royal-knight-charge-damage'] }
+];
+
+
 export interface TechAbilityInteraction {
   requiredTech: string;
   requiredAbility: string;
@@ -1063,12 +1079,6 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     }),
   },
 
-
-  //___________
-  //
-  // MONGOLS
-  //
-  //___________
   {
     id: "ability-battle-veteran",
     reason: 'Available for Byzantines and Golden Horde (keshik unit shared with Mongols).',
@@ -1105,17 +1115,17 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
 
   {
     id: "ability-gallop",
-    reason: 'Available for Byzantines.',
+    reason: 'Available for Byzantines and Mongols. Extended to khaganate-horse-archer.',
     after: (abilities) => ({
       ...abilities,
-      civs: [...abilities.civs, 'by'],
+      civs: [...abilities.civs, 'by', 'mo'],
       variations: abilities.variations.map(v => ({
         ...v,
-        civs: [...(v.civs || []), "by"],
+        civs: [...(v.civs || []), "by", "mo"],
         effects: [
           {
             property: 'moveSpeed',
-            select: { id: ['horse-archer'] },
+            select: { id: ['horse-archer', 'khaganate-horse-archer'] },
             effect: "change",
             value: 2,
             type: "ability",
@@ -1233,6 +1243,137 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     id: 'ability-coastal-navigation',
     reason: 'Set to manual so the ability can be toggled in the selector.',
     after: (ability) => ({ ...ability, variations: ability.variations.map(v => ({ ...v, active: 'manual' })) }),
+  },
+
+  //___________
+  //
+  // MONGOLS
+  //
+  //___________
+  {
+    id: 'ability-yam',
+    reason: 'active:always → manual so the ability can be toggled in the selector. select extended to include ship and monk.',
+    after: (ability) => ({
+      ...ability,
+      variations: ability.variations.map(v => ({
+        ...v,
+        active: 'manual' as const,
+        effects: v.effects.map(e => ({
+          ...e,
+          select: {
+            ...e.select,
+            class: [...(e.select?.class ?? []), ['ship'], ['monk']],
+          },
+        })),
+      })),
+    }),
+  },
+
+  {
+    id: "ability-kurultai-aura",
+    reason: "Raw variation has empty effects and active:always. Kurultai grants +1 HP/s and +20% damage (melee/ranged/siege/bonus) to nearby military units.",
+    after: (ability) => ({
+      ...ability,
+      variations: ability.variations.map(v => ({
+        ...v,
+        active: "manual" as const,
+        effects: [
+          { property: 'healingRatePerSecond', select: { class: [['military']], excludeId: ['fishing-boat'] }, effect: 'change', value: 1, type: 'passive' },
+          { property: 'meleeAttack', select: { class: [['military']], excludeId: ['fishing-boat'] }, effect: 'multiply', value: 1.2, type: 'passive' },
+          { property: 'rangedAttack', select: { class: [['military']], excludeId: ['fishing-boat'] }, effect: 'multiply', value: 1.2, type: 'passive' },
+          { property: 'siegeAttack', select: { class: [['military']], excludeId: ['fishing-boat'] }, effect: 'multiply', value: 1.2, type: 'passive' },
+          { property: 'bonusDamageMultiplier', select: { class: [['military']], excludeId: ['fishing-boat'] }, effect: 'multiply', value: 1.2, type: 'passive' },
+        ],
+      })),
+    }),
+  },
+
+  {
+    id: 'ability-yam-network-improved',
+    reason: 'Improved version applies to all military units except cavalry (cavalry gets the buff from ability-yam, not both).',
+    after: (ability) => ({
+      ...ability,
+      name: 'Yam Network',
+      variations: ability.variations.map(v => ({
+        ...v,
+        name: 'Yam Network',
+        unlockedBy: [],
+        active: 'manual' as const,
+        effects: v.effects.map(e => ({
+          ...e,
+          select: { class: [['infantry']] },
+          value: 1.15,
+        })),
+      })),
+    }),
+  },
+
+  {
+    id: 'ability-maneuver-arrow',
+    reason: 'Raw select targets specific classes — replaced with annihilation_condition to apply to all units.',
+    after: (ability) => ({
+      ...ability,
+      variations: ability.variations.map(v => ({
+        ...v,
+        effects: v.effects.map(e => ({
+          ...e,
+          select: { class: [['annihilation_condition']] },
+        })),
+      })),
+    }),
+  },
+
+  {
+    id: 'ability-defense-arrow',
+    reason: 'Raw select targets specific classes — replaced with annihilation_condition to apply to all units.',
+    after: (ability) => ({
+      ...ability,
+      variations: ability.variations.map(v => ({
+        ...v,
+        effects: v.effects.map(e => ({
+          ...e,
+          select: { class: [['annihilation_condition']] },
+        })),
+      })),
+    }),
+  },
+
+  {
+    id: 'ability-attack-speed-arrow',
+    reason: 'Per-unit AS corrections from in-game measurements (no uniform model). Average: +33.2% vs +50% announced.',
+    after: (ability) => {
+      const corrections = [
+        { id: 'archer', value: 1.148 },
+        { id: 'crossbowman', value: 1.117 },
+        { id: 'handcannoneer', value: 1.089 },
+        { id: 'mangudai', value: 1.211 },
+        { id: 'khan', value: 1.090 },
+        { id: 'khans-hunter', value: 1.090 },
+        { id: 'khaganate-horse-archer', value: 1.109 },
+        { id: 'baochuan', value: 1.057 },
+        { id: 'war-junk', value: 1.076 },
+        { id: 'light-junk', value: 1.124 },
+      ];
+      return {
+        ...ability,
+        variations: ability.variations.map(v => ({
+          ...v,
+          effects: [
+            ...v.effects.map(e =>
+              e.select?.class ? { ...e, select: { ...e.select, excludeId: ['battering-ram', 'fishing-boat'] } } : e
+            ),
+            ...corrections.map(c => ({
+              property: 'attackSpeed',
+              select: { id: [c.id] },
+              effect: 'multiply' as const,
+              value: c.value,
+              type: 'ability' as const,
+              duration: 5,
+            })),
+          ],
+        })),
+      };
+    },
   },
 
 ];
@@ -1653,7 +1794,7 @@ function createKhanWarcry(age: 2 | 3 | 4, multiplier: number): Ability {
     id: `ability-khan-warcry-${age}`,
     name: `Khan War Cry (+${pct}%)`,
     type: 'ability',
-    civs: ['mo', 'gol'],
+    civs: ['gol'],
     displayClasses: [],
     classes: [],
     minAge: age,
@@ -1669,7 +1810,7 @@ function createKhanWarcry(age: 2 | 3 | 4, multiplier: number): Ability {
       pbgid: 999100 + age,
       attribName: `ability_khan_warcry_${age}`,
       age,
-      civs: ['mo', 'gol'],
+      civs: ['gol'],
       description: `Khan War Cry: units gain +${pct}% attack.`,
       classes: [], displayClasses: [], unique: false,
       costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
@@ -2294,17 +2435,6 @@ function createAbbeyOfTheTrinityAbility(): Ability {
   } as Ability;
 }
 
-// Display row grouping for AbilitySelector.
-// Each entry reserves a dedicated row with a short label.
-// Abilities not listed here share the default "ABI:" row.
-// Order matters: rows render in array order, default row first.
-export const ABILITY_ROW_GROUPS: readonly { label: string; ids: readonly string[] }[] = [
-  { label: 'WC', ids: ['ability-khan-warcry-2', 'ability-khan-warcry-3', 'ability-khan-warcry-4'] },
-  { label: 'CTR', ids: ['ability-house-unified', 'ability-lord-of-lancaster-inspiration'] },
-  { label: 'CONV', ids: ['ability-buddhist-conversion', 'ability-nehan'] },
-  { label: 'WPN', ids: ['ability-streltsy-berdysh', 'ability-streltsy-handcannon'] },
-  { label: 'Age', ids: ['ability-high-armory-production-bonus', 'ability-abbey-of-the-trinity'] },
-];
 
 //_____________________
 //
@@ -2632,6 +2762,55 @@ function createUnwaveringFocus(): Ability {
 
 //_____________________
 //
+// MONGOL
+//
+//_____________________
+
+function createKhanHunterRangeAura(): Ability {
+  const makeVariation = (age: number, baseValue: number) => ({
+    id: `ability-khan-hunter-range-aura-${age}`,
+    baseId: 'ability-khan-hunter-range-aura',
+    type: 'ability' as const,
+    name: 'Range Aura',
+    pbgid: 0,
+    attribName: '',
+    age,
+    civs: ['mo'],
+    description: `Increases the range of nearby ranged units by +${baseValue}. Cavalry Archers gain an additional +0.5.`,
+    classes: [],
+    displayClasses: [],
+    costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+    producedBy: [],
+    effects: [
+      { property: 'maxRange', select: { class: [['archer']] }, effect: 'change', value: baseValue, type: 'ability' },
+      { property: 'maxRange', select: { class: [['ranged', 'cavalry']] }, effect: 'change', value: 0.5, type: 'ability' },
+    ],
+  });
+
+  return {
+    id: 'ability-khan-hunter-range-aura',
+    name: 'Range Aura',
+    type: 'ability',
+    civs: ['mo'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    active: 'manual',
+    icon: '/abilities/AoE4_RangeAura_KhanHunter.png',
+    description: 'Increases the range of ranged units within a 4-tile radius by +0.5/+0.8/+1 in the Feudal/Castle/Imperial Age. Cavalry Archers gain an additional +0.5.',
+    unique: false,
+    effects: [],
+    variations: [
+      makeVariation(2, 0.5),
+      makeVariation(3, 0.8),
+      makeVariation(4, 1),
+    ],
+    shared: {},
+  } as Ability;
+}
+
+//_____________________
+//
 // MALIAN
 //
 //_____________________
@@ -2808,6 +2987,7 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createCheirosiphonGarrison(),
     createLocalKnowledgeAbility(),
     createFarimaLeadershipAbility(),
+    createKhanHunterRangeAura(),
   ];
 
   return abilitiesWithCharge.map(ability => {

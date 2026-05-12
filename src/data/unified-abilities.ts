@@ -289,10 +289,12 @@ export function getAbilityVariation(
 
   if (ability.minAge > age) return null;
 
-  const variation = ability.variations.find(v => {
+  const eligible = ability.variations.filter(v => {
     if (v.civs.length > 0 && civAbbr !== 'all' && !v.civs.includes(civAbbr)) return false;
+    if (v.age !== undefined && v.age > age) return false;
     return true;
   });
+  const variation = eligible.sort((a, b) => (b.age ?? 0) - (a.age ?? 0))[0];
 
   let finalVariation = variation;
   if (!finalVariation) {
@@ -330,7 +332,7 @@ export function getActiveAbilityVariations(
     const ability = allAbilities.find(a => a.id === abilityId);
     if (!ability) continue;
 
-    const variation = getAbilityVariation(abilityId, civAbbr, ability.minAge);
+    const variation = getAbilityVariation(abilityId, civAbbr, age);
     if (variation) {
       variations.push(variation);
     }

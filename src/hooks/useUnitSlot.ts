@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { aoe4Units, AoE4Unit, getUnitVariation, getMaxAge, getPrimaryWeapon, getArmorValue, getResistanceValue } from "@/data/unified-units";
 import type { UnifiedVariation } from "@/data/unified-units";
-import { getTechnologiesForUnit, getActiveTechnologyVariationsWithTiers, applyTechnologyEffects, getAllTiersFromSameLine, allTechnologies, type UnitStats } from "@/data/unified-technologies";
+import { getTechnologiesForUnit, getActiveTechnologyVariationsWithTiers, applyTechnologyEffects, getAllTiersFromSameLine, allTechnologies, IMPROVED_TECH_PAIRS, IMPROVED_TECH_BASE, type UnitStats } from "@/data/unified-technologies";
 import { getAbilitiesForUnit, getActiveAbilityVariations, getAbilityVariation } from "@/data/unified-abilities";
 import { techAbilityInteractions } from "@/data/patches/abilities";
 import { foreignEngineeringUnitRestrictions, techUnitExclusions, weaponInjectionMap } from "@/data/patches/technologies";
@@ -16,6 +16,7 @@ export const ABILITY_UPGRADE_GROUPS: readonly (readonly string[])[] = [
   ['ability-dynasty-song', 'ability-dynasty-yuan', 'ability-dynasty-ming'],
   ['ability-network-of-castles', 'ability-network-of-citadels'],
   ['ability-khan-warcry-2', 'ability-khan-warcry-3', 'ability-khan-warcry-4'],
+  ['ability-maneuver-arrow', 'ability-attack-speed-arrow', 'ability-defense-arrow']
 ];
 
 export function categorizeUnit(unit: AoE4Unit, selectedCiv?: string): string {
@@ -24,6 +25,7 @@ export function categorizeUnit(unit: AoE4Unit, selectedCiv?: string): string {
   if (classes.includes('worker_elephant')) return 'other';
   if (classes.includes('worker')) return 'other'; // trade/support units (e.g. atabeg)
   if (classes.includes('mercenary_byz') && selectedCiv === 'by') return 'mercenary';
+  if (classes.includes('khaganate') && selectedCiv === 'mo') return 'khaganate';
   if (classes.includes('ballista_elephant')) return 'siege';
   if (classes.includes('infantry') && classes.includes('melee')) return 'melee_infantry';
   if (classes.includes('ranged') && !classes.includes('siege') && !classes.includes('ship') && !classes.includes('naval_unit')) return 'ranged';
@@ -44,6 +46,7 @@ const DEFAULT_OPEN_CATEGORIES: Record<string, boolean> = {
   ship: true,
   other: true,
   mercenary: false,
+  khaganate: false,
 };
 
 
@@ -96,11 +99,35 @@ export function useUnitSlot() {
     const tech = allTechnologies.find(t => t.id === techId);
     if (!tech) return;
     const allTierIds = getAllTiersFromSameLine(tech).map(t => t.id);
+    const improvedId = IMPROVED_TECH_PAIRS[techId];
+    const baseId = IMPROVED_TECH_BASE[techId]; // defined when techId is an improved ID
+
     setActiveTechnologies(prev => {
       const next = new Set(prev);
-      if (next.has(techId)) {
+
+      if (baseId) {
+        // Called with an improved ID (from the + badge)
+        if (next.has(techId)) {
+          // improved active → deactivate improved only (keep base)
+          next.delete(techId);
+        } else {
+          // improved not active → activate both base and improved
+          if (!next.has(baseId)) {
+            const baseTech = allTechnologies.find(t => t.id === baseId);
+            if (baseTech) {
+              getAllTiersFromSameLine(baseTech).map(t => t.id).forEach(id => next.delete(id));
+              const civGroups = CIV_TECH_EXCLUSIVE_GROUPS[selectedCivRef.current] || [];
+              const exclusiveGroup = civGroups.find(g => g.includes(baseId));
+              if (exclusiveGroup) exclusiveGroup.forEach(id => next.delete(id));
+              next.add(baseId);
+            }
+          }
+          next.add(techId);
+        }
+      } else if (next.has(techId)) {
+        // Base toggle off — also remove improved if present
         next.delete(techId);
-        // Deactivate abilities that require this tech
+        if (improvedId) next.delete(improvedId);
         setActiveAbilities(prevAbi => {
           const nextAbi = new Set(prevAbi);
           Object.entries(ABILITY_TECH_DEPENDENCIES).forEach(([abilityId, reqTech]) => {
@@ -109,13 +136,11 @@ export function useUnitSlot() {
           return nextAbi;
         });
       } else {
+        // Base toggle on
         allTierIds.forEach(id => next.delete(id));
-        // Remove mutually exclusive techs for the current civ
         const civGroups = CIV_TECH_EXCLUSIVE_GROUPS[selectedCivRef.current] || [];
         const exclusiveGroup = civGroups.find(g => g.includes(techId));
-        if (exclusiveGroup) {
-          exclusiveGroup.forEach(id => next.delete(id));
-        }
+        if (exclusiveGroup) exclusiveGroup.forEach(id => next.delete(id));
         next.add(techId);
       }
       return next;
@@ -306,6 +331,7 @@ export function useUnitSlot() {
     'gunpowder-contingent',
     'mansa-musofadi-warrior',
     'mansa-javelineer',
+    'khaganate-mangudai',
   ]);
 
   const filteredUnits = useMemo(() => {
@@ -645,6 +671,11 @@ export function useUnitSlot() {
       (unit?.id === 'royal-knight' || unit?.id === 'jeanne-darc-knight')
     ) {
       result = { ...result, postChargeMeleeBonus: activeTechnologies.has('cantled-saddles') ? 10 : 3 };
+    }
+
+    // yam-network-improved (×1.15) and maneuver-arrow (×1.33) don't stack — take the max (remove the smaller)
+    if (activeAbilities.has('ability-yam-network-improved') && activeAbilities.has('ability-maneuver-arrow')) {
+      result = { ...result, moveSpeed: result.moveSpeed / 1.15 };
     }
 
     // HRE infantry passive: +10% move speed (formerly a technology, now a baked-in passive not present in data)

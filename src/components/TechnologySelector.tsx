@@ -1,5 +1,5 @@
 import React from "react";
-import { Technology, categorizeTechnology, getTechnologyTier, getTechnologyBaseName } from "@/data/unified-technologies";
+import { Technology, categorizeTechnology, getTechnologyTier, getTechnologyBaseName, IMPROVED_TECH_PAIRS, IMPROVED_TECH_BASE, allTechnologies } from "@/data/unified-technologies";
 import { technologyPatches, foreignEngineeringTechIds } from "@/data/patches/technologies";
 import {
   Tooltip,
@@ -29,7 +29,10 @@ export const TechnologySelector = ({
   unitId,
   selectedAge,
 }: TechnologySelectorProps) => {
-  if (technologies.length === 0) return null;
+  // Filter out improved techs — they're controlled via the "^" button on their base tech
+  const visibleTechnologies = technologies.filter(t => !IMPROVED_TECH_BASE[t.id]);
+
+  if (visibleTechnologies.length === 0) return null;
 
   // Group technologies by category AND by age
   const categories = [
@@ -76,7 +79,7 @@ export const TechnologySelector = ({
     grouped[cat] = {};
   });
 
-  technologies.forEach(tech => {
+  visibleTechnologies.forEach(tech => {
     const category = categorizeTechnology(tech);
     const age = tech.minAge;
 
@@ -210,96 +213,124 @@ export const TechnologySelector = ({
             );
           } else {
             techGrid = (
-            <div className="flex gap-2">
-              {ages.map(age => {
-                const techs = lineTechs[age];
+              <div className="flex gap-2">
+                {ages.map(age => {
+                  const techs = lineTechs[age];
 
-                return (
-                  <div key={age} className="w-12 flex flex-col gap-2">
-                    {techs.map(tech => {
-                      const isActive = activeTechnologies.has(tech.id);
-                      const isLocked = lockedTechnologies?.has(tech.id) ?? false;
-                      const iconFileName = tech.icon.split('/').pop() || '';
-                      const iconPath = tech.icon.startsWith('http') ? tech.icon : `/technologies/${iconFileName}`;
-                      const patch = technologyPatches.find(p => p.id === tech.id);
-                      const isForeignEngineering = selectedCiv === 'by' && foreignEngineeringTechIds.has(tech.id);
-                      // Per-unit tooltip takes priority; then FEC/native logic
-                      const unitTooltip = unitId ? patch?.unitTooltips?.[unitId] : undefined;
-                      const patchTooltip = unitTooltip ?? (isForeignEngineering
-                        ? patch?.uiTooltip
-                        : (!foreignEngineeringTechIds.has(tech.id)
-                          ? (patch?.uiTooltip || patch?.variations?.find(vp => vp.uiTooltip)?.uiTooltip)
-                          : patch?.uiTooltipNative));
-                      return (
-                        <div key={tech.id} className="relative">
-                          {tech.unique && (
-                            <div className="absolute bottom-1 left-0 w-4 h-4 rounded-full bg-background border border-border/20 flex items-center justify-center pointer-events-none z-10">
-                              <img src="/unique.png" alt="" className="w-6 h-6 object-contain" />
-                            </div>
-                          )}
-                          <TooltipProvider delayDuration={750}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  onClick={() => !isLocked && onToggle(tech.id)}
-                                  className={`
-                                  w-12 h-12 rounded border-2 transition-all relative overflow-hidden
-                                  ${isLocked ? 'opacity-30 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}
-                                  ${isActive
-                                      ? 'border-green-500 bg-green-500/10'
-                                      : isForeignEngineering
-                                        ? 'border-orange-500/60 bg-orange-950/40 opacity-80'
-                                        : 'border-border/50 bg-secondary/50 opacity-60'
-                                    }
-                                `}
-                                >
-                                  <img
-                                    src={iconPath}
-                                    alt={tech.name}
-                                    className="w-full h-full object-contain p-1"
-                                    onError={(e) => {
-                                      e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" fill="%23666"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="24" fill="white">?</text></svg>';
-                                    }}
-                                  />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom" className="max-w-xs">
-                                <p className="font-semibold">{tech.name}</p>
-                                {tech.description && (
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    {tech.description}
-                                  </p>
-                                )}
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                  return (
+                    <div key={age} className="w-12 flex flex-col gap-2">
+                      {techs.map(tech => {
+                        const isActive = activeTechnologies.has(tech.id);
+                        const isLocked = lockedTechnologies?.has(tech.id) ?? false;
+                        const iconFileName = tech.icon.split('/').pop() || '';
+                        const iconPath = tech.icon.startsWith('http') ? tech.icon : `/technologies/${iconFileName}`;
+                        const patch = technologyPatches.find(p => p.id === tech.id);
+                        const isForeignEngineering = selectedCiv === 'by' && foreignEngineeringTechIds.has(tech.id);
+                        const unitTooltip = unitId ? patch?.unitTooltips?.[unitId] : undefined;
+                        const patchTooltip = unitTooltip ?? (isForeignEngineering
+                          ? patch?.uiTooltip
+                          : (!foreignEngineeringTechIds.has(tech.id)
+                            ? (patch?.uiTooltip || patch?.variations?.find(vp => vp.uiTooltip)?.uiTooltip)
+                            : patch?.uiTooltipNative));
 
-                          {patchTooltip && (
+                        const improvedId = IMPROVED_TECH_PAIRS[tech.id];
+                        const isMongolActive = improvedId ? activeTechnologies.has(improvedId) : false;
+                        const improvedTech = improvedId ? allTechnologies.find(t => t.id === improvedId) : undefined;
+
+                        // Visual state per spec — CSS classes only, no inline hex
+                        const iconStateClass = !isActive
+                          ? isForeignEngineering
+                            ? 'border-orange-500/60 bg-orange-950/40 opacity-80'
+                            : 'border-border/50 bg-secondary/50 opacity-60'
+                          : isMongolActive
+                            ? 'border-green-500 bg-green-500/10'
+                            : 'border-green-500 bg-green-500/10';
+
+                        return (
+                          <div key={tech.id} className="relative">
+                            {tech.unique && (
+                              <div className="absolute bottom-1 left-0 w-4 h-4 rounded-full bg-background border border-border/20 flex items-center justify-center pointer-events-none z-10">
+                                <img src="/unique.png" alt="" className="w-6 h-6 object-contain" />
+                              </div>
+                            )}
+
                             <TooltipProvider delayDuration={750}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <span
-                                    className="absolute top-0 right-0 text-[10px] font-bold text-yellow-500 bg-black/50 px-1 rounded-bl cursor-help z-10 pointer-events-auto"
-                                    onClick={(e) => e.stopPropagation()}
+                                  <button
+                                    onClick={() => !isLocked && onToggle(tech.id)}
+                                    className={`w-12 h-12 rounded border-2 transition-all relative overflow-hidden ${isLocked ? 'opacity-30 cursor-not-allowed' : 'hover:scale-105 active:scale-95'} ${iconStateClass}`}
                                   >
-                                    *
-                                  </span>
+                                    <img
+                                      src={iconPath}
+                                      alt={tech.name}
+                                      className="w-full h-full object-contain p-1"
+                                      onError={(e) => {
+                                        e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" fill="%23666"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="24" fill="white">?</text></svg>';
+                                      }}
+                                    />
+                                  </button>
                                 </TooltipTrigger>
-                                <TooltipContent side="right" className="max-w-xs z-50">
-                                  <p className="text-xs text-yellow-400">
-                                    {patchTooltip}
-                                  </p>
+                                <TooltipContent side="bottom" className="max-w-xs">
+                                  <p className="font-semibold">{tech.name}</p>
+                                  {tech.description && (
+                                    <p className="text-xs text-muted-foreground mt-1">{tech.description}</p>
+                                  )}
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
+
+                            {/* Mongol upgrade badge — top-right corner, always visible */}
+                            {tech.hasMongolUpgrade && (
+                              <TooltipProvider delayDuration={750}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); onToggle(improvedId!); }}
+                                      className={`absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full border text-[9px] font-bold flex items-center justify-center transition-all hover:scale-110 active:scale-90 z-20 ${isMongolActive
+                                          ? 'border-green-500 bg-green-900/80 text-green-400'
+                                          : isActive
+                                            ? 'border-orange-500 bg-orange-900/80 text-orange-400'
+                                            : 'border-orange-500/40 bg-orange-900/30 text-orange-400/50'
+                                        }`}
+                                    >
+                                      {isMongolActive ? '✓' : '+'}
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="right" className="max-w-xs">
+                                    <p className="font-semibold">{improvedTech?.name ?? 'Improved'}</p>
+                                    {improvedTech?.description && (
+                                      <p className="text-xs text-muted-foreground mt-1">{improvedTech.description}</p>
+                                    )}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+
+                            {patchTooltip && (
+                              <TooltipProvider delayDuration={750}>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span
+                                      className="absolute top-0 right-0 text-[10px] font-bold text-yellow-500 bg-black/50 px-1 rounded-bl cursor-help z-10 pointer-events-auto"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      *
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="right" className="max-w-xs z-50">
+                                    <p className="text-xs text-yellow-400">{patchTooltip}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
             );
           }
 

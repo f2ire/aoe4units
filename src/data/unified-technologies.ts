@@ -58,7 +58,8 @@ export interface Technology {
   icon: string;
   description: string;
   variations: TechnologyVariation[];
-  effects?: TechnologyEffect[]; // Effects at the technology level (all-optimized_tec.json)
+  effects?: TechnologyEffect[];
+  hasMongolUpgrade?: boolean; // Effects at the technology level (all-optimized_tec.json)
   counterMax?: number;                      // if set, renders as a counter ability (0 = inactive, max = counterMax)
   counterStep?: number;                     // default per-stack increment (e.g. 0.05 for +5%)
   counterSteps?: number[];                  // per-stack increments array; effectiveValue = 1 + sum(counterSteps[0..count-1]). Overrides counterStep when present.
@@ -72,7 +73,23 @@ import { applyTechnologyPatches } from './patches/technologies';
 
 // Parse all technologies from the unified file
 const allTechnologiesRaw: Technology[] = allTechnologiesData.data as Technology[];
-export const allTechnologies: Technology[] = applyTechnologyPatches(allTechnologiesRaw) as Technology[];
+const allTechnologiesPatched: Technology[] = applyTechnologyPatches(allTechnologiesRaw) as Technology[];
+
+// Mongol "improved" tech pairs: base ID → improved ID
+export const IMPROVED_TECH_PAIRS: Record<string, string> = Object.fromEntries(
+  allTechnologiesPatched
+    .filter(t => t.id.endsWith('-improved'))
+    .map(t => [t.id.replace(/-improved$/, ''), t.id])
+);
+// Reverse: improved ID → base ID
+export const IMPROVED_TECH_BASE: Record<string, string> = Object.fromEntries(
+  Object.entries(IMPROVED_TECH_PAIRS).map(([base, imp]) => [imp, base])
+);
+
+// Inject hasMongolUpgrade flag on base techs that have an improved variant
+export const allTechnologies: Technology[] = allTechnologiesPatched.map(t =>
+  IMPROVED_TECH_PAIRS[t.id] !== undefined ? { ...t, hasMongolUpgrade: true } : t
+);
 
 // Filter technologies that affect combat stats
 const combatProperties = [
@@ -380,6 +397,7 @@ export function applyTechnologyEffects(
     statKey: keyof UnitStats;
     effectType: 'change' | 'multiply';
     value: number;
+    sourceTechBaseId: string;
   }
 
   interface SpecialEffect {
@@ -388,12 +406,28 @@ export function applyTechnologyEffects(
     value: number;
     target?: { class: string[][] };
     type?: string;
+    sourceTechBaseId: string;
   }
+
+  // Improved pair detection: set of base tech IDs where BOTH base AND improved are currently active
+  const activeBaseIds = new Set(activeTechnologies.map(v => v.baseId || v.id));
+  const activePairBases = new Set<string>();
+  for (const baseId of activeBaseIds) {
+    if (IMPROVED_TECH_PAIRS[baseId] && activeBaseIds.has(IMPROVED_TECH_PAIRS[baseId])) {
+      activePairBases.add(baseId);
+    }
+  }
+  const getPairBaseId = (src: string): string | undefined => {
+    if (activePairBases.has(src)) return src;
+    const base = IMPROVED_TECH_BASE[src];
+    return (base && activePairBases.has(base)) ? base : undefined;
+  };
 
   const applicableEffects: ApplicableEffect[] = [];
   const specialEffects: SpecialEffect[] = [];
 
   for (const tech of activeTechnologies) {
+    const sourceTechBaseId = tech.baseId || tech.id;
     if (!tech.effects) continue;
 
     for (const effect of tech.effects) {
@@ -455,7 +489,8 @@ export function applyTechnologyEffects(
         specialEffects.push({
           property,
           effectType: effect.effect as 'change' | 'multiply',
-          value: effect.value
+          value: effect.value,
+          sourceTechBaseId,
         });
         continue;
       }
@@ -467,7 +502,8 @@ export function applyTechnologyEffects(
           effectType: effect.effect as 'change' | 'multiply',
           value: effect.value,
           target: effect.target,
-          type: 'bonus'
+          type: 'bonus',
+          sourceTechBaseId,
         });
         continue;
       }
@@ -504,7 +540,8 @@ export function applyTechnologyEffects(
       applicableEffects.push({
         statKey,
         effectType: effect.effect as 'change' | 'multiply',
-        value: effect.value
+        value: effect.value,
+        sourceTechBaseId,
       });
     }
   }
@@ -539,6 +576,10 @@ export function applyTechnologyEffects(
   let hpMultiplierDelta = 0;
   let rangedAttackMultiplier = 1;
 
+  // Improved-pair multiply effects on non-HP stats stack additively (15% + 5% = 20%, not 20.75%).
+  // Collect their deltas here; apply after all multiplicative effects.
+  const pairMultiplierDeltas = new Map<keyof UnitStats, number>();
+
   for (const effect of applicableEffects) {
     if (effect.effectType === 'multiply') {
       // Exclude attackSpeed and bonusDamage which are not modifiable here
@@ -547,11 +588,18 @@ export function applyTechnologyEffects(
       if (effect.statKey === 'hitpoints') {
         // Accumulate deltas additively on base HP
         hpMultiplierDelta += (effect.value - 1);
+      } else if (getPairBaseId(effect.sourceTechBaseId)) {
+        pairMultiplierDeltas.set(effect.statKey, (pairMultiplierDeltas.get(effect.statKey) ?? 0) + (effect.value - 1));
       } else {
         (modifiedStats[effect.statKey] as number) *= effect.value;
         if (effect.statKey === 'rangedAttack') rangedAttackMultiplier *= effect.value;
       }
     }
+  }
+
+  for (const [statKey, delta] of pairMultiplierDeltas) {
+    (modifiedStats[statKey] as number) *= (1 + delta);
+    if (statKey === 'rangedAttack') rangedAttackMultiplier *= (1 + delta);
   }
 
   if (rangedAttackMultiplier !== 1) modifiedStats.rangedAttackMultiplier = rangedAttackMultiplier;
@@ -574,15 +622,23 @@ export function applyTechnologyEffects(
     }
   }
 
-  // Apply attackSpeed
+  // Apply attackSpeed (improved-pair multiply effects stack additively)
+  let attackSpeedPairDelta = 0;
   for (const effect of specialEffects) {
     if (effect.property === 'attackSpeed' && typeof modifiedStats.attackSpeed === 'number') {
       if (effect.effectType === 'change') {
         modifiedStats.attackSpeed += effect.value;
       } else if (effect.effectType === 'multiply') {
-        modifiedStats.attackSpeed *= effect.value;
+        if (getPairBaseId(effect.sourceTechBaseId)) {
+          attackSpeedPairDelta += (effect.value - 1);
+        } else {
+          modifiedStats.attackSpeed *= effect.value;
+        }
       }
     }
+  }
+  if (attackSpeedPairDelta !== 0 && typeof modifiedStats.attackSpeed === 'number') {
+    modifiedStats.attackSpeed *= (1 + attackSpeedPairDelta);
   }
 
   // Apply burst
@@ -680,16 +736,24 @@ export function applyTechnologyEffects(
     }
   }
 
-  // Apply healingRate (HP healed per hit the unit lands)
+  // Apply healingRate (HP healed per hit the unit lands; improved-pair multiply effects stack additively)
+  let healingRatePairDelta = 0;
   for (const effect of specialEffects) {
     if (effect.property === 'healingRate') {
       const current = modifiedStats.healingRate ?? 0;
       if (effect.effectType === 'change') {
         modifiedStats.healingRate = current + effect.value;
       } else if (effect.effectType === 'multiply') {
-        modifiedStats.healingRate = current * effect.value;
+        if (getPairBaseId(effect.sourceTechBaseId)) {
+          healingRatePairDelta += (effect.value - 1);
+        } else {
+          modifiedStats.healingRate = current * effect.value;
+        }
       }
     }
+  }
+  if (healingRatePairDelta !== 0) {
+    modifiedStats.healingRate = (modifiedStats.healingRate ?? 0) * (1 + healingRatePairDelta);
   }
 
   // Apply healingRatePerSecond (HP healed per second, e.g. Triumph)

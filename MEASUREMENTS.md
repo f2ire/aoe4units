@@ -161,6 +161,27 @@ Canon              | 5.375   | 3.981  | 4.100    | +31.1%  |
 Royal Culverin     | 3.625   | 2.685  | 2.790    | +29.9%  |
 Ribauldequin       | 5.250   | 3.889  | 4.160    | +26.2%  |
 
+
+**Description:** 50% attack speed
+
+Unit                   | Base  | Theory | Practice | Eff. %  |
+-----------------------|-------|--------|----------|---------|
+archer                 | 1.625 | 1.083  | 1.250    | +30.0%  |
+crossbowman            | 2.125 | 1.417  | 1.590    | +33.6%  |
+handcannoneer          | 2.125 | 1.417  | 1.550    | +37.1%  |
+mangudai               | 0.875 | 0.583  | 0.710    | +23.2%  |
+khan                   | 2.000 | 1.333  | 1.460    | +37.0%  |
+khan's hunter          | 2.000 | 1.333  | 1.460    | +37.0%  |
+khaganate horse archer | 1.750 | 1.167  | 1.300    | +34.6%  |
+baochuan               | 5.620 | 3.747  | 3.980    | +41.2%  |
+war junk               | 4.120 | 2.747  | 2.970    | +38.7%  |
+light junk             | 1.500 | 1.000  | 1.130    | +32.7%  |
+
+
+
+**Average effective bonus:** +33.2% AS (≠ +50% announced).
+**Conclusion:** Average gap of ~16.8 pp, with a spread of 23–37%. Mangudai is the most penalized (+23.2%). No uniform model; unit-specific corrections are required in `patches/`.
+
 <!-- TEMPLATE FOR NEXT EXPERIMENT
 
 **Description:** +50% + 20% attack speed

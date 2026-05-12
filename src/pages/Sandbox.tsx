@@ -24,6 +24,7 @@ const categoryNames: Record<string, string> = {
   ship: 'Ships',
   other: 'Other',
   mercenary: 'Mercenaries',
+  khaganate: 'Khaganate',
 };
 
 const categoryIcons: Record<string, string> = {
@@ -36,9 +37,10 @@ const categoryIcons: Record<string, string> = {
   ship: 'https://data.aoe4world.com/images/buildings/dock.png',
   other: 'https://data.aoe4world.com/images/buildings/house.png',
   mercenary: 'https://data.aoe4world.com/images/buildings/barracks.png',
+  khaganate: 'https://data.aoe4world.com/images/buildings/khaganate-palace.png',
 };
 
-const categoryOrder = ['jeanne', 'melee_infantry', 'ranged', 'cavalry', 'siege', 'mercenary', 'monk', 'ship', 'other'];
+const categoryOrder = ['jeanne', 'melee_infantry', 'ranged', 'cavalry', 'siege', 'mercenary', 'khaganate', 'monk', 'ship', 'other'];
 
 function getMercenarySubCategory(unit: { classes: string[] }): string {
   const cls = unit.classes.map(c => c.toLowerCase());
@@ -51,6 +53,18 @@ function getMercenarySubCategory(unit: { classes: string[] }): string {
 }
 
 const MERCENARY_SUB_ORDER = ['Melee Infantry', 'Ranged Infantry', 'Melee Cavalry', 'Ranged Cavalry', 'Siege', 'Other'];
+
+function getKhaganateSubCategory(unit: { classes: string[] }): string {
+  const cls = unit.classes.map(c => c.toLowerCase());
+  if (cls.includes('siege')) return 'Siege';
+  if (cls.includes('monk')) return 'Monk';
+  if (cls.includes('cavalry') && cls.includes('ranged')) return 'Ranged Cavalry';
+  if (cls.includes('cavalry')) return 'Cavalry';
+  if (cls.includes('melee')) return 'Melee Infantry';
+  return 'Other';
+}
+
+const KHAGANATE_SUB_ORDER = ['Melee Infantry', 'Ranged Cavalry', 'Cavalry', 'Monk', 'Siege', 'Other'];
 
 // Function to calculate the charge bonus for a unit
 const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activeAbilities: Set<string>, age: number, activeTechnologies: Set<string> = new Set(), chargeMultiplier?: number, modifiedMeleeAttack?: number, abilityCounters?: Map<string, number>, modifiedRangedAttack?: number, chargeChange?: number): number => {
@@ -1152,6 +1166,27 @@ const Sandbox = () => {
                             ))}
                           </React.Fragment>
                         ));
+                      })() : isOpen && categoryKey === 'khaganate' ? (() => {
+                        const grouped: Record<string, typeof units> = {};
+                        for (const u of units) {
+                          const sub = getKhaganateSubCategory(u);
+                          if (!grouped[sub]) grouped[sub] = [];
+                          grouped[sub].push(u);
+                        }
+                        return KHAGANATE_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
+                          <React.Fragment key={sub}>
+                            <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
+                            {grouped[sub].map((unit) => (
+                              <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-10 group">
+                                <div className="flex items-center gap-2">
+                                  <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
+                                  <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
+                                  {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </React.Fragment>
+                        ));
                       })() : isOpen && categoryKey === 'jeanne' ? (() => {
                         const peasant = units.find(u => u.id === 'jeanne-darc-peasant');
                         if (!peasant) return null;
@@ -1267,6 +1302,27 @@ const Sandbox = () => {
                           grouped[sub].push(u);
                         }
                         return MERCENARY_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
+                          <React.Fragment key={sub}>
+                            <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
+                            {grouped[sub].map((unit) => (
+                              <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-10 group">
+                                <div className="flex items-center gap-2">
+                                  <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
+                                  <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
+                                  {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </React.Fragment>
+                        ));
+                      })() : isOpen && categoryKey === 'khaganate' ? (() => {
+                        const grouped: Record<string, typeof units> = {};
+                        for (const u of units) {
+                          const sub = getKhaganateSubCategory(u);
+                          if (!grouped[sub]) grouped[sub] = [];
+                          grouped[sub].push(u);
+                        }
+                        return KHAGANATE_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
                           <React.Fragment key={sub}>
                             <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
                             {grouped[sub].map((unit) => (
