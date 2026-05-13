@@ -2030,6 +2030,47 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     })
   },
 
+  {
+    id: 'golden-cuirass',
+    reason: 'Raw data has property "unknown" — not processed. Approximated as +5% HP: 20% resistance applies only to the last 20% HP (80% normal + 20%/0.8 = ×1.05 effective HP to kill).',
+    uiTooltip: 'Approximation of ≈ +5% HP (20% resistance below 20% HP)',
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [
+          {
+            property: 'hitpoints',
+            select: { id: ['gilded-man-at-arms'] },
+            effect: 'multiply',
+            value: 1.05,
+            type: 'passive',
+          }
+        ]
+      }))
+    })
+  },
+
+  {
+    id: 'scale-armor',
+    reason: 'Raw effects empty. Adds +3 ranged armor to Gilded Archer.',
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [
+          {
+            property: 'rangedArmor',
+            select: { id: ['gilded-archer'] },
+            effect: 'change',
+            value: 3,
+            type: 'passive',
+          }
+        ]
+      }))
+    })
+  },
+
   //___________
   //
   // RUS

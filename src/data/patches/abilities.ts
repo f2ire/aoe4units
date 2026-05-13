@@ -13,7 +13,7 @@ export const ABILITY_ROW_GROUPS: readonly { label: string; ids: readonly string[
   { label: 'CTR', ids: ['ability-house-unified', 'ability-lord-of-lancaster-inspiration'] },
   { label: 'CONV', ids: ['ability-buddhist-conversion', 'ability-nehan'] },
   { label: 'WPN', ids: ['ability-streltsy-berdysh', 'ability-streltsy-handcannon'] },
-  { label: 'AGE', ids: ['ability-high-armory-production-bonus', 'ability-abbey-of-the-trinity', 'ability-kurultai-aura', 'ability-tower-of-victory-aura'] },
+  { label: 'AGE', ids: ['ability-high-armory-production-bonus', 'ability-abbey-of-the-trinity', 'ability-kurultai-aura', 'ability-tower-of-victory-aura', 'ability-burgrave-palace'] },
   { label: 'CHAR', ids: ['charge-attack', 'ability-royal-knight-charge-damage'] }
 ];
 
@@ -662,12 +662,16 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
 
   {
     id: "ability-inspired-warriors",
-    reason: "Change active always to manual. Duration 60s.",
+    reason: "Change active always to manual. Duration 60s. Added civ 'od'.",
     after: (ability: Ability) => ({
       ...ability,
+      civs: [...ability.civs, 'od'],
       variations: ability.variations.map((v: AbilityVariation) => ({
         ...v,
+        civs: [...(v.civs || []), 'od'],
         effects: [
+          { property: 'meleeArmor', select: { class: [['infantry'], ['cavalry', 'melee'], ['cavalry', 'ranged'], ['siege']] }, effect: 'change', value: 1, type: 'ability', duration: 60 },
+          { property: 'rangedArmor', select: { class: [['infantry'], ['cavalry', 'melee'], ['cavalry', 'ranged'], ['siege']] }, effect: 'change', value: 1, type: 'ability', duration: 60 },
           { property: 'meleeAttack', select: { id: ['melee'] }, effect: 'multiply', value: 1.15, type: 'ability', duration: 60 },
           { property: 'rangedAttack', select: { id: ['ranged', 'siege'] }, effect: 'multiply', value: 1.15, type: 'ability', duration: 60 },
           { property: 'siegeAttack', select: { id: ['siege'] }, effect: 'multiply', value: 1, type: 'ability', duration: 60 }
@@ -2945,6 +2949,50 @@ function createJavelinThrow(): Ability {
   } as Ability;
 }
 
+//___________
+//
+// ORDER OF THE DRAGON
+//
+//___________
+
+function createBurgravePalaceAbility(): Ability {
+  return {
+    id: 'ability-burgrave-palace',
+    name: 'Burgrave Palace',
+    type: 'ability',
+    civs: ['od'],
+    displayClasses: [],
+    classes: [],
+    minAge: 3,
+    icon: 'https://data.aoe4world.com/images/buildings/burgrave-palace-2.png',
+    description: 'The Burgrave Palace produces units at a 35% discount.',
+    unique: true,
+    effects: [{
+      property: 'costReduction',
+      select: { class: [['melee', 'infantry']] },
+      effect: 'multiply',
+      value: 0.65,
+      type: 'ability',
+    }],
+    variations: [{
+      id: 'ability-burgrave-palace-3',
+      baseId: 'ability-burgrave-palace',
+      type: 'ability',
+      name: 'Burgrave Palace',
+      pbgid: 999302,
+      attribName: 'ability_burgrave_palace',
+      age: 3,
+      civs: ['od'],
+      description: 'The Burgrave Palace produces units at a 35% discount.',
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
 export function applyAbilityPatches(abilities: Ability[]): Ability[] {
   // Add the created synthetic abilities
   const chargeAttackAbility = createChargeAttackAbility();
@@ -2988,6 +3036,7 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createLocalKnowledgeAbility(),
     createFarimaLeadershipAbility(),
     createKhanHunterRangeAura(),
+    createBurgravePalaceAbility(),
   ];
 
   return abilitiesWithCharge.map(ability => {
