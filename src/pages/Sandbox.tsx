@@ -120,7 +120,6 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
 
 
   if (activeAbilities.has('ability-trample') && baseId === 'cataphract') return 12;
-  if (baseId === 'kipchak-archer') return 12 + (activeTechnologies.has('incendiary-arrows') ? 7.2 : 0);
 
   if (activeAbilities.has('ability-dagger-throw') && baseId === 'earls-guard') {
     const hasDrills = activeTechnologies.has('throwing-dagger-drills');
@@ -362,6 +361,7 @@ const Sandbox = () => {
       armorPenetration: modifiedStats1.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: modifiedStats1.opponentAttackSpeedDebuff ?? 0,
       versusOpponentDamageDebuff: modifiedStats1.versusOpponentDamageDebuff ?? 1,
+      opponentHealingRateDebuff: modifiedStats1.opponentHealingRateDebuff ?? 0,
       postChargeMeleeBonus: modifiedStats1.postChargeMeleeBonus ?? 0,
       firstHitBlocked: activeAbilities1.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(variation1, activeTechnologies1),
@@ -445,6 +445,7 @@ const Sandbox = () => {
       armorPenetration: modifiedStats2.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: modifiedStats2.opponentAttackSpeedDebuff ?? 0,
       versusOpponentDamageDebuff: modifiedStats2.versusOpponentDamageDebuff ?? 1,
+      opponentHealingRateDebuff: modifiedStats2.opponentHealingRateDebuff ?? 0,
       postChargeMeleeBonus: modifiedStats2.postChargeMeleeBonus ?? 0,
       firstHitBlocked: activeAbilities2.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(variation2, activeTechnologies2),
@@ -525,6 +526,7 @@ const Sandbox = () => {
       armorPenetration: modifiedStats1.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: modifiedStats1.opponentAttackSpeedDebuff ?? 0,
       versusOpponentDamageDebuff: modifiedStats1.versusOpponentDamageDebuff ?? 1,
+      opponentHealingRateDebuff: modifiedStats1.opponentHealingRateDebuff ?? 0,
       postChargeMeleeBonus: modifiedStats1.postChargeMeleeBonus ?? 0,
       firstHitBlocked: activeAbilities1.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(unit1, activeTechnologies1),
@@ -601,6 +603,7 @@ const Sandbox = () => {
       armorPenetration: modifiedStats2.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: modifiedStats2.opponentAttackSpeedDebuff ?? 0,
       versusOpponentDamageDebuff: modifiedStats2.versusOpponentDamageDebuff ?? 1,
+      opponentHealingRateDebuff: modifiedStats2.opponentHealingRateDebuff ?? 0,
       postChargeMeleeBonus: modifiedStats2.postChargeMeleeBonus ?? 0,
       firstHitBlocked: activeAbilities2.has('ability-deflective-armor'),
       chargeBonusBurst: getChargeBonusBurst(unit2, activeTechnologies2),
@@ -666,6 +669,7 @@ const Sandbox = () => {
       healingRatePerSecond: s.healingRatePerSecond ?? 0,
       armorPenetration: s.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: s.opponentAttackSpeedDebuff ?? 0,
+      opponentHealingRateDebuff: s.opponentHealingRateDebuff ?? 0,
     };
   })() : undefined;
 
@@ -695,6 +699,7 @@ const Sandbox = () => {
       healingRatePerSecond: s.healingRatePerSecond ?? 0,
       armorPenetration: s.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: s.opponentAttackSpeedDebuff ?? 0,
+      opponentHealingRateDebuff: s.opponentHealingRateDebuff ?? 0,
     };
   })() : undefined;
 
@@ -724,6 +729,7 @@ const Sandbox = () => {
       healingRatePerSecond: s.healingRatePerSecond ?? 0,
       armorPenetration: s.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: s.opponentAttackSpeedDebuff ?? 0,
+      opponentHealingRateDebuff: s.opponentHealingRateDebuff ?? 0,
     };
   })() : undefined;
 
@@ -753,6 +759,7 @@ const Sandbox = () => {
       healingRatePerSecond: s.healingRatePerSecond ?? 0,
       armorPenetration: s.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: s.opponentAttackSpeedDebuff ?? 0,
+      opponentHealingRateDebuff: s.opponentHealingRateDebuff ?? 0,
     };
   })() : undefined;
 
@@ -865,8 +872,8 @@ const Sandbox = () => {
 
   // Charge row — only pushed if at least one side has it
   if (hasChargeOnly1 || hasChargeOnly2) {
-    const chargeLabel1 = baseId1 === 'kipchak-archer' ? 'Bleed' : baseId1 === 'earls-guard' ? 'Dagger' : baseId1 === 'donso' ? 'Javelin' : ['musofadi-warrior', 'musofadi-gunner'].includes(baseId1) ? 'First Strike' : 'Charge';
-    const chargeLabel2 = baseId2 === 'kipchak-archer' ? 'Bleed' : baseId2 === 'earls-guard' ? 'Dagger' : baseId2 === 'donso' ? 'Javelin' : ['musofadi-warrior', 'musofadi-gunner'].includes(baseId2) ? 'First Strike' : 'Charge';
+    const chargeLabel1 = baseId1 === 'earls-guard' ? 'Dagger' : baseId1 === 'donso' ? 'Javelin' : ['musofadi-warrior', 'musofadi-gunner'].includes(baseId1) ? 'First Strike' : 'Charge';
+    const chargeLabel2 = baseId2 === 'earls-guard' ? 'Dagger' : baseId2 === 'donso' ? 'Javelin' : ['musofadi-warrior', 'musofadi-gunner'].includes(baseId2) ? 'First Strike' : 'Charge';
 
     alignedBonuses1.push(hasChargeOnly1
       ? { isChargeBonus: true, value: chargeOnly1, chargeBonusLabel: chargeLabel1, chargeBonusBurst: getChargeBonusBurst(data1, activeTechnologies1) }

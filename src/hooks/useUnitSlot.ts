@@ -631,6 +631,7 @@ export function useUnitSlot() {
       armorPenetration: 0,
       opponentAttackSpeedDebuff: 0,
       versusOpponentDamageDebuff: 1,
+      opponentHealingRateDebuff: (data as any).opponentHealingRateDebuff ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     };
 
     const techVariations = getActiveTechnologyVariationsWithTiers(activeTechnologies, selectedCiv, selectedAge);
@@ -781,6 +782,7 @@ export function useUnitSlot() {
       armorPenetration: 0,
       opponentAttackSpeedDebuff: 0,
       versusOpponentDamageDebuff: 1,
+      opponentHealingRateDebuff: (data as any).opponentHealingRateDebuff ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     };
     const techVariations = getActiveTechnologyVariationsWithTiers(activeTechnologies, selectedCiv, selectedAge);
     const counterAbilityIds = new Set(abilities.filter(a => a.counterMax !== undefined).map(a => a.id));

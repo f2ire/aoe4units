@@ -48,6 +48,18 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
   //
   //_________
 
+  {
+    id: 'kipchak-archer',
+    reason: 'Bleed: 2 HP/s on opponent. Modeled as opponentHealingRateDebuff (bypass armor/resistance) instead of one-time charge bonus.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      return {
+        ...u,
+        variations: (u.variations as Record<string, unknown>[]).map(v => ({ ...v, opponentHealingRateDebuff: 2 })),
+      };
+    },
+  },
+
   // Demolition ships self-destruct on contact — they can only kill if hitsToKill === 1
 
   ...((['explosive-dhow', 'demolition-ship', 'explosive-junk', 'lodya-demolition-ship'] as const).map(id => ({

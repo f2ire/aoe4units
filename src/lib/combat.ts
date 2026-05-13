@@ -24,6 +24,7 @@ export interface CombatEntity {
   armorPenetration?: number; // Enemy armor reduced by this amount on each hit (clamped ≥ 0)
   opponentAttackSpeedDebuff?: number; // Opponent's attack interval multiplied by (1 + value), e.g. 0.20 = 20% slower
   versusOpponentDamageDebuff?: number; // Multiplier on damage dealt by attackers (e.g. 0.8 = −20%); default 1
+  opponentHealingRateDebuff?: number; // HP/s subtracted from opponent's healingRatePerSecond
   chargeBonusBurst?: number; // Burst count for first-hit bonus display (e.g. 2 daggers for Earl's Guard)
   chargeArmorType?: 'ranged' | 'none' | 'first-strike'; // 'ranged': charge uses ranged armor (dagger); 'none': charge ignores armor+resistance entirely (holy wrath); 'first-strike': label only, normal melee damage path
   continuousMovement?: boolean; // unit can move throughout entire attack cycle (e.g. Mangudai)
@@ -73,6 +74,7 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     armorPenetration: (source as any).armorPenetration ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     opponentAttackSpeedDebuff: (source as any).opponentAttackSpeedDebuff ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     versusOpponentDamageDebuff: (source as any).versusOpponentDamageDebuff ?? 1, // eslint-disable-line @typescript-eslint/no-explicit-any
+    opponentHealingRateDebuff: (source as any).opponentHealingRateDebuff ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     chargeBonusBurst: (source as any).chargeBonusBurst ?? 1, // eslint-disable-line @typescript-eslint/no-explicit-any
     chargeArmorType: (source as any).chargeArmorType, // eslint-disable-line @typescript-eslint/no-explicit-any
     continuousMovement: (source as any).continuousMovement ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -702,6 +704,20 @@ function computeMetrics(
             hitsToKill = Math.ceil(timeToKill / attackSpeed);
           }
         }
+      }
+    }
+
+    // Attacker's bleed: adds fixed DPS to effective attack (e.g. Zornhau: 2 HP/s)
+    const bleedDPS = attacker.opponentHealingRateDebuff ?? 0;
+    if (bleedDPS !== 0 && dps !== null) {
+      dps = round(dps + bleedDPS, 2);
+      const totalDefHP = defender.hitpoints * defenderMultiplier;
+      if (dps > 0) {
+        timeToKill = round(totalDefHP / dps, 1);
+        hitsToKill = attackSpeed > 0 ? Math.ceil(timeToKill / attackSpeed) : null;
+      } else {
+        hitsToKill = null;
+        timeToKill = null;
       }
     }
 

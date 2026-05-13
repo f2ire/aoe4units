@@ -962,7 +962,12 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: 'triple-shot',
     reason: 'Kipchak Archer fires 2 extra arrows at 30% damage. Raw effects are generic +2 attack with no select — replaced with a zeroed no-op targeting kipchak-archer so the tech stays visible. Secondary weapon injection handles the actual DPS (burst=2, damageMultiplier=0.3).',
-    update: { effects: [{ property: 'rangedAttack', select: { id: ['kipchak-archer'] }, effect: 'change', value: 0, type: 'passive' }] },
+    update: {
+      effects: [
+        { property: 'rangedAttack', select: { id: ['kipchak-archer'] }, effect: 'change', value: 0, type: 'passive' },
+        { property: 'opponentHealingRateDebuff', select: { id: ['kipchak-archer'] }, effect: 'change', value: 0.6, type: 'passive' },
+      ]
+    },
     injectWeapon: { unitId: 'kipchak-archer', weaponIndex: 0, damageMultiplier: 0.3, burstCount: 2, maxDamage: 10 },
     uiTooltip: "For an unknown reason, the secondary weapon from Triple Shot can't reach over 10, even if it should.",
   },
@@ -1801,6 +1806,27 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     excludedUnits: ['musofadi-warrior', 'musofadi-gunner'],
   },
 
+  {
+    id: 'poisoned-arrows',
+    reason: 'Poison replaces raw rangedAttack bonus with 1.85 HP/s bleed on the opponent.',
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [
+          ...v.effects.map(e => e.property === 'rangedAttack' ? { ...e, value: 0 } : e),
+          {
+            property: 'opponentHealingRateDebuff',
+            select: { id: ['archer'] },
+            effect: 'change',
+            value: 1.85,
+            type: 'passive',
+          }
+        ]
+      }))
+    })
+  },
+
 
 
   //___________
@@ -1976,6 +2002,33 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     }),
   },
 
+
+  //___________
+  //
+  // ORDER OF THE DRAGON
+  //
+  //___________
+
+
+  {
+    id: 'zornhau',
+    reason: 'Bleed effect: Gilded Landsknecht inflicts 2 HP/s damage on the opponent (negates healing)',
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [
+          {
+            property: 'opponentHealingRateDebuff',
+            select: { id: ['gilded-landsknecht'] },
+            effect: 'change',
+            value: 2,
+            type: 'passive',
+          }
+        ]
+      }))
+    })
+  },
 
   //___________
   //
@@ -2275,10 +2328,10 @@ function createEnlistMansaJavelineers(): Technology {
         type: 'passive',
       },
       {
-        property: 'rangedAttack',
+        property: 'opponentHealingRateDebuff',
         select: { id: ['javelin-thrower'] },
         effect: 'change',
-        value: 3,
+        value: 1.41,
         type: 'passive',
       },
     ] as TechnologyEffect[],
