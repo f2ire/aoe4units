@@ -280,8 +280,8 @@ export const TechnologySelector = ({
                               </Tooltip>
                             </TooltipProvider>
 
-                            {/* Mongol upgrade badge — top-right corner, always visible */}
-                            {tech.hasMongolUpgrade && (
+                            {/* Mongol upgrade badge — only for Mongol civ */}
+                            {tech.hasMongolUpgrade && selectedCiv === 'mo' && (
                               <TooltipProvider delayDuration={750}>
                                 <Tooltip>
                                   <TooltipTrigger asChild>

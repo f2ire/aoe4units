@@ -373,7 +373,8 @@ export function applyTechnologyEffects(
   baseStats: UnitStats,
   unitClasses: string[],
   activeTechnologies: TechnologyVariation[],
-  unitId?: string
+  unitId?: string,
+  selectedCiv?: string
 ): UnitStats {
   // Deep-copy bonusDamage to avoid mutations
   const modifiedStats = {
@@ -409,12 +410,14 @@ export function applyTechnologyEffects(
     sourceTechBaseId: string;
   }
 
-  // Improved pair detection: set of base tech IDs where BOTH base AND improved are currently active
+  // Improved pair detection: only for Mongols ('mo') — set of base tech IDs where BOTH base AND improved are currently active
   const activeBaseIds = new Set(activeTechnologies.map(v => v.baseId || v.id));
   const activePairBases = new Set<string>();
-  for (const baseId of activeBaseIds) {
-    if (IMPROVED_TECH_PAIRS[baseId] && activeBaseIds.has(IMPROVED_TECH_PAIRS[baseId])) {
-      activePairBases.add(baseId);
+  if (selectedCiv === 'mo') {
+    for (const baseId of activeBaseIds) {
+      if (IMPROVED_TECH_PAIRS[baseId] && activeBaseIds.has(IMPROVED_TECH_PAIRS[baseId])) {
+        activePairBases.add(baseId);
+      }
     }
   }
   const getPairBaseId = (src: string): string | undefined => {

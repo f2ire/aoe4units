@@ -647,9 +647,9 @@ export function useUnitSlot() {
     const baseAbilityVariations = abilityVariations.filter(v => BASE_MODIFYING_ABILITY_IDS.has(v.baseId));
     const regularAbilityVariations = abilityVariations.filter(v => !BASE_MODIFYING_ABILITY_IDS.has(v.baseId));
 
-    const withTechs = applyTechnologyEffects(baseStats, effectiveClasses, techVariations, unit?.id);
-    const withAbilities = applyTechnologyEffects(withTechs, effectiveClasses, regularAbilityVariations, unit?.id);
-    let result = applyTechnologyEffects(withAbilities, effectiveClasses, baseAbilityVariations, unit?.id);
+    const withTechs = applyTechnologyEffects(baseStats, effectiveClasses, techVariations, unit?.id, selectedCiv);
+    const withAbilities = applyTechnologyEffects(withTechs, effectiveClasses, regularAbilityVariations, unit?.id, selectedCiv);
+    let result = applyTechnologyEffects(withAbilities, effectiveClasses, baseAbilityVariations, unit?.id, selectedCiv);
 
     for (const interaction of techAbilityInteractions) {
       if (
@@ -724,7 +724,7 @@ export function useUnitSlot() {
         ...counterVariation,
         effects: (counterVariation.effects || []).map((e: any) => ({ ...e, value: effectiveValue * (e.counterStepScale ?? 1) })), // eslint-disable-line @typescript-eslint/no-explicit-any
       };
-      result = applyTechnologyEffects(result, effectiveClasses, [syntheticVariation], unit?.id);
+      result = applyTechnologyEffects(result, effectiveClasses, [syntheticVariation], unit?.id, selectedCiv);
     }
 
     return result;
@@ -790,9 +790,9 @@ export function useUnitSlot() {
     const BASE_MODIFYING_ABILITY_IDS = new Set(['ability-astronomical-clocktower']);
     const baseAbilityVariations = abilityVariations.filter(v => BASE_MODIFYING_ABILITY_IDS.has(v.baseId));
     const regularAbilityVariations = abilityVariations.filter(v => !BASE_MODIFYING_ABILITY_IDS.has(v.baseId));
-    const withTechs = applyTechnologyEffects(baseStats, effectiveClasses, techVariations, unit?.id);
-    const withAbilities = applyTechnologyEffects(withTechs, effectiveClasses, regularAbilityVariations, unit?.id);
-    let result = applyTechnologyEffects(withAbilities, effectiveClasses, baseAbilityVariations, unit?.id);
+    const withTechs = applyTechnologyEffects(baseStats, effectiveClasses, techVariations, unit?.id, selectedCiv);
+    const withAbilities = applyTechnologyEffects(withTechs, effectiveClasses, regularAbilityVariations, unit?.id, selectedCiv);
+    let result = applyTechnologyEffects(withAbilities, effectiveClasses, baseAbilityVariations, unit?.id, selectedCiv);
     for (const interaction of techAbilityInteractions) {
       if (activeTechnologies.has(interaction.requiredTech) && activeAbilities.has(interaction.requiredAbility) && (!interaction.unitId || unit?.id === interaction.unitId)) {
         const abilityVar = getAbilityVariation(interaction.requiredAbility, selectedCiv, selectedAge);
@@ -841,7 +841,7 @@ export function useUnitSlot() {
         ...counterVariation,
         effects: (counterVariation.effects || []).map((e: any) => ({ ...e, value: effectiveValue * (e.counterStepScale ?? 1) })), // eslint-disable-line @typescript-eslint/no-explicit-any
       };
-      result = applyTechnologyEffects(result, effectiveClasses, [syntheticVariation], unit?.id);
+      result = applyTechnologyEffects(result, effectiveClasses, [syntheticVariation], unit?.id, selectedCiv);
     }
     return result;
   }, [modifiedStats, activeAbilities, unit, variation, effectiveVariation, effectiveClasses, activeTechnologies, selectedCiv, selectedAge, abilities, abilityCounters]);
