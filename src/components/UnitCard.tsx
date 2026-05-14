@@ -1005,12 +1005,6 @@ export const UnitCard = ({
                     {effectiveMeleeArmor !== null ? Math.round(effectiveMeleeArmor) : Math.round(meleeArmor)}
                   </span>
                 </div>
-                {meleeVulnerability > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Melee Vuln.</span>
-                    <span className="text-orange-400">+{meleeVulnerability}%</span>
-                  </div>
-                )}
                 {meleeResistanceRaw > 0 && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Melee Resist.</span>

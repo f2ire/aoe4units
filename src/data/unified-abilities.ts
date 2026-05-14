@@ -287,8 +287,6 @@ export function getAbilityVariation(
   const ability = allAbilities.find(a => a.id === abilityId);
   if (!ability) return null;
 
-  if (ability.minAge > age) return null;
-
   const eligible = ability.variations.filter(v => {
     if (v.civs.length > 0 && civAbbr !== 'all' && !v.civs.includes(civAbbr)) return false;
     if (v.age !== undefined && v.age > age) return false;

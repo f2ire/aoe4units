@@ -2204,6 +2204,36 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     })
   },
 
+  {
+    id: 'imperial-fleet',
+    reason: 'Raw moveSpeed value 0.8 is incorrect — should be 1.2 (+20%).',
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: v.effects.map(e =>
+          e.property === 'moveSpeed' ? { ...e, value: 1.2 } : e
+        ),
+      })),
+    }),
+  },
+
+  {
+    id: 'siege-crews',
+    reason: 'Attack speed ×1/1.25 for siege units while garrisoned.',
+    update: {
+      effects: [
+        {
+          property: 'attackSpeed',
+          select: { class: [['siege']] },
+          effect: 'multiply',
+          value: 1 / 1.25,
+          type: 'passive',
+        }
+      ]
+    }
+  },
+
 ];
 
 //__________________

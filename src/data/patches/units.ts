@@ -981,6 +981,20 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       })),
     }),
   },
+
+  {
+    id: 'akinji',
+    reason: 'Raw JSON burst count is 2.25; in-game the Akinji fires 2 arrows per attack.',
+    after: (unit: any) => ({
+      ...unit,
+      variations: unit.variations.map((v: any) => ({
+        ...v,
+        weapons: v.weapons.map((w: any) =>
+          w.burst ? { ...w, burst: { ...w.burst, count: 2 } } : w
+        ),
+      })),
+    }),
+  },
 ];
 //   after: (unit: unknown) => {
 //     const u = unit as Record<string, unknown>;

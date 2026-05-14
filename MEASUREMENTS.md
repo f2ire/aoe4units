@@ -162,25 +162,61 @@ Royal Culverin     | 3.625   | 2.685  | 2.790    | +29.9%  |
 Ribauldequin       | 5.250   | 3.889  | 4.160    | +26.2%  |
 
 
+## [TECH] Khan attack speed arrow — MG — 2026/05/14
+
 **Description:** 50% attack speed
 
-Unit                   | Base  | Theory | Practice | Eff. %  |
------------------------|-------|--------|----------|---------|
-archer                 | 1.625 | 1.083  | 1.250    | +30.0%  |
-crossbowman            | 2.125 | 1.417  | 1.590    | +33.6%  |
-handcannoneer          | 2.125 | 1.417  | 1.550    | +37.1%  |
-mangudai               | 0.875 | 0.583  | 0.710    | +23.2%  |
-khan                   | 2.000 | 1.333  | 1.460    | +37.0%  |
-khan's hunter          | 2.000 | 1.333  | 1.460    | +37.0%  |
-khaganate horse archer | 1.750 | 1.167  | 1.300    | +34.6%  |
-baochuan               | 5.620 | 3.747  | 3.980    | +41.2%  |
-war junk               | 4.120 | 2.747  | 2.970    | +38.7%  |
-light junk             | 1.500 | 1.000  | 1.130    | +32.7%  |
+Unit               | Base    | Theory | Practice | Eff. %  |
+-------------------|---------|--------|----------|---------|
+spearman           | 1.875   | 1.389  | 1.310    | +43.1%  |
+man-at-arms        | 1.375   | 1.019  | 1.000    | +37.5%  |
+Jeanne's Champion  | 1.375   | 1.019  | 1.000    | +37.5%  |
+archer             | 1.625   | 1.204  | 1.310    | +24.0%  |
+handcannoneer      | 2.125   | 1.574  | 1.690    | +25.7%  |
+arbalétrier        | 2.125   | 1.574  | 1.670    | +27.2%  |
+Horseman           | 1.750   | 1.296  | 1.210    | +44.6%  |
+Royal Knight       | 1.500   | 1.111  | 1.150    | +30.4%  |
+Jeanne's Rider     | 1.750   | 1.296  | 1.210    | +44.6%  |
+Trebuchet          | 11.375  | 8.426  | 8.660    | +31.3%  |
+Mangonel           | 6.875   | 5.093  | 5.210    | +32.0%  |
+Springald          | 3.125   | 2.315  | 2.320    | +34.7%  |
+Canon              | 5.375   | 3.981  | 4.100    | +31.1%  |
+Royal Culverin     | 3.625   | 2.685  | 2.790    | +29.9%  |
+Ribauldequin       | 5.250   | 3.889  | 4.160    | +26.2%  |
 
 
 
 **Average effective bonus:** +33.2% AS (≠ +50% announced).
 **Conclusion:** Average gap of ~16.8 pp, with a spread of 23–37%. Mangudai is the most penalized (+23.2%). No uniform model; unit-specific corrections are required in `patches/`.
+
+## [TECH] Mehter Attack Drums — Ot — 2026/05/14
+
+**Description:** 15% attack speed
+
+Unit               | Base    | Theory | Practice | Eff. %  |
+-------------------|---------|--------|----------|---------|
+spearman           | 1.875   | 1.630  | 1.650    | +13.6%  |
+man-at-arms        | 1.375   | 1.196  | 1.120    | +22.8%  |
+archer             | 1.625   | 1.413  | 1.400    | +16.1%  |
+crossbow           | 2.125   | 1.848  | 1.900    | +11.8%  |
+akinji             | 2.625   | 2.283  | 2.270    | +15.6%  |
+janissary          | 1.500   | 1.304  | 1.350    | +11.1%  |
+lancer             | 1.500   | 1.304  | 1.260    | +19.0%  |
+siphahi            | 1.750   | 1.522  | 1.600    | +9.4%   |
+trebuchet          | 11.375  | 9.891  | 9.890    | +15.0%  |
+great-bombard      | 7.000   | 6.087  | 6.150    | +13.8%  |
+springald          | 3.125   | 2.717  | 2.720    | +14.9%  |
+mangonel           | 6.875   | 5.978  | 5.980    | +15.0%  |
+ribauldequin       | 5.250   | 4.565  | 4.700    | +11.7%  |
+carrack            | 5.615   | 4.883  | 4.970    | +13.0%  |
+hulk               | 1.500   | 1.304  | 1.280    | +17.2%  |
+grand-galley       | 4.000   | 3.478  | 3.610    | +10.8%  |
+ 
+
+
+
+**Average effective bonus:** +14.4% AS (≠ +15% announced).
+**Conclusion:** No uniform model. Hard-coded per unit in `patches/abilities.ts`.
 
 <!-- TEMPLATE FOR NEXT EXPERIMENT
 

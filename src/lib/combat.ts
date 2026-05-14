@@ -934,7 +934,8 @@ function computeDamageInTime(attacker: CombatEntity, defender: CombatEntity, cha
   const firstHitSpeed = (hasChargeWeapon ? (chargeWeapon!.speed || rawSpeed) : rawSpeed) * asDebuffFactor;
   if (duration < firstHitSpeed) return 0;
   const additionalHits = Math.floor((duration - firstHitSpeed) / attackSpeed);
-  let total = firstData.value + additionalHits * normalData.value;
+  const firstHitDamage = defender.firstHitBlocked ? 0 : firstData.value;
+  let total = firstHitDamage + additionalHits * normalData.value;
   for (const secWeapon of (attacker.secondaryWeapons ?? [])) {
     if (!secWeapon.speed || secWeapon.speed <= 0) continue;
     const secData = computeEffectiveDamage(attacker, defender, 0, false, secWeapon);

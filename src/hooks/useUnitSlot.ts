@@ -16,7 +16,8 @@ export const ABILITY_UPGRADE_GROUPS: readonly (readonly string[])[] = [
   ['ability-dynasty-song', 'ability-dynasty-yuan', 'ability-dynasty-ming'],
   ['ability-network-of-castles', 'ability-network-of-citadels'],
   ['ability-khan-warcry-2', 'ability-khan-warcry-3', 'ability-khan-warcry-4'],
-  ['ability-maneuver-arrow', 'ability-attack-speed-arrow', 'ability-defense-arrow']
+  ['ability-maneuver-arrow', 'ability-attack-speed-arrow', 'ability-defense-arrow'],
+  ['ability-attack-drums', 'ability-ranged-defense-drums', 'ability-melee-defense-drums']
 ];
 
 export function categorizeUnit(unit: AoE4Unit, selectedCiv?: string): string {

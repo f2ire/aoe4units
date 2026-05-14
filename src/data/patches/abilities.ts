@@ -14,7 +14,8 @@ export const ABILITY_ROW_GROUPS: readonly { label: string; ids: readonly string[
   { label: 'CONV', ids: ['ability-buddhist-conversion', 'ability-nehan'] },
   { label: 'WPN', ids: ['ability-streltsy-berdysh', 'ability-streltsy-handcannon'] },
   { label: 'AGE', ids: ['ability-high-armory-production-bonus', 'ability-abbey-of-the-trinity', 'ability-kurultai-aura', 'ability-tower-of-victory-aura', 'ability-burgrave-palace'] },
-  { label: 'CHAR', ids: ['charge-attack', 'ability-royal-knight-charge-damage'] }
+  { label: 'CHAR', ids: ['charge-attack', 'ability-royal-knight-charge-damage'] },
+  { label: 'MEHT', ids: ['ability-attack-drums', 'ability-ranged-defense-drums', 'ability-melee-defense-drums'] },
 ];
 
 
@@ -1053,6 +1054,43 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   //___________
 
   {
+    id: "ability-attack-drums",
+    reason: "The +15% attack speed bonus is non-uniform across units. Values hard-coded per measurement (2026/05/14).",
+    after: (ability: Ability) => ({
+      ...ability,
+      minAge: 2,
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        effects: [
+          // Infantry
+          { property: "attackSpeed", select: { id: ["spearman"] }, effect: "multiply", value: 1.65 / 1.875, type: "ability" },
+          { property: "attackSpeed", select: { id: ["man-at-arms"] }, effect: "multiply", value: 1.12 / 1.375, type: "ability" },
+          { property: "attackSpeed", select: { id: ["archer"] }, effect: "multiply", value: 1.4 / 1.625, type: "ability" },
+          { property: "attackSpeed", select: { id: ["crossbowman"] }, effect: "multiply", value: 1.9 / 2.125, type: "ability" },
+          { property: "attackSpeed", select: { id: ["akinji"] }, effect: "multiply", value: 2.27 / 2.625, type: "ability" },
+          { property: "attackSpeed", select: { id: ["janissary"] }, effect: "multiply", value: 1.35 / 1.5, type: "ability" },
+          // Cavalry
+          { property: "attackSpeed", select: { id: ["lancer"] }, effect: "multiply", value: 1.26 / 1.5, type: "ability" },
+          { property: "attackSpeed", select: { id: ["sipahi"] }, effect: "multiply", value: 1.6 / 1.75, type: "ability" },
+          // Siege
+          { property: "attackSpeed", select: { id: ["trebuchet"] }, effect: "multiply", value: 9.89 / 11.375, type: "ability" },
+          { property: "attackSpeed", select: { id: ["great-bombard"] }, effect: "multiply", value: 6.15 / 7, type: "ability" },
+          { property: "attackSpeed", select: { id: ["springald"] }, effect: "multiply", value: 2.72 / 3.125, type: "ability" },
+          { property: "attackSpeed", select: { id: ["mangonel"] }, effect: "multiply", value: 5.98 / 6.875, type: "ability" },
+          { property: "attackSpeed", select: { id: ["ribauldequin"] }, effect: "multiply", value: 4.7 / 5.25, type: "ability" },
+          // Naval
+          { property: "attackSpeed", select: { id: ["carrack"] }, effect: "multiply", value: 4.97 / 5.615, type: "ability" },
+          { property: "attackSpeed", select: { id: ["hulk"] }, effect: "multiply", value: 1.28 / 1.5, type: "ability" },
+          { property: "attackSpeed", select: { id: ["grand-galley"] }, effect: "multiply", value: 3.61 / 4, type: "ability" },
+          // Fallback for unmeasured units
+          { property: "attackSpeed", select: { class: [["infantry"], ["cavalry", "melee"], ["cavalry", "ranged"], ["siege"]], excludeId: ["spearman", "man-at-arms", "archer", "crossbowman", "akinji", "janissary", "lancer", "sipahi", "trebuchet", "great-bombard", "springald", "mangonel", "ribauldequin"] }, effect: "multiply", value: 1 / 1.15, type: "ability" },
+        ]
+      }))
+    }),
+    uiTooltip: "The announced +15% bonus is represented by an average measured: +14.4%.",
+  },
+
+  {
     id: "ability-fortitude",
     reason: 'Available for Byzantines.',
     after: (abilities) => ({
@@ -1095,6 +1133,48 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
       }))
     }),
   },
+
+  {
+    id: 'ability-trade-protection',
+    reason: 'active:always → manual so the ability can be toggled in the selector.',
+    after: (ability) => ({
+      ...ability,
+      active: 'manual' as const,
+      minAge: 4,
+      variations: ability.variations.map(v => ({ ...v, active: 'manual' as const })),
+    }),
+  },
+
+  {
+    id: 'ability-ranged-defense-drums',
+    reason: 'minAge lowered to 2 so the ability is accessible at the mehter available ages.',
+    after: (ability) => ({ ...ability, minAge: 2 }),
+  },
+
+  {
+    id: 'ability-melee-defense-drums',
+    reason: 'minAge lowered to 2 so the ability is accessible at the mehter available ages.',
+    after: (ability) => ({ ...ability, minAge: 2 }),
+  },
+
+  {
+    id: 'ability-mehter-speed-bonus',
+    reason: 'active:always → manual so the ability can be toggled in the selector. Mehter added to select so it benefits from its own aura.',
+    after: (ability) => ({
+      ...ability,
+      active: 'manual' as const,
+      minAge: 2,
+      variations: ability.variations.map(v => ({
+        ...v,
+        active: 'manual' as const,
+        effects: v.effects.map(e => ({
+          ...e,
+          select: { ...e.select, id: ['mehter'] },
+        })),
+      })),
+    }),
+  },
+
 
 
   //___________
@@ -1379,6 +1459,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
       };
     },
   },
+
 
 ];
 
