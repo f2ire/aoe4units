@@ -443,7 +443,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         active: "manual",
       }))
     }),
-    uiTooltip: "Only the attackSpeed increase is implemented. Furthermore, the 20% bonus annonced is not correct. \n It's a 24% bonus for Fire lancer. 11% bonus for Zhuge Nu and 18% bonus for Grenadier.",
+    uiTooltip: "Model: attack speed only. Game shows +20%; model uses +24% (Fire Lancer), +18% (Grenadier), +11% (Zhuge Nu).",
   },
 
   //___________
@@ -482,7 +482,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         }))
       };
     },
-    uiTooltip: "The 20% attack speed buff varies per unit (+15.7% Spearman to +22.8% Man-at-Arms). Values hard-fixed from in-game measurements.",
+    uiTooltip: "The 20% attack speed buff varies per unit (+15.7% Spearman to +22.8% Man-at-Arms).",
   },
 
   //___________
