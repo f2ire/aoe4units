@@ -370,7 +370,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: 'composite-bows',
     reason: 'aoe4world reports the attack speed multiplier as 0.75 (−25%) but in-game testing shows the actual reduction is ~−23% (×0.76923). The tooltip in-game is also misleading (claims −33%).',
-    uiTooltip: 'The actual attack speed buff is 30%.',
+    uiTooltip: "Model: +30% attack speed (in-game shows +33%).",
     variations: [
       {
         match: { id: 'composite-bows-3' },
@@ -466,7 +466,6 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: 'sultans-mamluks',
     reason: 'aoe4world effects use effect:"change" (addition) with value 1.25 instead of multiply, have no select targeting infantry, and omit the moveSpeed bonus entirely. Patched to: multiply meleeAttack/rangedAttack ×1.25 and moveSpeed ×1.2 for infantry only.',
-    uiTooltip: 'Infantry: +25% damage, +20% move speed (30s after a kill)',
     variations: [
       {
         match: { id: 'sultans-mamluks-3' },
@@ -644,7 +643,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         )
       }))
     }),
-    uiTooltip: "The actual attack speed reduction is -28%, not -33% as shown in the tooltip."
+    uiTooltip: "Model: +28% attack speed (in-game shows +33%)."
   },
 
   //___________
@@ -715,7 +714,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         }))
       };
     },
-    uiTooltip: "The +20% attack speed buff value is incorrect compared to in-game measurements. The mean is around +17.9%, ranging from +17.2% (Lancer) to +19.0% (Horseman).",
+    uiTooltip: "Model: mean +17.9% attack speed (game shows +20%; range +17.2%–+19.0%).",
   },
 
   {
@@ -753,7 +752,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         }))
       };
     },
-    uiTooltip: "The 50% attack speed buff value is incorrect compared to the in-game UI average. The mean is around 39%, but it varies from 30% (Archer) to 56% (Ghazi).",
+    uiTooltip: "Model: mean +39% attack speed (game shows +50%; range +30%–+56%).",
   },
 
   {
@@ -936,7 +935,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     foreignEngineering: true,
     foreignEngineeringUnits: ['arbaletrier'],
     uiTooltip: "Available only with Foreign Engineering Company",
-    uiTooltipNative: "The actual attackspeed buff is 20%.",
+    uiTooltipNative: "Model: +20% attack speed.",
   },
 
   {
