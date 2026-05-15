@@ -16,6 +16,8 @@ export const ABILITY_ROW_GROUPS: readonly { label: string; ids: readonly string[
   { label: 'AGE', ids: ['ability-high-armory-production-bonus', 'ability-abbey-of-the-trinity', 'ability-kurultai-aura', 'ability-tower-of-victory-aura', 'ability-burgrave-palace'] },
   { label: 'CHAR', ids: ['charge-attack', 'ability-royal-knight-charge-damage'] },
   { label: 'MEHT', ids: ['ability-attack-drums', 'ability-ranged-defense-drums', 'ability-melee-defense-drums'] },
+  { label: 'DYN', ids: ['ability-dynasty-yuan', 'ability-dynasty-ming'] },
+  { label: 'AURA', ids: ['ability-network-of-castles', 'ability-network-of-citadels'] },
 ];
 
 
@@ -1179,86 +1181,6 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
 
   //___________
   //
-  // RUS
-  //
-  //___________
-
-  {
-    id: "ability-static-deployment",
-    reason: 'Available for Byzantines. Duration 10s (description).',
-    after: (abilities) => ({
-      ...abilities,
-      civs: [...abilities.civs, 'by'],
-      variations: abilities.variations.map(v => ({
-        ...v,
-        civs: [...(v.civs || []), "by"],
-        effects: (v.effects || []).map(e => ({ ...e, duration: 10, active: "manual" })),
-      }))
-    }),
-  },
-
-  {
-    id: "ability-gallop",
-    reason: 'Available for Byzantines and Mongols. Extended to khaganate-horse-archer.',
-    after: (abilities) => ({
-      ...abilities,
-      civs: [...abilities.civs, 'by', 'mo'],
-      variations: abilities.variations.map(v => ({
-        ...v,
-        civs: [...(v.civs || []), "by", "mo"],
-        effects: [
-          {
-            property: 'moveSpeed',
-            select: { id: ['horse-archer', 'khaganate-horse-archer'] },
-            effect: "change",
-            value: 2,
-            type: "ability",
-            duration: 8
-          }
-        ]
-      }))
-    }),
-    foreignEngineering: true,
-    foreignEngineeringUnits: ['horse-archer'],
-    uiTooltip: 'Available only with Foreign Engineering Company.',
-  },
-
-  {
-    id: "ability-saints-blessing",
-    reason: "Not always active. Duration stripped — effect is considered permanent.",
-    after: (ability: Ability) => ({
-      ...ability,
-      active: 'manual',
-      variations: ability.variations.map(v => ({
-        ...v,
-        active: 'manual',
-        effects: (v.effects || []).map(({ duration: _, ...e }) => e),
-      })),
-    }),
-  },
-
-  {
-    id: "ability-high-armory-production-bonus",
-    reason: "goldCost/woodCost mapped to costReduction (special property covering all costs).",
-    after: (ability: Ability) => ({
-      ...ability,
-      active: 'manual',
-      variations: ability.variations.map(v => ({
-        ...v,
-        active: 'manual',
-        effects: [{
-          property: 'costReduction',
-          select: { class: [['siege']] },
-          effect: 'multiply',
-          value: 0.8,
-          type: 'ability'
-        }]
-      }))
-    }),
-  },
-
-  //___________
-  //
   // MALIAN
   //
   //___________
@@ -1333,7 +1255,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   //
   // MONGOLS
   //
-  //___________
+
   {
     id: 'ability-yam',
     reason: 'active:always → manual so the ability can be toggled in the selector. select extended to include ship and monk.',
@@ -1461,6 +1383,157 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   },
 
 
+
+  //___________
+  //
+  // RUS
+  //
+  //___________
+
+  {
+    id: "ability-static-deployment",
+    reason: 'Available for Byzantines. Duration 10s (description).',
+    after: (abilities) => ({
+      ...abilities,
+      civs: [...abilities.civs, 'by'],
+      variations: abilities.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by"],
+        effects: (v.effects || []).map(e => ({ ...e, duration: 10, active: "manual" })),
+      }))
+    }),
+  },
+
+  {
+    id: "ability-gallop",
+    reason: 'Available for Byzantines and Mongols. Extended to khaganate-horse-archer.',
+    after: (abilities) => ({
+      ...abilities,
+      civs: [...abilities.civs, 'by', 'mo'],
+      variations: abilities.variations.map(v => ({
+        ...v,
+        civs: [...(v.civs || []), "by", "mo"],
+        effects: [
+          {
+            property: 'moveSpeed',
+            select: { id: ['horse-archer', 'khaganate-horse-archer'] },
+            effect: "change",
+            value: 2,
+            type: "ability",
+            duration: 8
+          }
+        ]
+      }))
+    }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['horse-archer'],
+    uiTooltip: 'Available only with Foreign Engineering Company.',
+  },
+
+  {
+    id: "ability-saints-blessing",
+    reason: "Not always active. Duration stripped — effect is considered permanent.",
+    after: (ability: Ability) => ({
+      ...ability,
+      active: 'manual',
+      variations: ability.variations.map(v => ({
+        ...v,
+        active: 'manual',
+        effects: (v.effects || []).map(({ duration: _, ...e }) => e),
+      })),
+    }),
+  },
+
+  {
+    id: "ability-high-armory-production-bonus",
+    reason: "goldCost/woodCost mapped to costReduction (special property covering all costs).",
+    after: (ability: Ability) => ({
+      ...ability,
+      active: 'manual',
+      variations: ability.variations.map(v => ({
+        ...v,
+        active: 'manual',
+        effects: [{
+          property: 'costReduction',
+          select: { class: [['siege']] },
+          effect: 'multiply',
+          value: 0.8,
+          type: 'ability'
+        }]
+      }))
+    }),
+  },
+
+  //___________
+  //
+  // ZHU XI
+  //
+  //___________
+
+  {
+    id: 'ability-divine-haste',
+    reason: 'Raw effect uses change:15 (adds 15 tiles/s). Replaced with multiply:1.15 (+15% speed).',
+    after: (ability) => ({
+      ...ability,
+      variations: ability.variations.map(v => ({
+        ...v,
+        effects: [
+          { property: 'moveSpeed', select: { class: [['infantry']] }, effect: 'multiply', value: 1.15, type: 'ability' },
+        ],
+      })),
+    }),
+  },
+
+  {
+    id: 'ability-divine-charge',
+    reason: 'minAge corrected from 1 to 4 (Imperial Age only).',
+    update: { minAge: 4 },
+  },
+
+  {
+    id: 'ability-divine-defense',
+    reason: 'minAge corrected from 1 to 4 (Imperial Age only).',
+    update: { minAge: 4 },
+  },
+
+  {
+    id: 'ability-divine-haste',
+    reason: 'minAge corrected from 1 to 4 (Imperial Age only).',
+    update: { minAge: 4 },
+  },
+
+  {
+    id: 'ability-ascetic-recovery',
+    reason: 'Removed from UI — out-of-combat healing is not modelled in the simulator.',
+    after: (ability) => ({ ...ability, hidden: true }),
+  },
+
+  {
+    id: 'ability-divine-vitality',
+    reason: 'Removed from UI — out-of-combat healing is not modelled in the simulator.',
+    after: (ability) => ({ ...ability, hidden: true }),
+  },
+
+  {
+    id: 'ability-supervise',
+    reason: 'Removed from UI — building supervision has no combat relevance.',
+    after: (ability) => ({ ...ability, hidden: true }),
+  },
+
+  {
+    id: 'ability-body-of-iron',
+    reason: 'Body of Iron: Shaolin Monk reduces incoming ranged damage by 50% for 15 seconds.',
+    after: (ability) => ({
+      ...ability,
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        effects: [
+          { property: 'rangedResistance', select: { id: ['shaolin-monk'] }, effect: 'change', value: 50, type: 'ability', duration: 15 },
+        ]
+      }))
+    })
+  },
+
 ];
 
 export const foreignEngineeringAbilityIds: Set<string> = new Set(
@@ -1560,30 +1633,19 @@ function createChargeAttackAbility(): Ability {
 //
 //___________
 
-// Synthetic ability — Ming Dynasty (Chinese).
-// +15% HP to all military units.
-// HP multiply uses additive stacking: HP_base × (1 + Σ(value - 1)).
 function createMingDynastyAbility(): Ability {
   return {
     id: 'ability-dynasty-ming',
     name: 'Ming Dynasty',
     type: 'ability',
-    civs: ['ch'],
+    civs: ['ch', 'zx'],
     displayClasses: [],
     classes: [],
     minAge: 4,
     icon: '/abilities/AoE4_MingDynasty.png',
-    description: 'Ming Dynasty: all military units gain +15% HP.',
+    description: 'Ming Dynasty.',
     unique: false,
-    effects: [
-      {
-        property: 'hitpoints',
-        select: { class: [['land_military']] },
-        effect: 'multiply',
-        value: 1.15,
-        type: 'ability',
-      }
-    ],
+    effects: [], // per-civ effects live in variations
     variations: [
       {
         id: 'ability-dynasty-ming-4',
@@ -1600,37 +1662,51 @@ function createMingDynastyAbility(): Ability {
         unique: false,
         costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
         producedBy: [],
-        effects: [], // effects live at ability level (getAbilityVariation concatenates both)
-      }
+        effects: [
+          { property: 'hitpoints', select: { class: [['land_military']] }, effect: 'multiply', value: 1.15, type: 'ability' },
+        ],
+      },
+      {
+        id: 'ability-dynasty-ming-zx-4',
+        baseId: 'ability-dynasty-ming',
+        type: 'ability',
+        name: 'Ming Dynasty',
+        pbgid: 998005,
+        attribName: 'ability_dynasty_ming_zx_4',
+        age: 4,
+        civs: ['zx'],
+        description: 'Ming Dynasty: Palace Guards gain +20% attack and bonus damage.',
+        classes: [],
+        displayClasses: [],
+        unique: false,
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        producedBy: [],
+        effects: [
+          { property: 'meleeAttack', select: { id: ['palace-guard', 'grenadier', 'zhuge-nu', 'imperial-guard', 'yuan-raider', 'nest-of-bees', 'shaolin-monk'] }, effect: 'multiply', value: 1.2, type: 'ability' },
+          { property: 'siegeAttack', select: { id: ['palace-guard', 'grenadier', 'zhuge-nu', 'imperial-guard', 'yuan-raider', 'nest-of-bees', 'shaolin-monk'] }, effect: 'multiply', value: 1.2, type: 'ability' },
+          { property: 'rangedAttack', select: { id: ['palace-guard', 'grenadier', 'zhuge-nu', 'imperial-guard', 'yuan-raider', 'nest-of-bees', 'shaolin-monk'] }, effect: 'multiply', value: 1.2, type: 'ability' },
+          { property: 'bonusDamageMultiplier', select: { id: ['palace-guard', 'grenadier', 'zhuge-nu', 'imperial-guard', 'yuan-raider', 'nest-of-bees', 'shaolin-monk'] }, effect: 'multiply', value: 1.2, type: 'ability' },
+        ],
+      },
     ],
     shared: {}
   } as Ability;
 }
 
-// Synthetic ability — Yuan Dynasty (Chinese).
-// +15% attack speed (×0.87 cycle) for all cavalry units.
-// Yuan = Mongol-inspired → cavalry-focused bonus.
+
 function createYuanDynastyAbility(): Ability {
   return {
     id: 'ability-dynasty-yuan',
     name: 'Yuan Dynasty',
     type: 'ability',
-    civs: ['ch'],
+    civs: ['ch', 'zx'],
     displayClasses: [],
     classes: [],
     minAge: 3,
     icon: '/abilities/AoE4_YuanDynasty.png',
-    description: 'Yuan Dynasty: all non-siege units (land + naval) gain +15% movement speed.',
+    description: 'Yuan Dynasty.',
     unique: false,
-    effects: [
-      {
-        property: 'moveSpeed',
-        select: { class: [['find_non_siege_land_military'], ['naval_unit']] },
-        effect: 'multiply',
-        value: 1.15,
-        type: 'ability',
-      }
-    ],
+    effects: [], // per-civ effects live in variations
     variations: [
       {
         id: 'ability-dynasty-yuan-3',
@@ -1641,22 +1717,40 @@ function createYuanDynastyAbility(): Ability {
         attribName: 'ability_dynasty_yuan_3',
         age: 3,
         civs: ['ch'],
-        description: 'Yuan Dynasty: all non-siege units (land + naval) gain +15% movement speed.',
+        description: 'Yuan Dynasty: all non-siege units gain +15% movement speed.',
         classes: [],
         displayClasses: [],
         unique: false,
         costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
         producedBy: [],
-        effects: [], // effects live at ability level (getAbilityVariation concatenates both)
-      }
+        effects: [
+          { property: 'moveSpeed', select: { class: [['find_non_siege_land_military'], ['naval_unit']] }, effect: 'multiply', value: 1.15, type: 'ability' },
+        ],
+      },
+      {
+        id: 'ability-dynasty-yuan-zx-3',
+        baseId: 'ability-dynasty-yuan',
+        type: 'ability',
+        name: 'Yuan Dynasty',
+        pbgid: 998004,
+        attribName: 'ability_dynasty_yuan_zx_3',
+        age: 3,
+        civs: ['zx'],
+        description: 'Yuan Dynasty: all military units cost 10% less.',
+        classes: [],
+        displayClasses: [],
+        unique: false,
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        producedBy: [],
+        effects: [
+          { property: 'costReduction', select: { class: [['annihilation_condition']] }, effect: 'multiply', value: 0.9, type: 'ability' },
+        ],
+      },
     ],
     shared: {}
   } as Ability;
 }
 
-// Synthetic ability — Astronomical Clocktower (Chinese).
-// Chinese siege units produced in the Clocktower landmark gain +50% HP.
-// Replaces the separate clocktower-* unit variants.
 function createClocktowerAbility(): Ability {
   return {
     id: 'ability-astronomical-clocktower',
@@ -3074,6 +3168,49 @@ function createBurgravePalaceAbility(): Ability {
   } as Ability;
 }
 
+//___________
+//
+// ZHU XI
+//
+//___________
+
+
+function createHardCasedBombs(): Ability {
+  return {
+    id: 'ability-hard-cased-bombs',
+    name: 'Hard Cased Bombs',
+    type: 'ability',
+    civs: ['zx'],
+    displayClasses: [],
+    classes: [],
+    minAge: 3,
+    active: 'manual',
+    icon: 'https://data.aoe4world.com/images/technologies/hard-cased-bombs-3.png',
+    description: 'Units receive +15% Ranged and Melee damage for 5 seconds when hit by a Grenade.',
+    unique: true,
+    effects: [
+      { property: 'meleeAttack', select: { class: [['land_military', 'human']], excludeId: ['grenadier', 'monk'] }, effect: 'multiply', value: 1.15, type: 'ability' },
+      { property: 'rangedAttack', select: { class: [['land_military', 'human']], excludeId: ['grenadier', 'monk'] }, effect: 'multiply', value: 1.15, type: 'ability' },
+    ],
+    variations: [{
+      id: 'ability-hard-cased-bombs-3',
+      baseId: 'ability-hard-cased-bombs',
+      type: 'ability',
+      name: 'Hard Cased Bombs',
+      pbgid: 999601,
+      attribName: 'ability-hard-cased-bombs',
+      age: 3,
+      civs: ['zx'],
+      description: 'Units receive +15% Ranged and Melee damage for 5 seconds when hit by a Grenade.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
 export function applyAbilityPatches(abilities: Ability[]): Ability[] {
   // Add the created synthetic abilities
   const chargeAttackAbility = createChargeAttackAbility();
@@ -3118,6 +3255,7 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createFarimaLeadershipAbility(),
     createKhanHunterRangeAura(),
     createBurgravePalaceAbility(),
+    createHardCasedBombs(),
   ];
 
   return abilitiesWithCharge.map(ability => {

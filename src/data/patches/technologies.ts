@@ -683,6 +683,42 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   },
 
   {
+    id: "dali-horses",
+    reason: "Raw effects empty. Per-unit corrections hard-fixed from in-game measurements (no uniform model found). Average effective buff: +17.9% AS (≠ +20% announced).",
+    after: (tech: Technology) => {
+      const corrections = [
+        { id: 'lancer', value: 1.280 * 1.2 / 1.500 }, // 1.024
+        { id: 'imperial-guard', value: 1.380 * 1.2 / 1.625 }, // 1.019
+        { id: 'horseman', value: 1.470 * 1.2 / 1.750 }, // 1.008
+        { id: 'yuan-raider', value: 1.380 * 1.2 / 1.625 }, // 1.019
+      ];
+      return {
+        ...tech,
+        variations: tech.variations.map(v => ({
+          ...v,
+          effects: [
+            {
+              property: 'attackSpeed',
+              select: { class: [['cavalry']] },
+              effect: 'multiply',
+              value: 1 / 1.2,
+              type: 'passive'
+            },
+            ...corrections.map(c => ({
+              property: 'attackSpeed',
+              select: { id: [c.id] },
+              effect: 'multiply',
+              value: c.value,
+              type: 'passive'
+            }))
+          ]
+        }))
+      };
+    },
+    uiTooltip: "The +20% attack speed buff value is incorrect compared to in-game measurements. The mean is around +17.9%, ranging from +17.2% (Lancer) to +19.0% (Horseman).",
+  },
+
+  {
     id: "zeal",
     reason: "Base effect corrected to ×1/1.5. Per-unit corrections hard-fixed from in-game measurements (no uniform model found). Average effective buff: −28.3% cycle (+39.4% AS).",
     excludedUnits: ['scholar'],
@@ -2232,6 +2268,53 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         }
       ]
     }
+  },
+
+  //___________
+  //
+  // ZHU XI
+  //
+  //___________
+
+  {
+    id: 'bolt-magazines',
+    reason: 'Raw effects empty — adds +0.5 maxRange and +1 bonus damage vs light infantry for Zhuge Nu.',
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [
+          { property: 'maxRange', select: { id: ['zhuge-nu'] }, effect: 'change', value: 0.5, type: 'passive' },
+          { property: 'rangedAttack', select: { id: ['zhuge-nu'] }, effect: 'change', value: 1, type: 'bonus', target: { class: [["light", "melee", "infantry"]] } },
+        ],
+      })),
+    }),
+  },
+
+  {
+    id: '10000-bolts',
+    reason: 'Replace flat ×1.4 multiplier with burst:+1 + burstDecay:0.4 — second bolt deals 40% of base damage with no bonus damage.',
+    uiTooltip: 'Bug: For crossbowmen, when attacking at max range, the second bolt deals full damage (so it becomes equivalent to a 100% damage bonus).',
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [
+          { property: 'burst', select: { id: ['zhuge-nu', 'crossbowman'] }, effect: 'change', value: 1, type: 'passive' },
+          { property: 'burstDecay', select: { id: ['crossbowman'], excludeId: ['zhuge-nu'] }, effect: 'change', value: 0.4, type: 'passive' },
+        ],
+      })),
+    }),
+  },
+
+  {
+    id: 'single-whip-reform',
+    reason: 'Raw effects empty. Imperial Officials move 50% faster.',
+    update: {
+      effects: [
+        { property: 'moveSpeed', select: { id: ['imperial-official'] }, effect: 'multiply', value: 1.5, type: 'passive' },
+      ],
+    },
   },
 
 ];

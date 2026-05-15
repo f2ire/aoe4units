@@ -34,6 +34,7 @@ interface UnifiedWeapon {
   attribName?: string; // Internal attribute name, used to detect special weapons (e.g. _charge_)
   burst?: {
     count: number;
+    decay?: number; // secondary bolt damage as fraction of base (no bonus damage)
   };
   durations?: {
     aim?: number;

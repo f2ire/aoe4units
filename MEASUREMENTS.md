@@ -218,6 +218,20 @@ grand-galley       | 4.000   | 3.478  | 3.610    | +10.8%  |
 **Average effective bonus:** +14.4% AS (≠ +15% announced).
 **Conclusion:** No uniform model. Hard-coded per unit in `patches/abilities.ts`.
 
+## [TECH] Dali horses — zx — 2026/05/15
+
+**Description:** 20% attack speed
+
+Unit             | Base  | Theory | Practice | Eff. %  |
+-----------------|-------|--------|----------|---------|
+lancer           | 1.500 | 1.250  | 1.280    | +17.2%  |
+imperial-guard   | 1.625 | 1.354  | 1.380    | +17.8%  |
+horseman         | 1.750 | 1.458  | 1.470    | +19.0%  |
+yuan-raider      | 1.625 | 1.354  | 1.380    | +17.8%  |
+
+**Average effective bonus:** +17.9% AS (≠ +20% announced).
+**Conclusion:** No uniform model. Hard-coded per unit in `patches/technologies.ts`.
+
 <!-- TEMPLATE FOR NEXT EXPERIMENT
 
 **Description:** +50% + 20% attack speed

@@ -92,9 +92,10 @@ export const AbilitySelector = ({
             </TooltipTrigger>
             <TooltipContent side="bottom" className="max-w-xs">
               <p className="font-semibold">{ability.name}</p>
-              {ability.description && (
-                <p className="text-xs text-muted-foreground mt-1">{ability.description}</p>
-              )}
+              {(() => {
+                const desc = (selectedCiv && ability.variations.find(v => v.civs.length > 0 && v.civs.includes(selectedCiv))?.description) || ability.description;
+                return desc ? <p className="text-xs text-muted-foreground mt-1">{desc}</p> : null;
+              })()}
               {count > 0 && (() => {
                 const step = (unitId ? ability.unitCounterStep?.[unitId] : undefined) ?? ability.counterStep ?? 0.05;
                 const label = ability.counterTooltipLabel ?? 'attack cycle';
@@ -221,9 +222,10 @@ export const AbilitySelector = ({
             </TooltipTrigger>
             <TooltipContent side="bottom" className="max-w-xs">
               <p className="font-semibold">{ability.name}</p>
-              {ability.description && (
-                <p className="text-xs text-muted-foreground mt-1">{ability.description}</p>
-              )}
+              {(() => {
+                const desc = (selectedCiv && ability.variations.find(v => v.civs.length > 0 && v.civs.includes(selectedCiv))?.description) || ability.description;
+                return desc ? <p className="text-xs text-muted-foreground mt-1">{desc}</p> : null;
+              })()}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

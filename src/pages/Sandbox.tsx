@@ -332,7 +332,7 @@ const Sandbox = () => {
           max: modifiedStats1.maxRange || weapon.range.max
         } : undefined,
         modifiers: filterBonusForWeapon(modifiedStats1.bonusDamage || [], weapon.type),
-        burst: modifiedStats1.burst ? { count: modifiedStats1.burst } : weapon.burst
+        burst: modifiedStats1.burst ? { count: modifiedStats1.burst, decay: modifiedStats1.burstDecay ?? weapon.burst?.decay } : weapon.burst
       })),
       armor: [
         { type: 'melee', value: modifiedStats1.meleeArmor },
@@ -387,12 +387,12 @@ const Sandbox = () => {
             const raw = w.type === 'ranged' || w.type === 'siege'
               ? w.damageMultiplier != null
                 ? (rangedBase1 * w.damageMultiplier + rangedFlatDelta1) * rangedMultiplier1 * debuffMultiplier
-                : modifiedStats1.rangedAttack * debuffMultiplier
+                : (w.injectedWeapon ? w.damage : modifiedStats1.rangedAttack) * debuffMultiplier
               : (w.damage + meleeAttackDelta) * debuffMultiplier;
             return w.maxDamage != null ? Math.min(raw, w.maxDamage) : raw;
           })(),
           modifiers: (w.type === 'ranged' || w.type === 'siege')
-            ? filterBonusForWeapon(modifiedStats1.bonusDamage || [], w.type).filter((m: any) => !m.chargeBonusLabel) // eslint-disable-line @typescript-eslint/no-explicit-any
+            ? (w.injectedWeapon && w.damageMultiplier == null ? (w.modifiers || []) : filterBonusForWeapon(modifiedStats1.bonusDamage || [], w.type).filter((m: any) => !m.chargeBonusLabel)) // eslint-disable-line @typescript-eslint/no-explicit-any
             : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedStats1.bonusDamage || [], 'melee').filter((b: any) => !b.fromWeapon)], // eslint-disable-line @typescript-eslint/no-explicit-any
         }));
       })(),
@@ -416,7 +416,7 @@ const Sandbox = () => {
           max: modifiedStats2.maxRange || weapon.range.max
         } : undefined,
         modifiers: filterBonusForWeapon(modifiedStats2.bonusDamage || [], weapon.type),
-        burst: modifiedStats2.burst ? { count: modifiedStats2.burst } : weapon.burst
+        burst: modifiedStats2.burst ? { count: modifiedStats2.burst, decay: modifiedStats2.burstDecay ?? weapon.burst?.decay } : weapon.burst
       })),
       armor: [
         { type: 'melee', value: modifiedStats2.meleeArmor },
@@ -471,12 +471,12 @@ const Sandbox = () => {
             const raw = w.type === 'ranged' || w.type === 'siege'
               ? w.damageMultiplier != null
                 ? (rangedBase2 * w.damageMultiplier + rangedFlatDelta2) * rangedMultiplier2 * debuffMultiplier
-                : modifiedStats2.rangedAttack * debuffMultiplier
+                : (w.injectedWeapon ? w.damage : modifiedStats2.rangedAttack) * debuffMultiplier
               : (w.damage + meleeAttackDelta) * debuffMultiplier;
             return w.maxDamage != null ? Math.min(raw, w.maxDamage) : raw;
           })(),
           modifiers: (w.type === 'ranged' || w.type === 'siege')
-            ? filterBonusForWeapon(modifiedStats2.bonusDamage || [], w.type)
+            ? (w.injectedWeapon && w.damageMultiplier == null ? (w.modifiers || []) : filterBonusForWeapon(modifiedStats2.bonusDamage || [], w.type)) // eslint-disable-line @typescript-eslint/no-explicit-any
             : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedStats2.bonusDamage || [], 'melee').filter((b: any) => !b.fromWeapon)], // eslint-disable-line @typescript-eslint/no-explicit-any
         }));
       })(),
@@ -505,7 +505,7 @@ const Sandbox = () => {
           max: modifiedStats1.maxRange || weapon.range.max
         } : undefined,
         modifiers: filterBonusForWeapon(modifiedStats1.bonusDamage || [], weapon.type),
-        burst: modifiedStats1.burst ? { count: modifiedStats1.burst } : weapon.burst
+        burst: modifiedStats1.burst ? { count: modifiedStats1.burst, decay: modifiedStats1.burstDecay ?? weapon.burst?.decay } : weapon.burst
       })),
       armor: [
         { type: 'melee', value: modifiedStats1.meleeArmor },
@@ -552,12 +552,12 @@ const Sandbox = () => {
             const raw = w.type === 'ranged' || w.type === 'siege'
               ? w.damageMultiplier != null
                 ? (rangedBaseU1 * w.damageMultiplier + rangedFlatDeltaU1) * rangedMultiplierU1 * debuffMultiplier
-                : modifiedStats1.rangedAttack * debuffMultiplier
+                : (w.injectedWeapon ? w.damage : modifiedStats1.rangedAttack) * debuffMultiplier
               : (w.damage + meleeAttackDelta) * debuffMultiplier;
             return w.maxDamage != null ? Math.min(raw, w.maxDamage) : raw;
           })(),
           modifiers: (w.type === 'ranged' || w.type === 'siege')
-            ? filterBonusForWeapon(modifiedStats1.bonusDamage || [], w.type).filter((m: any) => !m.chargeBonusLabel) // eslint-disable-line @typescript-eslint/no-explicit-any
+            ? (w.injectedWeapon && w.damageMultiplier == null ? (w.modifiers || []) : filterBonusForWeapon(modifiedStats1.bonusDamage || [], w.type).filter((m: any) => !m.chargeBonusLabel)) // eslint-disable-line @typescript-eslint/no-explicit-any
             : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedStats1.bonusDamage || [], 'melee').filter((b: any) => !b.fromWeapon)], // eslint-disable-line @typescript-eslint/no-explicit-any
         }));
       })(),
@@ -582,7 +582,7 @@ const Sandbox = () => {
           max: modifiedStats2.maxRange || weapon.range.max
         } : undefined,
         modifiers: filterBonusForWeapon(modifiedStats2.bonusDamage || [], weapon.type),
-        burst: modifiedStats2.burst ? { count: modifiedStats2.burst } : weapon.burst
+        burst: modifiedStats2.burst ? { count: modifiedStats2.burst, decay: modifiedStats2.burstDecay ?? weapon.burst?.decay } : weapon.burst
       })),
       armor: [
         { type: 'melee', value: modifiedStats2.meleeArmor },
@@ -629,12 +629,12 @@ const Sandbox = () => {
             const raw = w.type === 'ranged' || w.type === 'siege'
               ? w.damageMultiplier != null
                 ? (rangedBaseU2 * w.damageMultiplier + rangedFlatDeltaU2) * rangedMultiplierU2 * debuffMultiplier
-                : modifiedStats2.rangedAttack * debuffMultiplier
+                : (w.injectedWeapon ? w.damage : modifiedStats2.rangedAttack) * debuffMultiplier
               : (w.damage + meleeAttackDelta) * debuffMultiplier;
             return w.maxDamage != null ? Math.min(raw, w.maxDamage) : raw;
           })(),
           modifiers: (w.type === 'ranged' || w.type === 'siege')
-            ? filterBonusForWeapon(modifiedStats2.bonusDamage || [], w.type)
+            ? (w.injectedWeapon && w.damageMultiplier == null ? (w.modifiers || []) : filterBonusForWeapon(modifiedStats2.bonusDamage || [], w.type)) // eslint-disable-line @typescript-eslint/no-explicit-any
             : [...(w.modifiers || []), ...filterBonusForWeapon(modifiedStats2.bonusDamage || [], 'melee').filter((b: any) => !b.fromWeapon)], // eslint-disable-line @typescript-eslint/no-explicit-any
         }));
       })(),

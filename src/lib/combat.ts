@@ -289,7 +289,22 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
   }
 
   const clampedPerProjectile = damagePerProjectile < 1 ? 1 : damagePerProjectile;
-  const totalPrimary = clampedPerProjectile * burstCount;
+  const burstDecay = weapon.burst?.decay;
+  let totalPrimary: number;
+  if (burstDecay !== undefined && burstCount > 1) {
+    // Secondary bolts: base × decay, no bonus damage, same armor + debuff + resistance
+    let decayDmg = effectiveBaseDamage * burstDecay - armorValue;
+    if (debuffMultiplier !== 1.0) decayDmg *= debuffMultiplier;
+    if (resistancePct !== 0) decayDmg *= (1 - resistancePct / 100);
+    if (isGunpowder(attacker, weapon)) {
+      const gpRes = getResistanceValue(defender as unknown as AoE4Unit, 'gunpowder');
+      if (gpRes !== 0) decayDmg *= (1 - gpRes / 100);
+    }
+    const clampedDecay = decayDmg < 1 ? 1 : decayDmg;
+    totalPrimary = clampedPerProjectile + (burstCount - 1) * clampedDecay;
+  } else {
+    totalPrimary = clampedPerProjectile * burstCount;
+  }
 
   // Dagger charge: computed separately with ranged armor + ranged resistance (clamped to 0, not 1)
   let daggerExtra = 0;

@@ -107,6 +107,7 @@ const combatProperties = [
   'siegeAttack',      // Siege damage (special property for siege weapons)
   'gunpowderAttack',  // Gunpowder damage (special property for gunpowder weapons)
   'burst',            // Number of projectiles
+  'burstDecay',       // Secondary bolt damage as fraction of base (no bonus damage)
   'costReduction',    // Unit production cost multiplier
   'stoneCostReduction', // Stone-only cost multiplier
   'foodCostReduction',  // Food-only cost multiplier
@@ -350,6 +351,7 @@ export interface UnitStats {
   attackSpeed?: number;
   maxRange?: number;
   burst?: number;
+  burstDecay?: number;
   bonusDamage?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   costMultiplier?: number; // Production cost multiplier (e.g. 0.8 = -20%)
   stoneCostMultiplier?: number; // Stone-only cost multiplier (e.g. 0.8 = -20% stone)
@@ -487,7 +489,7 @@ export function applyTechnologyEffects(
       if (!combatProperties.includes(property)) continue;
 
       // Handle special properties
-      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'costReduction' || property === 'stoneCostReduction' || property === 'foodCostReduction' || property === 'goldCostReduction' || property === 'rangedResistance' || property === 'meleeResistance' || property === 'siegeResistance' || property === 'healingRate' || property === 'healingRatePerSecond' || property === 'chargeMultiplier' || property === 'chargeChange' || property === 'bonusDamageMultiplier' || property === 'armorPenetration' || property === 'opponentAttackSpeedDebuff' || property === 'versusOpponentDamageDebuff' || property === 'opponentHealingRateDebuff') {
+      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'burstDecay' || property === 'costReduction' || property === 'stoneCostReduction' || property === 'foodCostReduction' || property === 'goldCostReduction' || property === 'rangedResistance' || property === 'meleeResistance' || property === 'siegeResistance' || property === 'healingRate' || property === 'healingRatePerSecond' || property === 'chargeMultiplier' || property === 'chargeChange' || property === 'bonusDamageMultiplier' || property === 'armorPenetration' || property === 'opponentAttackSpeedDebuff' || property === 'versusOpponentDamageDebuff' || property === 'opponentHealingRateDebuff') {
         // versusOpponentDamageDebuff with a class selector is handled per-hit by getVersusDebuffMultiplier
         // in combat.ts — applying it here too causes double-counting.
         if (property === 'versusOpponentDamageDebuff' && effect.select?.class) continue;
@@ -653,6 +655,17 @@ export function applyTechnologyEffects(
         modifiedStats.burst += effect.value;
       } else if (effect.effectType === 'multiply') {
         modifiedStats.burst *= effect.value;
+      }
+    }
+  }
+
+  // Apply burstDecay
+  for (const effect of specialEffects) {
+    if (effect.property === 'burstDecay') {
+      if (effect.effectType === 'change') {
+        modifiedStats.burstDecay = (modifiedStats.burstDecay ?? 0) + effect.value;
+      } else if (effect.effectType === 'multiply') {
+        modifiedStats.burstDecay = (modifiedStats.burstDecay ?? 1) * effect.value;
       }
     }
   }

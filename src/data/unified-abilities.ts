@@ -296,7 +296,10 @@ export function getAbilityVariation(
 
   let finalVariation = variation;
   if (!finalVariation) {
-    finalVariation = ability.variations.find(v => v.effects && v.effects.length > 0) || ability.variations[0] || null;
+    // Prefer civ-matching variation in fallback to avoid picking a variation from a different civ
+    finalVariation = ability.variations.find(v =>
+      (civAbbr === 'all' || v.civs.length === 0 || v.civs.includes(civAbbr)) && v.effects && v.effects.length > 0
+    ) || ability.variations.find(v => v.effects && v.effects.length > 0) || ability.variations[0] || null;
   }
 
   if (!finalVariation) return null;

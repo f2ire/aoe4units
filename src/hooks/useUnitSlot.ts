@@ -300,22 +300,6 @@ export function useUnitSlot() {
     }
   }, [unit, selectedCiv, selectedAge]);
 
-  // Deactivate technologies whose minAge exceeds the current selected age
-  useEffect(() => {
-    setActiveTechnologies(prev => {
-      if (prev.size === 0) return prev;
-      const next = new Set(prev);
-      let changed = false;
-      for (const techId of [...next]) {
-        const tech = allTechnologies.find(t => t.id === techId);
-        if (tech && tech.minAge > selectedAge) {
-          next.delete(techId);
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [selectedAge]);
 
   const EXCLUDED_UNIT_IDS = new Set([
     'clocktower-battering-ram',
@@ -623,6 +607,7 @@ export function useUnitSlot() {
       attackSpeed: weapon?.speed || 0,
       maxRange: weapon?.range?.max || 0,
       burst: weapon?.burst?.count || 1,
+      burstDecay: weapon?.burst?.decay,
       bonusDamage: (weapon?.modifiers || []).map((m: any) => ({ ...m, fromWeapon: true })), // eslint-disable-line @typescript-eslint/no-explicit-any
       rangedResistance: getResistanceValue(data, 'ranged'),
       meleeResistance: getResistanceValue(data, 'melee'),
@@ -774,6 +759,7 @@ export function useUnitSlot() {
       attackSpeed: weapon?.speed || 0,
       maxRange: weapon?.range?.max || 0,
       burst: weapon?.burst?.count || 1,
+      burstDecay: weapon?.burst?.decay,
       bonusDamage: (weapon?.modifiers || []).map((m: any) => ({ ...m, fromWeapon: true })), // eslint-disable-line @typescript-eslint/no-explicit-any
       rangedResistance: getResistanceValue(data, 'ranged'),
       meleeResistance: getResistanceValue(data, 'melee'),
@@ -867,7 +853,7 @@ export function useUnitSlot() {
       if (injection.burstCount !== undefined) weapon = { ...weapon, burst: { count: injection.burstCount } };
       if (injection.damageMultiplier !== undefined) weapon = { ...weapon, damageMultiplier: injection.damageMultiplier };
       if (injection.maxDamage !== undefined) weapon = { ...weapon, maxDamage: injection.maxDamage };
-      weapons.push(weapon);
+      weapons.push({ ...weapon, name: sourceUnit.name, injectedWeapon: true });
     }
     return weapons;
   }, [activeTechnologies, variation]);

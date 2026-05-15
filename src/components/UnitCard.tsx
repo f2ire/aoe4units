@@ -348,7 +348,7 @@ export const UnitCard = ({
                   <span className="text-muted-foreground">Attack</span>
                   <span className={cn('flex items-center gap-1', getComparisonColor((primaryWeapon.damage || 0) * (primaryWeapon.burst?.count || 1), compareAttack).color)}>
                     {getComparisonColor((primaryWeapon.damage || 0) * (primaryWeapon.burst?.count || 1), compareAttack).symbol && <span className="text-xs">{getComparisonColor((primaryWeapon.damage || 0) * (primaryWeapon.burst?.count || 1), compareAttack).symbol}</span>}
-                    {Math.round(primaryWeapon.damage || 0)}{primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 ? ` × ${primaryWeapon.burst.count}` : ''} ({primaryWeapon.type})
+                    {Math.round(primaryWeapon.damage || 0)}{primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 && primaryWeapon.burst.decay === undefined ? ` × ${primaryWeapon.burst.count}` : ''} ({primaryWeapon.type})
                     {effectiveAttackDmg !== null && (
                       <span className="text-orange-400">
                         (→{effectiveAttackDmg})
@@ -356,6 +356,14 @@ export const UnitCard = ({
                     )}
                   </span>
                 </div>
+                {primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 && primaryWeapon.burst.decay !== undefined && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground text-xs italic pl-2">+ 2nd bolt</span>
+                    <span className="text-xs text-muted-foreground">
+                      {Math.round((primaryWeapon.damage || 0) * primaryWeapon.burst.decay)} ({primaryWeapon.type})
+                    </span>
+                  </div>
+                )}
                 {showSecondaryWeaponRow && (
                   secondaryWeapons && secondaryWeapons.length > 0 ? (
                     secondaryWeapons.map((w: any, i: number) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -744,6 +752,52 @@ export const UnitCard = ({
                     </div>
                   )}
 
+                  {/* ── Burst Decay Bolt ── */}
+                  {primaryWeapon?.burst?.count && primaryWeapon.burst.count > 1 && primaryWeapon.burst.decay !== undefined && (() => {
+                    const decayDmg = (primaryWeapon.damage || 0) * primaryWeapon.burst.decay;
+                    const decayArmorVal = primaryWeapon.type === 'melee'
+                      ? (compareMeleeArmor || 0)
+                      : primaryWeapon.type === 'siege'
+                        ? 0
+                        : (compareRangedArmor || 0);
+                    const decayEffectiveDmg = Math.max(0, decayDmg - decayArmorVal);
+                    const decayDps = (primaryWeapon.speed || 0) > 0 ? decayEffectiveDmg / primaryWeapon.speed : 0;
+                    return (
+                      <div className="space-y-1">
+                        <div className="font-semibold text-primary uppercase tracking-wide text-[9px]">
+                          ⚔️ 2nd Bolt
+                        </div>
+                        <div className="pl-1 border-l-2 border-primary/20 space-y-0.5">
+                          <div className="font-medium text-primary/80">
+                            + 2nd bolt ({primaryWeapon.type})
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Base dmg</span>
+                            <span>{round2(decayDmg)}</span>
+                          </div>
+                          {decayArmorVal > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Armor</span>
+                              <span className="text-red-400">−{round2(decayArmorVal)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between border-t border-border/50 pt-0.5">
+                            <span className="text-muted-foreground">≈ Effective dmg</span>
+                            <span>{round2(decayEffectiveDmg)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Attack cycle</span>
+                            <span>{cycleStr}</span>
+                          </div>
+                          <div className="flex justify-between font-medium">
+                            <span>≈ DPS</span>
+                            <span>{round2(decayDps)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* ── Movement ── */}
                   {hasMovement && (
                     <div className="space-y-1">
@@ -975,7 +1029,10 @@ export const UnitCard = ({
               <div>
                 {primaryWeapon ? (
                   <>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Atk</span><span className={effectiveAttackDmg !== null ? 'text-orange-400' : undefined}>{effectiveAttackDmg !== null ? effectiveAttackDmg : Math.round(primaryWeapon.damage || 0)}{primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 ? `×${primaryWeapon.burst.count}` : ''}{applicableBonus > 0 && ` + ${Math.round(versusDebuff < 1 ? applicableBonus * versusDebuff : applicableBonus)}`}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Atk</span><span className={effectiveAttackDmg !== null ? 'text-orange-400' : undefined}>{effectiveAttackDmg !== null ? effectiveAttackDmg : Math.round(primaryWeapon.damage || 0)}{primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 && primaryWeapon.burst.decay === undefined ? `×${primaryWeapon.burst.count}` : ''}{applicableBonus > 0 && ` + ${Math.round(versusDebuff < 1 ? applicableBonus * versusDebuff : applicableBonus)}`}</span></div>
+                    {primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 && primaryWeapon.burst.decay !== undefined && (
+                      <div className="flex justify-end"><span className="text-muted-foreground text-xs italic">{Math.round((primaryWeapon.damage || 0) * primaryWeapon.burst.decay)}</span></div>
+                    )}
                     {secondaryWeapons && secondaryWeapons.length > 0 && secondaryWeapons.map((w: any, i: number) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
                       <div key={i} className="flex justify-end"><span>{(() => {
                         const applicableSecondaryBonus = computeApplicableBonus(w.modifiers || []);
