@@ -1091,7 +1091,7 @@ const Sandbox = () => {
         <div className="grid grid-cols-2 gap-6 mb-8">
           {/* Civ 1 Column */}
           <div className="space-y-4 flex flex-col items-end">
-            <label className="text-sm font-medium text-foreground">Civ 1:</label>
+            <label className="text-sm font-medium text-foreground">Civ 1: <span className="text-xs text-muted-foreground font-normal">({filteredUnits1.length} units)</span></label>
             <Select value={selectedCiv1} onValueChange={setSelectedCiv1}>
               <SelectTrigger className="bg-secondary border-border h-14">
                 <SelectValue>
@@ -1119,7 +1119,6 @@ const Sandbox = () => {
               </SelectContent>
             </Select>
 
-            <label className="text-sm font-medium text-foreground mt-6 block">Friendly Unit:</label>
             <Select
               value={isJeanneUnit(unit1) ? 'jeanne-darc-peasant' : unit1?.id === 'desert-raider' && activeAbilities1.has('ability-desert-raider-blade') ? 'desert-raider_cavalry' : (unit1?.id || "")}
               onValueChange={(value) => {
@@ -1235,12 +1234,11 @@ const Sandbox = () => {
                 onSelect={setUnit1}
               />
             )}
-            <p className="text-xs text-muted-foreground">{filteredUnits1.length} units available</p>
           </div>
 
           {/* Civ 2 Column */}
           <div className="space-y-4 flex flex-col items-start">
-            <label className="text-sm font-medium text-foreground">Civ 2:</label>
+            <label className="text-sm font-medium text-foreground">Civ 2: <span className="text-xs text-muted-foreground font-normal">({filteredUnits2.length} units)</span></label>
             <Select value={selectedCiv2} onValueChange={setSelectedCiv2}>
               <SelectTrigger className="bg-secondary border-border h-14">
                 <SelectValue>
@@ -1268,7 +1266,6 @@ const Sandbox = () => {
               </SelectContent>
             </Select>
 
-            <label className="text-sm font-medium text-foreground mt-6 block">Civ 2 Unit:</label>
             <Select
               value={isJeanneUnit(unit2) ? 'jeanne-darc-peasant' : unit2?.id === 'desert-raider' && activeAbilities2.has('ability-desert-raider-blade') ? 'desert-raider_cavalry' : (unit2?.id || "")}
               onValueChange={(value) => {
@@ -1384,7 +1381,6 @@ const Sandbox = () => {
                 onSelect={setUnit2}
               />
             )}
-            <p className="text-xs text-muted-foreground">{filteredUnits2.length} units available</p>
           </div>
         </div>
 
