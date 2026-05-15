@@ -272,6 +272,10 @@ const Sandbox = () => {
     lockedAbilities: lockedAbilities1,
     lockedTechnologies: lockedTechnologies1,
     secondaryWeapons: secondaryWeapons1,
+    unitMinAge: unitMinAge1,
+    fullUpgradeAge: fullUpgradeAge1,
+    applyFullUpgrade: applyFullUpgrade1,
+    resetTechnologies: resetTechnologies1,
   } = civ1;
 
   const {
@@ -298,6 +302,10 @@ const Sandbox = () => {
     lockedAbilities: lockedAbilities2,
     lockedTechnologies: lockedTechnologies2,
     secondaryWeapons: secondaryWeapons2,
+    unitMinAge: unitMinAge2,
+    fullUpgradeAge: fullUpgradeAge2,
+    applyFullUpgrade: applyFullUpgrade2,
+    resetTechnologies: resetTechnologies2,
   } = civ2;
 
   const maxRangeDistance = Math.max(modifiedStats1.maxRange || 0, modifiedStats2.maxRange || 0);
@@ -1403,6 +1411,10 @@ const Sandbox = () => {
                       technologies={techs1}
                       activeTechnologies={activeTechnologies1}
                       onToggle={toggleTechnology1}
+                      unitMinAge={unitMinAge1}
+                      fullUpgradeAge={fullUpgradeAge1}
+                      onApplyFullUpgrade={applyFullUpgrade1}
+                      onReset={resetTechnologies1}
                       orientation="left"
                       selectedCiv={selectedCiv1}
                       lockedTechnologies={lockedTechnologies1}
@@ -1509,6 +1521,10 @@ const Sandbox = () => {
                       lockedTechnologies={lockedTechnologies2}
                       unitId={variation2?.baseId ?? unit2?.id}
                       selectedAge={selectedAge2}
+                      unitMinAge={unitMinAge2}
+                      fullUpgradeAge={fullUpgradeAge2}
+                      onApplyFullUpgrade={applyFullUpgrade2}
+                      onReset={resetTechnologies2}
                     />
                     <AbilitySelector
                       abilities={abilities2}
@@ -1695,6 +1711,10 @@ const Sandbox = () => {
                           lockedTechnologies={lockedTechnologies1}
                           unitId={variation1?.baseId ?? unit1?.id}
                           selectedAge={selectedAge1}
+                          unitMinAge={unitMinAge1}
+                          fullUpgradeAge={fullUpgradeAge1}
+                          onApplyFullUpgrade={applyFullUpgrade1}
+                          onReset={resetTechnologies1}
                         />
                         <AbilitySelector
                           abilities={abilities1}
@@ -1763,6 +1783,10 @@ const Sandbox = () => {
                           lockedTechnologies={lockedTechnologies2}
                           unitId={variation2?.baseId ?? unit2?.id}
                           selectedAge={selectedAge2}
+                          unitMinAge={unitMinAge2}
+                          fullUpgradeAge={fullUpgradeAge2}
+                          onApplyFullUpgrade={applyFullUpgrade2}
+                          onReset={resetTechnologies2}
                         />
                         <AbilitySelector
                           abilities={abilities2}

@@ -62,7 +62,7 @@ export const AbilitySelector = ({
 
     return (
       <div key={ability.id} className="w-12 flex flex-col items-center gap-1 relative">
-        <TooltipProvider delayDuration={750}>
+        <TooltipProvider delayDuration={200}>
           <Tooltip>
             <TooltipTrigger asChild>
               <div
@@ -115,7 +115,7 @@ export const AbilitySelector = ({
         </TooltipProvider>
 
         {patchTooltip && (
-          <TooltipProvider delayDuration={750}>
+          <TooltipProvider delayDuration={200}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <span
@@ -188,7 +188,7 @@ export const AbilitySelector = ({
 
     return (
       <div key={ability.id} className="relative">
-        <TooltipProvider delayDuration={750}>
+        <TooltipProvider delayDuration={200}>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -231,7 +231,7 @@ export const AbilitySelector = ({
         </TooltipProvider>
 
         {patchTooltip && (
-          <TooltipProvider delayDuration={750}>
+          <TooltipProvider delayDuration={200}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <span

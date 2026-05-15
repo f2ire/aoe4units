@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { aoe4Units, AoE4Unit, getUnitVariation, getMaxAge, getPrimaryWeapon, getArmorValue, getResistanceValue } from "@/data/unified-units";
+import { aoe4Units, AoE4Unit, getUnitVariation, getMaxAge, getAvailableAges, getPrimaryWeapon, getArmorValue, getResistanceValue } from "@/data/unified-units";
 import type { UnifiedVariation } from "@/data/unified-units";
-import { getTechnologiesForUnit, getActiveTechnologyVariationsWithTiers, applyTechnologyEffects, getAllTiersFromSameLine, allTechnologies, IMPROVED_TECH_PAIRS, IMPROVED_TECH_BASE, type UnitStats } from "@/data/unified-technologies";
+import { getTechnologiesForUnit, getActiveTechnologyVariationsWithTiers, applyTechnologyEffects, getAllTiersFromSameLine, allTechnologies, IMPROVED_TECH_PAIRS, IMPROVED_TECH_BASE, getTechnologyTier, getTechnologyBaseName, type UnitStats } from "@/data/unified-technologies";
 import { getAbilitiesForUnit, getActiveAbilityVariations, getAbilityVariation } from "@/data/unified-abilities";
 import { techAbilityInteractions } from "@/data/patches/abilities";
 import { foreignEngineeringUnitRestrictions, techUnitExclusions, weaponInjectionMap } from "@/data/patches/technologies";
@@ -60,6 +60,7 @@ export function useUnitSlot() {
   const [activeTechnologies, setActiveTechnologies] = useState<Set<string>>(new Set());
   const [activeAbilities, setActiveAbilities] = useState<Set<string>>(new Set());
   const [abilityCounters, setAbilityCounters] = useState<Map<string, number>>(new Map());
+  const [fullUpgradeAge, setFullUpgradeAge] = useState<number | null>(null);
 
   // Stores a preferred weapon ability to activate on the next desert-raider unit load
   const pendingAbilityRef = useRef<string | null>(null);
@@ -70,6 +71,7 @@ export function useUnitSlot() {
     setActiveTechnologies(new Set());
     setActiveAbilities(new Set());
     setAbilityCounters(new Map());
+    setFullUpgradeAge(null);
     if (u && preferredAbility) {
       pendingAbilityRef.current = preferredAbility;
     }
@@ -146,6 +148,7 @@ export function useUnitSlot() {
       }
       return next;
     });
+    setFullUpgradeAge(null);
   }, []);
 
   // Mutually exclusive weapon-swap ability groups — clicking the active one is a no-op
@@ -858,6 +861,80 @@ export function useUnitSlot() {
     return weapons;
   }, [activeTechnologies, variation]);
 
+  const unitMinAge = useMemo(() => {
+    if (!unit) return 1;
+    const ages = getAvailableAges(unit.id, selectedCiv);
+    return ages.length > 0 ? Math.min(...ages) : 1;
+  }, [unit, selectedCiv]);
+
+  const applyFullUpgrade = useCallback((upgradeAge: number) => {
+    // Group tiered techs by base name, keep highest tier at/below upgradeAge
+    const tieredBest = new Map<string, (typeof techs)[number]>();
+    const standalones: (typeof techs)[number][] = [];
+
+    for (const tech of techs) {
+      if (tech.minAge > upgradeAge) continue;
+      const tierInfo = getTechnologyTier(tech);
+      if (tierInfo) {
+        const baseName = getTechnologyBaseName(tech.displayClasses[0]);
+        const existing = tieredBest.get(baseName);
+        if (!existing || getTechnologyTier(existing)!.tier < tierInfo.tier) {
+          tieredBest.set(baseName, tech);
+        }
+      } else {
+        standalones.push(tech);
+      }
+    }
+
+    const toActivate = new Set<string>();
+    for (const tech of tieredBest.values()) toActivate.add(tech.id);
+
+    // Add standalones, respecting civ-exclusive groups (pick first in group only)
+    const civGroups = CIV_TECH_EXCLUSIVE_GROUPS[selectedCiv] || [];
+    const usedGroupIdxs = new Set<number>();
+    for (const tech of standalones) {
+      const groupIdx = civGroups.findIndex(g => g.includes(tech.id));
+      if (groupIdx !== -1) {
+        if (!usedGroupIdxs.has(groupIdx)) {
+          usedGroupIdxs.add(groupIdx);
+          toActivate.add(tech.id);
+        }
+      } else {
+        toActivate.add(tech.id);
+      }
+    }
+
+    // For Mongols: also activate improved variants available at upgradeAge
+    if (selectedCiv === 'mo') {
+      for (const id of [...toActivate]) {
+        const improvedId = IMPROVED_TECH_PAIRS[id];
+        if (improvedId) {
+          const improvedTech = allTechnologies.find(t => t.id === improvedId);
+          if (improvedTech && improvedTech.minAge <= upgradeAge) toActivate.add(improvedId);
+        }
+      }
+    }
+
+    // Always keep locked/default techs
+    (DEFAULT_ACTIVE_TECHS[selectedCiv] || []).forEach(id => toActivate.add(id));
+    (LOCKED_UNIT_TECHS[unit?.id ?? ''] || []).forEach(id => toActivate.add(id));
+
+    setActiveTechnologies(toActivate);
+    setFullUpgradeAge(upgradeAge);
+  }, [techs, selectedCiv, unit]);
+
+  const resetTechnologies = useCallback(() => {
+    const defaults = new Set<string>();
+    (DEFAULT_ACTIVE_TECHS[selectedCiv] || []).forEach(id => {
+      if (techs.some(t => t.id === id)) defaults.add(id);
+    });
+    (LOCKED_UNIT_TECHS[unit?.id ?? ''] || []).forEach(id => {
+      if (techs.some(t => t.id === id)) defaults.add(id);
+    });
+    setActiveTechnologies(defaults);
+    setFullUpgradeAge(null);
+  }, [techs, selectedCiv, unit]);
+
   const lockedTechnologies = useMemo(() => {
     const locked = new Set<string>();
     (DEFAULT_ACTIVE_TECHS[selectedCiv] || []).forEach(id => locked.add(id));
@@ -889,5 +966,9 @@ export function useUnitSlot() {
     lockedAbilities,
     lockedTechnologies,
     secondaryWeapons,
+    unitMinAge,
+    fullUpgradeAge,
+    applyFullUpgrade,
+    resetTechnologies,
   };
 }

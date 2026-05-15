@@ -17,6 +17,10 @@ interface TechnologySelectorProps {
   lockedTechnologies?: Set<string>;
   unitId?: string;
   selectedAge?: number;
+  unitMinAge?: number;
+  fullUpgradeAge?: number | null;
+  onApplyFullUpgrade?: (age: number) => void;
+  onReset?: () => void;
 }
 
 export const TechnologySelector = ({
@@ -28,6 +32,10 @@ export const TechnologySelector = ({
   lockedTechnologies,
   unitId,
   selectedAge,
+  unitMinAge = 1,
+  fullUpgradeAge,
+  onApplyFullUpgrade,
+  onReset,
 }: TechnologySelectorProps) => {
   // Filter out improved techs — they're controlled via the "^" button on their base tech
   const visibleTechnologies = technologies.filter(t => !IMPROVED_TECH_BASE[t.id]);
@@ -124,8 +132,49 @@ export const TechnologySelector = ({
     }
   });
 
+  const AGE_LABELS = ['I', 'II', 'III', 'IV'];
+
   return (
     <div className="space-y-2 mt-2">
+      {(onApplyFullUpgrade || onReset) && (
+        <div className={`flex items-center gap-2 mb-5 ${orientation === 'right' ? 'flex-row-reverse' : ''}`}>
+          <span className="text-[11px] uppercase tracking-wide text-[#6a6a7a]">Full upgrade</span>
+          {onApplyFullUpgrade && (
+            <div className="flex rounded overflow-hidden border border-[#3a3a4a] bg-[#1a1a2a]">
+              {AGE_LABELS.map((label, i) => {
+                const age = i + 1;
+                const isDisabled = age < unitMinAge;
+                const isActive = fullUpgradeAge === age;
+                return (
+                  <button
+                    key={age}
+                    disabled={isDisabled}
+                    onClick={() => onApplyFullUpgrade(age)}
+                    className={[
+                      'px-3 py-1 text-xs font-medium border-l border-[#3a3a4a] first:border-l-0 transition-colors',
+                      isActive
+                        ? 'bg-[#c9a227] text-[#0f0f17] font-bold'
+                        : isDisabled
+                          ? 'opacity-30 cursor-not-allowed text-[#6a6a7a]'
+                          : 'text-[#6a6a7a] hover:bg-[#2a2a3a] hover:text-[#c9a227] cursor-pointer',
+                    ].join(' ')}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {onReset && (
+            <button
+              onClick={onReset}
+              className="px-2 py-1 text-xs rounded border border-[#3a3a4a] bg-[#1a1a2a] text-[#6a6a7a] hover:bg-[#2a2a3a] hover:text-red-400 transition-colors"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      )}
       {categories.map(category => {
         const categoryLines = grouped[category];
         const lineKeys = Object.keys(categoryLines);
@@ -174,7 +223,7 @@ export const TechnologySelector = ({
                   // First column of the span: render the counter widget at the computed width
                   if (age === counterMinAge) return (
                     <div key={age} style={{ width: `${spanWidth}px` }} className="flex-shrink-0 flex flex-col items-center gap-1 relative">
-                      <TooltipProvider delayDuration={750}>
+                      <TooltipProvider delayDuration={200}>
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <div
@@ -254,7 +303,7 @@ export const TechnologySelector = ({
                               </div>
                             )}
 
-                            <TooltipProvider delayDuration={750}>
+                            <TooltipProvider delayDuration={200}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <button
@@ -282,7 +331,7 @@ export const TechnologySelector = ({
 
                             {/* Mongol upgrade badge — only for Mongol civ */}
                             {tech.hasMongolUpgrade && selectedCiv === 'mo' && (
-                              <TooltipProvider delayDuration={750}>
+                              <TooltipProvider delayDuration={200}>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <button
@@ -308,7 +357,7 @@ export const TechnologySelector = ({
                             )}
 
                             {patchTooltip && (
-                              <TooltipProvider delayDuration={750}>
+                              <TooltipProvider delayDuration={200}>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <span
