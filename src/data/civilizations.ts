@@ -25,9 +25,10 @@ export const CIVILIZATIONS: Civilization[] = [
   { abbr: 'od', name: 'Order of the Dragon', slug: 'dragon', flagPath: '/flags/od.png' },
   { abbr: 'ot', name: 'Ottomans', slug: 'ottomans', flagPath: '/flags/ot.png' },
   { abbr: 'ru', name: 'Rus', slug: 'rus', flagPath: '/flags/ru.png' },
-  { abbr: 'zx', name: "Zhu Xi's Legacy", slug: 'zhuxi', flagPath: '/flags/zx.png' },
   { abbr: 'sen', name: 'Sengoku Dynasty', slug: 'sengoku', flagPath: '/flags/sen.png' },
   { abbr: 'tug', name: 'Tughlaq Dynasty', slug: 'tughlaq', flagPath: '/flags/tug.png' },
+  { abbr: 'zx', name: "Zhu Xi's Legacy", slug: 'zhuxi', flagPath: '/flags/zx.png' },
+
 ];
 
 export const getCivilizationByAbbr = (abbr: string): Civilization | undefined => {

@@ -371,6 +371,7 @@ export interface UnitStats {
   chargeMultiplier?: number;   // First-hit charge bonus = primaryMeleeDamage × chargeMultiplier (requires charge-attack active)
   chargeChange?: number;       // Flat additive bonus added to charge damage (requires charge-attack active)
   postChargeMeleeBonus?: number; // Melee attack bonus active only from hit 2 onward (after charge fires). Excluded from hit 1.
+  maxHpBonusFraction?: number;  // Flat bonus damage per hit = this fraction × defender's max HP (bypasses armor/resistance)
 }
 
 export function applyTechnologyEffects(

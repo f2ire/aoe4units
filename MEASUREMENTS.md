@@ -215,8 +215,49 @@ grand-galley       | 4.000   | 3.478  | 3.610    | +10.8%  |
 
 
 
-**Average effective bonus:** +14.4% AS (≠ +15% announced).
+**Average effective bonus:** +14.4% AS (≠ +15% announced). Spread: +9.4% (siphahi) to +22.8% (man-at-arms).
 **Conclusion:** No uniform model. Hard-coded per unit in `patches/abilities.ts`.
+
+## [TECH] Daimyo Aura — Sen — 2026/05/15
+
+**Description:** 20% Attack speed (10% age 2/ 15% age 3) 
+
+Unit                    | Base  | Theory | Practice | Eff. %  |
+------------------------|-------|--------|----------|---------|
+spearman                | 1.875 | 1.563  | 1.62     | +15.7%  |
+kanabo-samurai          | 1.375 | 1.146  | 1.12     | +22.8%  |
+naginata-samurai        | 1.375 | 1.146  | 1.12     | +22.8%  |
+ozutsu                  | 4.750 | 3.958  | 4.03     | +17.9%  |
+yumi-ashigaru           | 1.625 | 1.354  | 1.37     | +18.6%  |
+tanegashima-ashigaru    | 2.500 | 2.083  | 2.10     | +19.0%  |
+mounted-samurai         | 1.500 | 1.250  | 1.23     | +22.0%  |
+yari-cavalry            | 1.750 | 1.458  | 1.56     | +12.2%  |
+ikko-ikki-monk          | 1.375 | 1.146  | 1.12     | +22.8%  |
+
+
+**Average effective bonus:** +19.3% AS (≠ +20% announced). Spread: +12.2% (yari-cavalry) to +22.8% (kanabo/naginata/ikko-ikki-monk).
+**Conclusion:** No uniform model. Hard-coded per unit in `patches/technologies.ts`.
+
+## [TECH] Sword Hunt Statue — Sen — 2026/05/15
+
+**Description:** 35% Attack speed  (20% Damyo + 15% Sword Hunt Statue passive)
+
+Unit                    | Base  | Theory | Practice | Eff. %  |
+------------------------|-------|--------|----------|---------|
+spearman                | 1.875 | 1.389  | 1.30     | +44.2%  |
+kanabo-samurai          | 1.375 | 1.019  | 1.00     | +37.5%  |
+naginata-samurai        | 1.375 | 1.019  | 1.00     | +37.5%  |
+ozutsu                  | 4.750 | 3.519  | 3.71     | +28.0%  |
+yumi-ashigaru           | 1.625 | 1.204  | 1.30     | +25.0%  |
+tanegashima-ashigaru    | 2.500 | 1.852  | 1.95     | +28.2%  |
+mounted-samurai         | 1.500 | 1.111  | 1.15     | +30.4%  |
+yari-cavalry            | 1.750 | 1.296  | 1.21     | +44.6%  |
+ikko-ikki-monk          | 1.375 | 1.019  | 1.00     | +37.5%  |
+
+
+**Average effective bonus:** +34.8% AS (≠ +35% announced). Spread: +25.0% (yumi-ashigaru) to +44.6% (yari-cavalry).
+**Conclusion:** No uniform model. Hard-coded per unit in `patches/technologies.ts`.
+
 
 ## [TECH] Dali horses — zx — 2026/05/15
 

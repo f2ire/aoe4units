@@ -180,8 +180,8 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
   {
     id: 'court-architects',
-    reason: 'Villager has class golden_age_tier_3_building_abb which expands to "building" token, falsely matching this tech.',
-    excludedUnits: ['villager'],
+    reason: 'Building HP only — not relevant to unit combat. Clear effects to hide from UI.',
+    after: (tech) => ({ ...tech, effects: [], variations: tech.variations.map(v => ({ ...v, effects: [] })) }),
   },
   {
     id: "silk-bowstrings",
@@ -251,7 +251,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     excludedUnits: ['sultans-elite-tower-elephant', 'black-rider', 'jeanne-darc-markswoman'],
     after: (tech: any) => ({
       ...tech,
-      effects: [...(tech.effects || []), { property: 'rangedAttack', select: { id: ['earls-guard'] }, effect: 'change', value: 1, type: 'passive' }],
+      effects: [...(tech.effects || []), { property: 'rangedAttack', select: { id: ['earls-guard', 'donso', 'naginata-samurai'] }, effect: 'change', value: 1, type: 'passive' }],
     }),
   },
   {
@@ -260,7 +260,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     excludedUnits: ['sultans-elite-tower-elephant', 'black-rider', 'jeanne-darc-markswoman'],
     after: (tech: any) => ({
       ...tech,
-      effects: [...(tech.effects || []), { property: 'rangedAttack', select: { id: ['earls-guard'] }, effect: 'change', value: 1, type: 'passive' }],
+      effects: [...(tech.effects || []), { property: 'rangedAttack', select: { id: ['earls-guard', 'donso', 'naginata-samurai'] }, effect: 'change', value: 1, type: 'passive' }],
     }),
   },
   {
@@ -269,7 +269,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     excludedUnits: ['sultans-elite-tower-elephant', 'black-rider', 'jeanne-darc-markswoman'],
     after: (tech: any) => ({
       ...tech,
-      effects: [...(tech.effects || []), { property: 'rangedAttack', select: { id: ['earls-guard'] }, effect: 'change', value: 1, type: 'passive' }],
+      effects: [...(tech.effects || []), { property: 'rangedAttack', select: { id: ['earls-guard', 'donso', 'naginata-samurai'] }, effect: 'change', value: 1, type: 'passive' }],
     }),
   },
 
@@ -1378,6 +1378,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
       variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
     })
   },
+
   {
     id: 'tawara',
     reason: 'Raw effects empty. Villager move speed +7% (tier 1/3 of the Tawara/Takezaiku/Fudasashi line).',
@@ -2269,6 +2270,118 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     }
   },
 
+  //_______________
+  //
+  // SENGOKU DAIMYO
+  //
+  //_______________
+
+  {
+    id: 'cross-folded-armor',
+    reason: 'Raw effect has no select — restricts to melee infantry (barracks units). minAge set to 2.',
+    after: (tech) => ({
+      ...tech,
+      minAge: 2,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: v.effects.map(e => ({ ...e, select: { class: [['melee', 'infantry']], excludeId: ['ikko-ikki-monk'] } })),
+      })),
+    }),
+  },
+
+  {
+    id: 'lightweight-blades',
+    reason: 'Raw effects empty. Spearmen +10% move speed and +5 damage vs. Workers. minAge set to 2.',
+    update: {
+      minAge: 2,
+      effects: [
+        { property: 'moveSpeed', select: { id: ['spearman'] }, effect: 'multiply', value: 1.1, type: 'passive' },
+        { property: 'meleeAttack', select: { id: ['spearman'] }, effect: 'change', value: 5, type: 'bonus', target: { class: [['worker']] } },
+      ],
+    },
+  },
+
+
+  {
+    id: 'samurai-bow',
+    reason: 'Tech has empty effects — invisible without this. Synthetic chargeChange:0 passes isCombatTechnology and shows the tech for naginata-samurai. Bow mechanics (chargeModifiers, chargeArmorType, getChargeBonus) are handled in Sandbox.tsx. minAge set to 2.',
+    uiTooltip: 'Grants a bonus attack versus Light Melee Infantry (4 / 5 / 6 / 7 per age).',
+    after: (tech: any) => ({
+      ...tech,
+      minAge: 2,
+      effects: [{ property: 'chargeChange', select: { id: ['naginata-samurai'] }, effect: 'change', value: 0, type: 'passive' }],
+    }),
+  },
+
+  {
+    id: 'higoyumi',
+    reason: 'Raw effects empty. Grants +1 ranged attack to Yumi Ashigaru.',
+    update: {
+      minAge: 2,
+      effects: [{
+        property: 'rangedAttack',
+        select: { id: ['yumi-ashigaru'] },
+        effect: 'change',
+        value: 1,
+        type: 'passive',
+      }],
+    },
+  },
+
+  {
+    id: 'improved-yari',
+    reason: 'Raw effects empty. +2 bonus melee damage vs cavalry for yari-cavalry.',
+    update: {
+      minAge: 2,
+      effects: [{
+        property: 'meleeAttack',
+        select: { id: ['yari-cavalry'] },
+        effect: 'change',
+        value: 2,
+        type: 'bonus',
+        target: { class: [['cavalry']] },
+      }],
+    },
+  },
+
+  {
+    id: 'tanegashima-tate',
+    reason: 'Raw effects empty — placeholder makes tech visible for tanegashima-ashigaru. Actual +2 maxRange and +2 rangedArmor are applied via ability-tanegashima-tate, unlocked when this tech is active.',
+    after: (tech: any) => ({
+      ...tech,
+      effects: [{ property: 'maxRange', select: { id: ['tanegashima-ashigaru'] }, effect: 'change', value: 0, type: 'passive' }],
+    }),
+  },
+
+  {
+    id: 'mounted-samurai-odachi',
+    reason: 'Raw effects empty. +3 bonus melee damage vs infantry for mounted-samurai.',
+    update: {
+      effects: [{
+        property: 'meleeAttack',
+        select: { id: ['mounted-samurai'] },
+        effect: 'change',
+        value: 3,
+        type: 'bonus',
+        target: { class: [['infantry']] },
+      }],
+    },
+  },
+
+  {
+    id: 'horse-training',
+    reason: 'Raw variation effect is wrong (hitpoints ×1.5). Corrected to moveSpeed ×1.15 for cavalry. minAge set to 2.',
+    after: (tech) => ({
+      ...tech,
+      minAge: 2,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [{ property: 'moveSpeed', select: { class: [['cavalry']] }, effect: 'multiply', value: 1.05, type: 'passive' }],
+      })),
+    }),
+  },
+
+
   //___________
   //
   // ZHU XI
@@ -2316,6 +2429,28 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     },
   },
 
+  {
+    id: 'kampo-medicine',
+    reason: 'Raw variation effects are wrong placeholders. Top-level effect: +1 healingRate for ikko-ikki-monk.',
+    update: {
+      effects: [
+        { property: 'healingRate', select: { id: ['ikko-ikki-monk'] }, effect: 'change', value: 1, type: 'passive' },
+      ],
+    },
+  },
+
+  {
+    id: 'nenbutsu',
+    reason: 'Raw effects have no select — restricts to ikko-ikki-monk.',
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: v.effects.map(e => ({ ...e, select: { id: ['ikko-ikki-monk'] } })),
+      })),
+    }),
+  },
+
 ];
 
 //__________________
@@ -2360,6 +2495,7 @@ function createBurgravePalaceAgeUp(): Technology {
     shared: {}
   } as Technology;
 }
+
 
 function createCrusaderFleets(): Technology {
   return {
@@ -2503,6 +2639,88 @@ function createEnlistMansaJavelineers(): Technology {
   } as Technology;
 }
 
+
+function createSwordHuntStatueAgeUp(): Technology {
+  return {
+    id: 'sword-hunt-statue-age-up',
+    name: 'Sword Hunt Statue',
+    type: 'technology',
+    civs: ['sen'],
+    classes: ['age_up_upgrade'],
+    displayClasses: [],
+    minAge: 4,
+    icon: 'https://data.aoe4world.com/images/buildings/sword-hunt-statue-3.png',
+    description: 'It reduces the cost of Daimyo from all Daimyo Estates by 50%, improves their Rate of Fire enhancement by 15% (up to 35% total), and doubles the levy supply point generation speed.',
+    uiTooltip: '+35 AS announced. Effective avg: 34.8%. Spread: +25.0% (yumi-ashigaru) to +44.6% (yari-cavalry).',
+    unique: true,
+    effects: [
+      {
+        // Dummy no-op — makes isCombatTechnology return true and binds the tech to these units
+        property: 'hitpoints',
+        select: { id: ['spearman', 'kanabo-samurai', 'naginata-samurai', 'ozutsu', 'yumi-ashigaru', 'tanegashima-ashigaru', 'mounted-samurai', 'yari-cavalry', 'ikko-ikki-monk'] },
+        effect: 'change',
+        value: 0,
+        type: 'passive'
+      },
+      {
+        property: 'costReduction',
+        select: { id: ['daimyo'] },
+        effect: 'multiply',
+        value: 0.5,
+        type: 'passive'
+      }
+    ] as TechnologyEffect[],
+    variations: [
+      {
+        id: 'sword-hunt-statue-age-up-4',
+        baseId: 'sword-hunt-statue-age-up',
+        pbgid: 0,
+        attribName: '',
+        civs: ['sen'],
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        effects: [] as TechnologyEffect[],
+      }
+    ],
+    shared: {}
+  } as Technology;
+}
+
+function createTempleOfEqualityAgeUp(): Technology {
+  return {
+    id: 'temple-of-equality-age-up',
+    name: 'Temple of Equality',
+    type: 'technology',
+    civs: ['sen'],
+    classes: ['age_up_upgrade'],
+    displayClasses: [],
+    minAge: 3,
+    icon: 'https://data.aoe4world.com/images/buildings/temple-of-equality-2.png',
+    description: 'Acts as a Buddhist Temple that contains unique Ikko-Ikki upgrades. Reduces the cost of training Ikko-Ikki monks by 25%.',
+    unique: true,
+    effects: [
+      {
+        property: 'costReduction',
+        select: { id: ['ikko-ikki-monk'] },
+        effect: 'multiply',
+        value: 0.75,
+        type: 'passive'
+      }
+    ] as TechnologyEffect[],
+    variations: [
+      {
+        id: 'temple-of-equality-age-up-3',
+        baseId: 'temple-of-equality-age-up',
+        pbgid: 0,
+        attribName: '',
+        civs: ['sen'],
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        effects: [] as TechnologyEffect[],
+      }
+    ],
+    shared: {}
+  } as Technology;
+}
+
 // Maps tech ID → { unitId, weaponIndex, damageMultiplier?, burstCount? } for secondary weapon injection
 export const weaponInjectionMap: Map<string, { unitId: string; weaponIndex: number; damageMultiplier?: number; burstCount?: number; maxDamage?: number }> = new Map(
   technologyPatches
@@ -2540,9 +2758,11 @@ export function applyTechnologyPatches(allTechs: Technology[]): Technology[] {
   const allWithSynthetic = [
     ...allTechs,
     createBurgravePalaceAgeUp(),
+    createSwordHuntStatueAgeUp(),
     createCrusaderFleets(),
     createEnlistMansaMusofadi(),
     createEnlistMansaJavelineers(),
+    createTempleOfEqualityAgeUp(),
   ];
 
   return allWithSynthetic.map((tech) => {

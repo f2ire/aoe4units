@@ -100,10 +100,13 @@ export const AbilitySelector = ({
                 const step = (unitId ? ability.unitCounterStep?.[unitId] : undefined) ?? ability.counterStep ?? 0.05;
                 const label = ability.counterTooltipLabel ?? 'attack cycle';
                 const isAdditive = ability.counterDirection === 'additive';
+                const effectiveTotal = (ability as any).counterSteps
+                  ? ((ability as any).counterSteps as number[]).slice(0, count).reduce((a: number, b: number) => a + b, 0)
+                  : count * step;
                 const val = ability.counterDirection === 'increase'
-                  ? 1 + count * step
-                  : isAdditive ? count * step
-                  : 1 / (1 + count * step);
+                  ? 1 + effectiveTotal
+                  : isAdditive ? effectiveTotal
+                  : 1 / (1 + effectiveTotal);
                 return (
                   <p className="text-xs text-amber-400 mt-1">
                     {isAdditive ? `+${val}` : `×${val.toFixed(3)}`} {label} ({count} stack{count > 1 ? 's' : ''})
@@ -178,13 +181,13 @@ export const AbilitySelector = ({
     const isActive = activeAbilities.has(ability.id);
     const isLocked = lockedAbilities?.has(ability.id) ?? false;
     const unitMatchesActiveForIds = !ability.activeForIds || (unitId != null && ability.activeForIds.includes(unitId));
-    const isDefaultAlways = unitMatchesActiveForIds && ((hasActiveProperty(ability) && ability.active === 'always') || ability.variations?.some((v: AbilityVariation) => v.active === 'always'));
+    const isDefaultAlways = unitMatchesActiveForIds && ((hasActiveProperty(ability) && ability.active === 'always') || ability.variations?.some((v: AbilityVariation) => v.active === 'always' && (v.civs.length === 0 || !selectedCiv || v.civs.includes(selectedCiv))));
     const iconPath = ability.icon;
     const isForeignEngineering = selectedCiv === 'by' && foreignEngineeringAbilityIds.has(ability.id);
     const patch = abilityPatches.find(p => p.id === ability.id);
     const patchTooltip = isForeignEngineering
       ? patch?.uiTooltip
-      : (!foreignEngineeringAbilityIds.has(ability.id) ? patch?.uiTooltip : undefined);
+      : (!foreignEngineeringAbilityIds.has(ability.id) ? (patch?.uiTooltip ?? ability.uiTooltip) : undefined);
 
     return (
       <div key={ability.id} className="relative">

@@ -995,6 +995,69 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       })),
     }),
   },
+
+  //_____________
+  //
+  // SENGOKU
+  //
+  //_____________
+
+  {
+    id: 'daimyo',
+    reason: 'Raw data only has age-2 variation. Adding age-3 and age-4 variations: HP (240/270/310), Katana damage (18/29/35), armor (2/4/5 melee+ranged).',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      const variations = u.variations as Record<string, unknown>[];
+      const base = variations[0] as Record<string, unknown>;
+
+      const makeVariation = (age: number, hp: number, damage: number, armor: number) => {
+        const weapons = (base.weapons as Record<string, unknown>[]).map((w: any, i: number) =>
+          i === 0 ? { ...w, damage } : w
+        );
+        return {
+          ...base,
+          age,
+          id: `daimyo-${age}`,
+          hitpoints: hp,
+          weapons,
+          armor: [{ type: 'melee', value: armor }, { type: 'ranged', value: armor }],
+        };
+      };
+
+      return {
+        ...u,
+        variations: [
+          base,
+          makeVariation(3, 270, 29, 4),
+          makeVariation(4, 310, 35, 5),
+        ],
+      };
+    },
+  },
+
+  {
+    id: 'kanabo-samurai',
+    reason: 'Deals +6% of enemy max HP as bonus damage per hit (bypasses armor/resistance).',
+    after: (unit: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+      ...unit,
+      variations: unit.variations.map((v: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...v,
+        maxHpBonusFraction: 0.06,
+      })),
+    }),
+  },
+
+  {
+    id: 'ikko-ikki-monk',
+    reason: 'Heals 2 HP per hit landed (aura heal on attack).',
+    after: (unit: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+      ...unit,
+      variations: unit.variations.map((v: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...v,
+        healingRate: 2,
+      })),
+    }),
+  },
 ];
 //   after: (unit: unknown) => {
 //     const u = unit as Record<string, unknown>;

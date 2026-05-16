@@ -13,11 +13,11 @@ export const ABILITY_ROW_GROUPS: readonly { label: string; ids: readonly string[
   { label: 'CTR', ids: ['ability-house-unified', 'ability-lord-of-lancaster-inspiration'] },
   { label: 'CONV', ids: ['ability-buddhist-conversion', 'ability-nehan'] },
   { label: 'WPN', ids: ['ability-streltsy-berdysh', 'ability-streltsy-handcannon'] },
-  { label: 'AGE', ids: ['ability-high-armory-production-bonus', 'ability-abbey-of-the-trinity', 'ability-kurultai-aura', 'ability-tower-of-victory-aura', 'ability-burgrave-palace'] },
-  { label: 'CHAR', ids: ['charge-attack', 'ability-royal-knight-charge-damage'] },
   { label: 'MEHT', ids: ['ability-attack-drums', 'ability-ranged-defense-drums', 'ability-melee-defense-drums'] },
   { label: 'DYN', ids: ['ability-dynasty-yuan', 'ability-dynasty-ming'] },
-  { label: 'AURA', ids: ['ability-network-of-castles', 'ability-network-of-citadels'] },
+  { label: 'AURA', ids: ['ability-network-of-castles', 'ability-network-of-citadels', 'ability-daimyo-aura'] },
+  { label: 'AGE', ids: ['ability-high-armory-production-bonus', 'ability-abbey-of-the-trinity', 'ability-kurultai-aura', 'ability-tower-of-victory-aura', 'ability-burgrave-palace'] },
+  { label: 'CHAR', ids: ['charge-attack', 'ability-royal-knight-charge-damage'] },
 ];
 
 
@@ -84,8 +84,27 @@ export const techAbilityInteractions: TechAbilityInteraction[] = [
     requiredTech: 'mounted-training',
     requiredAbility: 'ability-gallop',
     apply: (stats) => ({ ...stats, maxRange: stats.maxRange + 1 })
-  }
+  },
+
+  { requiredTech: 'sword-hunt-statue-age-up', requiredAbility: 'ability-daimyo-aura', unitId: 'spearman', apply: (s) => ({ ...s, attackSpeed: 1.30 }) },
+  { requiredTech: 'sword-hunt-statue-age-up', requiredAbility: 'ability-daimyo-aura', unitId: 'kanabo-samurai', apply: (s) => ({ ...s, attackSpeed: 1.00 }) },
+  { requiredTech: 'sword-hunt-statue-age-up', requiredAbility: 'ability-daimyo-aura', unitId: 'naginata-samurai', apply: (s) => ({ ...s, attackSpeed: 1.00 }) },
+  { requiredTech: 'sword-hunt-statue-age-up', requiredAbility: 'ability-daimyo-aura', unitId: 'ozutsu', apply: (s) => ({ ...s, attackSpeed: 3.71 }) },
+  { requiredTech: 'sword-hunt-statue-age-up', requiredAbility: 'ability-daimyo-aura', unitId: 'yumi-ashigaru', apply: (s) => ({ ...s, attackSpeed: 1.30 }) },
+  { requiredTech: 'sword-hunt-statue-age-up', requiredAbility: 'ability-daimyo-aura', unitId: 'tanegashima-ashigaru', apply: (s) => ({ ...s, attackSpeed: 1.95 }) },
+  { requiredTech: 'sword-hunt-statue-age-up', requiredAbility: 'ability-daimyo-aura', unitId: 'mounted-samurai', apply: (s) => ({ ...s, attackSpeed: 1.15 }) },
+  { requiredTech: 'sword-hunt-statue-age-up', requiredAbility: 'ability-daimyo-aura', unitId: 'yari-cavalry', apply: (s) => ({ ...s, attackSpeed: 1.21 }) },
+  { requiredTech: 'sword-hunt-statue-age-up', requiredAbility: 'ability-daimyo-aura', unitId: 'ikko-ikki-monk', apply: (s) => ({ ...s, attackSpeed: 1.00 }) },
 ];
+
+export interface AbilityAbilityInteraction {
+  requiredAbility1: string;
+  requiredAbility2: string;
+  unitId?: string;
+  apply: (stats: UnitStats) => UnitStats;
+}
+
+export const abilityAbilityInteractions: AbilityAbilityInteraction[] = [];
 
 //_________________
 //
@@ -699,6 +718,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   // HOUSE OF LANCASTER
   //
   //___________
+
   //___________
   //
   // JAPANESE
@@ -1464,6 +1484,29 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     }),
   },
 
+
+  //_______________
+  //
+  // SENGOKU DAIMYO
+  //
+  //_______________
+
+  {
+    id: 'ability-castle-of-the-crow-aura',
+    reason: 'Raw effects empty. +1 max range and +10% siege attack for siege_range class units. Variation active overridden to manual.',
+    update: {
+      minAge: 4,
+      effects: [
+        { property: 'maxRange', select: { class: [['siege_range']] }, effect: 'change', value: 1, type: 'ability' },
+        { property: 'siegeAttack', select: { class: [['siege_range']] }, effect: 'multiply', value: 1.1, type: 'ability' },
+      ],
+    },
+    after: (ability) => ({
+      ...ability,
+      variations: ability.variations.map(v => ({ ...v, active: 'manual' })),
+    }),
+  },
+
   //___________
   //
   // ZHU XI
@@ -1533,6 +1576,8 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
       }))
     })
   },
+
+
 
 ];
 
@@ -2147,7 +2192,7 @@ function createBuddhistConversion(): Ability {
     id: 'ability-buddhist-conversion',
     name: 'Buddhist Conversion',
     type: 'ability',
-    civs: ['ja'],
+    civs: ['ja', 'sen'],
     displayClasses: [],
     classes: [],
     minAge: 3,
@@ -2164,7 +2209,7 @@ function createBuddhistConversion(): Ability {
       pbgid: 999300,
       attribName: 'ability_buddhist_conversion',
       age: 3,
-      civs: ['ja'],
+      civs: ['ja', 'sen'],
       description: "When casting Buddhist Conversion, nearby allied units gain +20% damage for 20 seconds.",
       classes: [], displayClasses: [], unique: false,
       costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
@@ -3168,12 +3213,318 @@ function createBurgravePalaceAbility(): Ability {
   } as Ability;
 }
 
+//_______________
+//
+// SENGOKU DAIMYO
+//
+//_______________
+
+function createHojoClanDaimyoEstate(): Ability {
+  return {
+    id: 'aura-hojo-clan-daimyo-estate',
+    name: 'Hojo Clan Daimyo Estate',
+    type: 'ability',
+    civs: ['sen'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    icon: 'https://data.aoe4world.com/images/buildings/hojo-clan-daimyo-estate-2.png',
+    description: 'Units get the following bonuses depending on the level of the clan. Level 1: +5% HP. Level 2: +10% HP. Level 3: Gain Deflective Armor when created in estate influence.',
+    unique: false,
+    counterMax: 3,
+    counterSteps: [0.05, 0.05, 0],
+    counterDirection: 'increase' as const,
+    counterTooltipLabel: 'hp',
+    effects: [{
+      property: 'hitpoints',
+      select: { class: [['melee', 'infantry']] },
+      effect: 'multiply',
+      value: 1.0,
+      type: 'ability',
+    }],
+    variations: [{
+      id: 'aura-hojo-clan-daimyo-estate-1',
+      baseId: 'aura-hojo-clan-daimyo-estate',
+      type: 'ability',
+      name: 'Hojo Clan Daimyo Estate',
+      pbgid: 999602,
+      attribName: 'aura_hojo_clan_daimyo_estate',
+      age: 2,
+      civs: ['sen'],
+      description: 'Units get the following bonuses depending on the level of the clan. Level 1: +5% HP. Level 2: +10% HP. Level 3: Gain Deflective Armor when created in estate influence.',
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createOdaClanDaimyoEstate(): Ability {
+  return {
+    id: 'aura-oda-clan-daimyo-estate',
+    name: 'Oda Clan Daimyo Estate',
+    type: 'ability',
+    civs: ['sen'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    icon: 'https://data.aoe4world.com/images/buildings/oda-clan-daimyo-estate-2.png',
+    description: 'Units get the following bonuses depending on the level of the clan. Level 1: +5% HP. Level 2: +10% HP. Level 3: Gain Deflective Armor when created in estate influence.',
+    unique: false,
+    counterMax: 3,
+    counterSteps: [0.05, 0.05, 0],
+    counterDirection: 'increase' as const,
+    counterTooltipLabel: 'hp',
+    effects: [{
+      property: 'hitpoints',
+      select: { class: [['ranged', 'infantry']] },
+      effect: 'multiply',
+      value: 1.0,
+      type: 'ability',
+    }],
+    variations: [{
+      id: 'aura-oda-clan-daimyo-estate-1',
+      baseId: 'aura-oda-clan-daimyo-estate',
+      type: 'ability',
+      name: 'Oda Clan Daimyo Estate',
+      pbgid: 999602,
+      attribName: 'aura_oda_clan_daimyo_estate',
+      age: 2,
+      civs: ['sen'],
+      description: 'Units get the following bonuses depending on the level of the clan. Level 1: +5% HP. Level 2: +10% HP. Level 3: Gain Deflective Armor when created in estate influence.',
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createTakedaClanDaimyoEstate(): Ability {
+  return {
+    id: 'aura-takeda-clan-daimyo-estate',
+    name: 'Takeda Clan Daimyo Estate',
+    type: 'ability',
+    civs: ['sen'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    icon: 'https://data.aoe4world.com/images/buildings/takeda-clan-daimyo-estate-2.png',
+    description: 'Units get the following bonuses depending on the level of the clan. Level 1: +5% HP. Level 2: +10% HP. Level 3: Gain Deflective Armor when created in estate influence.',
+    unique: false,
+    counterMax: 3,
+    counterSteps: [0.05, 0.05, 0],
+    counterDirection: 'increase' as const,
+    counterTooltipLabel: 'hp',
+    effects: [{
+      property: 'hitpoints',
+      select: { class: [['cavalry']] },
+      effect: 'multiply',
+      value: 1.0,
+      type: 'ability',
+    }],
+    variations: [{
+      id: 'aura-takeda-clan-daimyo-estate-1',
+      baseId: 'aura-takeda-clan-daimyo-estate',
+      type: 'ability',
+      name: 'Takeda Clan Daimyo Estate',
+      pbgid: 999602,
+      attribName: 'aura_takeda_clan_daimyo_estate',
+      age: 2,
+      civs: ['sen'],
+      description: 'Units get the following bonuses depending on the level of the clan. Level 1: +5% HP. Level 2: +10% HP. Level 3: Gain Deflective Armor when created in estate influence.',
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createDeflectiveArmorSen(): Ability {
+  return {
+    id: 'ability-deflective-armor-sen',
+    name: 'Deflective Armor',
+    type: 'ability',
+    civs: ['sen'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    active: 'manual',
+    icon: 'https://data.aoe4world.com/images/abilities/ability-deflective-armor-1.png',
+    description: 'Deflective Armor charge can block one melee or ranged attack. Recharges while out of combat for 8 seconds.',
+    unique: false,
+    effects: [{
+      property: 'hitpoints',
+      select: { class: [['infantry'], ['cavalry']], excludeId: ['ikko-ikki-monk'] },
+      effect: 'change',
+      value: 0,
+      type: 'ability',
+    }],
+    variations: [{
+      id: 'ability-deflective-armor-sen-2',
+      baseId: 'ability-deflective-armor-sen',
+      type: 'ability',
+      name: 'Deflective Armor',
+      pbgid: 999603,
+      attribName: 'ability-deflective-armor-sen',
+      age: 2,
+      civs: ['sen'],
+      description: 'Deflective Armor charge can block one melee or ranged attack. Recharges while out of combat for 8 seconds.',
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createAbilityDaimyoAura(): Ability {
+  // age2/age3 derived from age4 practice values: value_ageN = (practice4/base) × (1.2/N_factor)
+  const scale = (p4: number, base: number, factor: number) => p4 * 1.2 / (base * factor);
+  const e = (id: string, v: number) => ({ property: 'attackSpeed', select: { id: [id] }, effect: 'multiply', value: v, type: 'ability' as const });
+  return {
+    id: 'ability-daimyo-aura',
+    name: 'Daimyo Aura',
+    type: 'ability',
+    civs: ['sen'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    active: 'manual',
+    icon: '/abilities/Daimyo_aura.png',
+    description: 'The Daimyo grants all human military units within a 6-tile radius +10%/+15%/+20% melee, ranged, and torch attack speed.',
+    unique: false,
+    uiTooltip: '+20% AS announced. Effective avg: +19.3% (spread: +12.2% yari-cavalry → +22.8% kanabo/naginata/ikko-ikki).',
+    effects: [],
+    variations: [
+      {
+        id: 'ability-daimyo-aura-2',
+        baseId: 'ability-daimyo-aura',
+        type: 'ability',
+        name: 'Daimyo Aura',
+        pbgid: 999610,
+        attribName: 'ability_daimyo_aura',
+        age: 2,
+        civs: ['sen'],
+        description: 'The Daimyo grants all human military units within a 6-tile radius +10% attack speed.',
+        classes: [], displayClasses: [], unique: false,
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        producedBy: [],
+        effects: [
+          e('spearman', scale(1.62, 1.875, 1.1)),
+          e('kanabo-samurai', scale(1.12, 1.375, 1.1)),
+          e('naginata-samurai', scale(1.12, 1.375, 1.1)),
+          e('ozutsu', scale(4.03, 4.750, 1.1)),
+          e('yumi-ashigaru', scale(1.37, 1.625, 1.1)),
+          e('tanegashima-ashigaru', scale(2.10, 2.500, 1.1)),
+          e('mounted-samurai', scale(1.23, 1.500, 1.1)),
+          e('yari-cavalry', scale(1.56, 1.750, 1.1)),
+          e('ikko-ikki-monk', scale(1.12, 1.375, 1.1)),
+        ],
+      },
+      {
+        id: 'ability-daimyo-aura-3',
+        baseId: 'ability-daimyo-aura',
+        type: 'ability',
+        name: 'Daimyo Aura',
+        pbgid: 999611,
+        attribName: 'ability_daimyo_aura',
+        age: 3,
+        civs: ['sen'],
+        description: 'The Daimyo grants all human military units within a 6-tile radius +15% attack speed.',
+        classes: [], displayClasses: [], unique: false,
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        producedBy: [],
+        effects: [
+          e('spearman', scale(1.62, 1.875, 1.15)),
+          e('kanabo-samurai', scale(1.12, 1.375, 1.15)),
+          e('naginata-samurai', scale(1.12, 1.375, 1.15)),
+          e('ozutsu', scale(4.03, 4.750, 1.15)),
+          e('yumi-ashigaru', scale(1.37, 1.625, 1.15)),
+          e('tanegashima-ashigaru', scale(2.10, 2.500, 1.15)),
+          e('mounted-samurai', scale(1.23, 1.500, 1.15)),
+          e('yari-cavalry', scale(1.56, 1.750, 1.15)),
+          e('ikko-ikki-monk', scale(1.12, 1.375, 1.15)),
+        ],
+      },
+      {
+        id: 'ability-daimyo-aura-4',
+        baseId: 'ability-daimyo-aura',
+        type: 'ability',
+        name: 'Daimyo Aura',
+        pbgid: 999612,
+        attribName: 'ability_daimyo_aura',
+        age: 4,
+        civs: ['sen'],
+        description: 'The Daimyo grants all human military units within a 6-tile radius +20% attack speed.',
+        classes: [], displayClasses: [], unique: false,
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        producedBy: [],
+        effects: [
+          { property: 'attackSpeed', select: { id: ['spearman'] }, effect: 'multiply', value: 1.62 / 1.875, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['kanabo-samurai'] }, effect: 'multiply', value: 1.12 / 1.375, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['naginata-samurai'] }, effect: 'multiply', value: 1.12 / 1.375, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['ozutsu'] }, effect: 'multiply', value: 4.03 / 4.750, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['yumi-ashigaru'] }, effect: 'multiply', value: 1.37 / 1.625, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['tanegashima-ashigaru'] }, effect: 'multiply', value: 2.10 / 2.500, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['mounted-samurai'] }, effect: 'multiply', value: 1.23 / 1.500, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['yari-cavalry'] }, effect: 'multiply', value: 1.56 / 1.750, type: 'ability' },
+          { property: 'attackSpeed', select: { id: ['ikko-ikki-monk'] }, effect: 'multiply', value: 1.12 / 1.375, type: 'ability' },
+        ],
+      },
+    ],
+    shared: {}
+  } as Ability;
+}
+
 //___________
 //
 // ZHU XI
 //
 //___________
 
+
+function createTanegashimaTateAbility(): Ability {
+  return {
+    id: 'ability-tanegashima-tate',
+    name: 'Tanegashima Tate',
+    type: 'ability',
+    civs: ['sen'],
+    displayClasses: [],
+    classes: [],
+    minAge: 3,
+    active: 'manual',
+    icon: 'https://data.aoe4world.com/images/technologies/tanegashima-tate-3.png',
+    description: 'Tanegashima Ashigaru will automatically deploy a standing shield if not moving that increases weapon range by +2 tiles and ranged armor by +2.',
+    unique: true,
+    effects: [
+      { property: 'maxRange', select: { id: ['tanegashima-ashigaru'] }, effect: 'change', value: 2, type: 'ability' },
+      { property: 'rangedArmor', select: { id: ['tanegashima-ashigaru'] }, effect: 'change', value: 2, type: 'ability' },
+    ],
+    variations: [{
+      id: 'ability-tanegashima-tate-3',
+      baseId: 'ability-tanegashima-tate',
+      type: 'ability',
+      name: 'Tanegashima Tate',
+      pbgid: 999640,
+      attribName: 'ability-tanegashima-tate',
+      age: 3,
+      civs: ['sen'],
+      description: 'Tanegashima Ashigaru will automatically deploy a standing shield if not moving that increases weapon range by +2 tiles and ranged armor by +2.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
 
 function createHardCasedBombs(): Ability {
   return {
@@ -3256,6 +3607,12 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createKhanHunterRangeAura(),
     createBurgravePalaceAbility(),
     createHardCasedBombs(),
+    createHojoClanDaimyoEstate(),
+    createOdaClanDaimyoEstate(),
+    createTakedaClanDaimyoEstate(),
+    createDeflectiveArmorSen(),
+    createAbilityDaimyoAura(),
+    createTanegashimaTateAbility(),
   ];
 
   return abilitiesWithCharge.map(ability => {

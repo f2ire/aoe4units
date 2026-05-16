@@ -287,13 +287,15 @@ export const TechnologySelector = ({
                         const improvedTech = improvedId ? allTechnologies.find(t => t.id === improvedId) : undefined;
 
                         // Visual state per spec — CSS classes only, no inline hex
-                        const iconStateClass = !isActive
-                          ? isForeignEngineering
-                            ? 'border-orange-500/60 bg-orange-950/40 opacity-80'
-                            : 'border-border/50 bg-secondary/50 opacity-60'
-                          : isMongolActive
-                            ? 'border-green-500 bg-green-500/10'
-                            : 'border-green-500 bg-green-500/10';
+                        const iconStateClass = isLocked && !isActive
+                          ? 'border-border/30 bg-secondary/30'
+                          : !isActive
+                            ? isForeignEngineering
+                              ? 'border-orange-500/60 bg-orange-950/40 opacity-80'
+                              : 'border-border/50 bg-secondary/50 opacity-60'
+                            : isMongolActive
+                              ? 'border-green-500 bg-green-500/10'
+                              : 'border-green-500 bg-green-500/10';
 
                         return (
                           <div key={tech.id} className="relative">

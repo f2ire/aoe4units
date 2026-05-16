@@ -33,6 +33,7 @@ export interface CombatEntity {
   firstHitBlocked?: boolean; // defender absorbs first attack completely (0 damage, charge also nullified)
   postChargeMeleeBonus?: number; // melee attack bonus active from hit 2 onward only — subtracted from hit 1 (charge hit)
   chargeModifiers?: Array<{ target: { class: string[][] }; value: number }>; // class-specific bonus damage applied to the dagger/javelin hit (before ranged armor)
+  maxHpBonusFraction?: number; // Bonus damage per hit = fraction × defender's max HP (bypasses armor/resistance)
 }
 
 export interface VersusMetrics {
@@ -83,6 +84,7 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     firstHitBlocked: (source as any).firstHitBlocked ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
     postChargeMeleeBonus: (source as any).postChargeMeleeBonus ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     chargeModifiers: (source as any).chargeModifiers, // eslint-disable-line @typescript-eslint/no-explicit-any
+    maxHpBonusFraction: (source as any).maxHpBonusFraction ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
   };
 }
 
@@ -341,9 +343,11 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
   // Holy wrath (strike): flat bonus, no armor, no resistance
   const strikeExtra = isStrikeCharge ? chargeBonus_applied : 0;
 
-  const totalDamage = totalPrimary + daggerExtra + strikeExtra;
+  // Max-HP bonus damage: bypasses armor and resistance (e.g. Kanabo Samurai +6% enemy max HP)
+  const hpBonus = (attacker.maxHpBonusFraction ?? 0) > 0 ? attacker.maxHpBonusFraction! * defender.hitpoints : 0;
+  const totalDamage = totalPrimary + daggerExtra + strikeExtra + hpBonus;
 
-  return { value: totalDamage, base: effectiveBaseDamage * burstCount, bonus: (bonusDamage + chargeInPrimary) * burstCount, armorApplied: armorValue, weapon, debuffMultiplier: debuffMultiplier !== 1.0 ? debuffMultiplier : undefined, resistanceApplied };
+  return { value: totalDamage, base: effectiveBaseDamage * burstCount, bonus: (bonusDamage + chargeInPrimary) * burstCount + hpBonus, armorApplied: armorValue, weapon, debuffMultiplier: debuffMultiplier !== 1.0 ? debuffMultiplier : undefined, resistanceApplied };
 }
 
 function round(value: number, decimals: number): number {
@@ -1009,9 +1013,13 @@ export function computeVersus(
 
   let winnerHpRemaining: number | undefined;
   if (winner === "attacker" && metricsA.timeToKill !== null) {
-    winnerHpRemaining = Math.max(0, A.hitpoints - computeDamageInTime(B, A, chargeBonusB, metricsA.timeToKill));
+    const healingA = (metricsA.hitsToKill ?? 0) * (A.healingRate ?? 0)
+      + metricsA.timeToKill * Math.max(0, A.healingRatePerSecond ?? 0);
+    winnerHpRemaining = Math.min(A.hitpoints, Math.max(0, A.hitpoints - computeDamageInTime(B, A, chargeBonusB, metricsA.timeToKill) + healingA));
   } else if (winner === "defender" && metricsB.timeToKill !== null) {
-    winnerHpRemaining = Math.max(0, B.hitpoints - computeDamageInTime(A, B, chargeBonusA, metricsB.timeToKill));
+    const healingB = (metricsB.hitsToKill ?? 0) * (B.healingRate ?? 0)
+      + metricsB.timeToKill * Math.max(0, B.healingRatePerSecond ?? 0);
+    winnerHpRemaining = Math.min(B.hitpoints, Math.max(0, B.hitpoints - computeDamageInTime(A, B, chargeBonusA, metricsB.timeToKill) + healingB));
   }
 
   return {

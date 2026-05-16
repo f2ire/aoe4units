@@ -3,7 +3,7 @@ import { aoe4Units, AoE4Unit, getUnitVariation, getMaxAge, getAvailableAges, get
 import type { UnifiedVariation } from "@/data/unified-units";
 import { getTechnologiesForUnit, getActiveTechnologyVariationsWithTiers, applyTechnologyEffects, getAllTiersFromSameLine, allTechnologies, IMPROVED_TECH_PAIRS, IMPROVED_TECH_BASE, getTechnologyTier, getTechnologyBaseName, type UnitStats } from "@/data/unified-technologies";
 import { getAbilitiesForUnit, getActiveAbilityVariations, getAbilityVariation } from "@/data/unified-abilities";
-import { techAbilityInteractions } from "@/data/patches/abilities";
+import { techAbilityInteractions, abilityAbilityInteractions } from "@/data/patches/abilities";
 import { foreignEngineeringUnitRestrictions, techUnitExclusions, weaponInjectionMap } from "@/data/patches/technologies";
 import type { UnifiedWeapon } from "@/data/unified-units";
 import { foreignEngineeringAbilityUnitRestrictions } from "@/data/patches/abilities";
@@ -12,6 +12,12 @@ import type { Ability, AbilityVariation } from "@/data/unified-abilities";
 // Upgrade groups: ordered arrays where index 0 = tier 1, index 1 = tier 2, etc.
 // Only one ability in a group can be active at a time; clicking one deactivates the others.
 // Unlike WEAPON_SWAP_GROUPS, clicking the active ability deactivates it.
+const TECH_TECH_DEPENDENCIES: Array<{ techId: string; requiredTech: string; unitIds: string[] }> = [
+  { techId: 'steeled-arrow', requiredTech: 'samurai-bow', unitIds: ['naginata-samurai'] },
+  { techId: 'balanced-projectiles', requiredTech: 'samurai-bow', unitIds: ['naginata-samurai'] },
+  { techId: 'platecutter-point', requiredTech: 'samurai-bow', unitIds: ['naginata-samurai'] },
+];
+
 export const ABILITY_UPGRADE_GROUPS: readonly (readonly string[])[] = [
   ['ability-dynasty-song', 'ability-dynasty-yuan', 'ability-dynasty-ming'],
   ['ability-network-of-castles', 'ability-network-of-citadels'],
@@ -28,7 +34,7 @@ export function categorizeUnit(unit: AoE4Unit, selectedCiv?: string): string {
   if (classes.includes('mercenary_byz') && selectedCiv === 'by') return 'mercenary';
   if (classes.includes('khaganate') && selectedCiv === 'mo') return 'khaganate';
   if (classes.includes('ballista_elephant')) return 'siege';
-  if (classes.includes('infantry') && classes.includes('melee')) return 'melee_infantry';
+  if (classes.includes('infantry') && classes.includes('melee') && !classes.includes('monk')) return 'melee_infantry';
   if (classes.includes('ranged') && !classes.includes('siege') && !classes.includes('ship') && !classes.includes('naval_unit')) return 'ranged';
   if (classes.includes('monk') || classes.includes('religious') || classes.includes('healer_elephant')) return 'monk';
   if (classes.includes('cavalry')) return 'cavalry';
@@ -131,6 +137,9 @@ export function useUnitSlot() {
         // Base toggle off — also remove improved if present
         next.delete(techId);
         if (improvedId) next.delete(improvedId);
+        TECH_TECH_DEPENDENCIES.forEach(dep => {
+          if (dep.requiredTech === techId) next.delete(dep.techId);
+        });
         setActiveAbilities(prevAbi => {
           const nextAbi = new Set(prevAbi);
           Object.entries(ABILITY_TECH_DEPENDENCIES).forEach(([abilityId, reqTech]) => {
@@ -174,9 +183,44 @@ export function useUnitSlot() {
     'ability-nehan': 'ability-buddhist-conversion'
   };
 
+  // Ability suppressions: when the suppressor ability is active, the suppressed ability's effects are excluded
+  const ABILITY_SUPPRESSIONS: Record<string, string> = {};
+  // Tech suppressions: when the suppressor tech is active, the suppressed ability's effects are excluded
+  const TECH_ABILITY_SUPPRESSIONS: Record<string, string> = {
+    'sword-hunt-statue-age-up': 'ability-daimyo-aura',
+  };
+  const suppressedAbilityIds = new Set([
+    ...Object.entries(ABILITY_SUPPRESSIONS)
+      .filter(([suppressor]) => activeAbilities.has(suppressor))
+      .map(([, suppressed]) => suppressed),
+    ...Object.entries(TECH_ABILITY_SUPPRESSIONS)
+      .filter(([suppressor]) => activeTechnologies.has(suppressor))
+      .map(([, suppressed]) => suppressed),
+  ]);
+
   // Tech-gated abilities: a dependent ability can only be active when the required tech is also active
   const ABILITY_TECH_DEPENDENCIES: Record<string, string> = {
     'ability-gallop': 'mounted-training',
+    'ability-tanegashima-tate': 'tanegashima-tate',
+  };
+
+  // Techs unlocked by ability counter level: tech is locked until the ability reaches minLevel
+  const TECH_ABILITY_LEVEL_DEPENDENCIES: Record<string, { abilityId: string; minLevel: number }> = {
+    'lightweight-blades': { abilityId: 'aura-hojo-clan-daimyo-estate', minLevel: 1 },
+    'samurai-bow': { abilityId: 'aura-hojo-clan-daimyo-estate', minLevel: 2 },
+    'cross-folded-armor': { abilityId: 'aura-hojo-clan-daimyo-estate', minLevel: 3 },
+
+    'higoyumi': { abilityId: 'aura-oda-clan-daimyo-estate', minLevel: 1 },
+    'tanegashima-tate': { abilityId: 'aura-oda-clan-daimyo-estate', minLevel: 2 },
+
+    'horse-training': { abilityId: 'aura-takeda-clan-daimyo-estate', minLevel: 1 },
+    'improved-yari': { abilityId: 'aura-takeda-clan-daimyo-estate', minLevel: 2 },
+    'mounted-samurai-odachi': { abilityId: 'aura-takeda-clan-daimyo-estate', minLevel: 3 },
+  };
+
+  // Abilities unlocked by ability counter level (civ-specific): locked until the required ability reaches minLevel
+  const ABILITY_LEVEL_DEPENDENCIES: Record<string, { abilityIds: string[]; minLevel: number; civs?: string[] }> = {
+    'ability-deflective-armor-sen': { abilityIds: ['aura-hojo-clan-daimyo-estate', 'aura-oda-clan-daimyo-estate', 'aura-takeda-clan-daimyo-estate'], minLevel: 3 },
   };
 
   // Ref so toggleAbility can access current abilities/technologies without closure dependencies
@@ -260,6 +304,24 @@ export function useUnitSlot() {
       if (clamped === 0) next.delete(abilityId); else next.add(abilityId);
       return next;
     });
+    setActiveTechnologies(prev => {
+      const toRemove = Object.entries(TECH_ABILITY_LEVEL_DEPENDENCIES)
+        .filter(([, dep]) => dep.abilityId === abilityId && clamped < dep.minLevel)
+        .map(([techId]) => techId);
+      if (toRemove.length === 0) return prev;
+      const next = new Set(prev);
+      toRemove.forEach(id => next.delete(id));
+      return next;
+    });
+    setActiveAbilities(prev => {
+      const toRemove = Object.entries(ABILITY_LEVEL_DEPENDENCIES)
+        .filter(([, dep]) => dep.abilityIds.includes(abilityId) && clamped < dep.minLevel && (!dep.civs || dep.civs.includes(selectedCivRef.current)))
+        .map(([aId]) => aId);
+      if (toRemove.length === 0) return prev;
+      const next = new Set(prev);
+      toRemove.forEach(id => next.delete(id));
+      return next;
+    });
   }, []);
 
   const decrementAbility = useCallback((abilityId: string) => {
@@ -278,6 +340,24 @@ export function useUnitSlot() {
       } else {
         next.set(abilityId, newCount);
       }
+      setActiveTechnologies(prevTechs => {
+        const toRemove = Object.entries(TECH_ABILITY_LEVEL_DEPENDENCIES)
+          .filter(([, dep]) => dep.abilityId === abilityId && newCount < dep.minLevel)
+          .map(([techId]) => techId);
+        if (toRemove.length === 0) return prevTechs;
+        const nextTechs = new Set(prevTechs);
+        toRemove.forEach(id => nextTechs.delete(id));
+        return nextTechs;
+      });
+      setActiveAbilities(prevAbi => {
+        const toRemove = Object.entries(ABILITY_LEVEL_DEPENDENCIES)
+          .filter(([, dep]) => dep.abilityIds.includes(abilityId) && newCount < dep.minLevel && (!dep.civs || dep.civs.includes(selectedCivRef.current)))
+          .map(([aId]) => aId);
+        if (toRemove.length === 0) return prevAbi;
+        const nextAbi = new Set(prevAbi);
+        toRemove.forEach(id => nextAbi.delete(id));
+        return nextAbi;
+      });
       return next;
     });
   }, []);
@@ -320,6 +400,13 @@ export function useUnitSlot() {
     'mansa-musofadi-warrior',
     'mansa-javelineer',
     'khaganate-mangudai',
+    'mounted-samurai-levy',
+    'naginata-samurai-levy',
+    'spearman-levy',
+    'tanegashima-ashigaru-levy',
+    'yari-cavalry-levy',
+    'yumi-ashigaru-levy',
+
   ]);
 
   const filteredUnits = useMemo(() => {
@@ -383,6 +470,8 @@ export function useUnitSlot() {
         const restriction = foreignEngineeringUnitRestrictions.get(t.id);
         if (restriction && !restriction.includes(unit.id)) return false;
       }
+      const techDep = TECH_TECH_DEPENDENCIES.find(d => d.techId === t.id && d.unitIds.includes(unit.id));
+      if (techDep && !activeTechnologies.has(techDep.requiredTech)) return false;
       return true;
     });
 
@@ -415,7 +504,7 @@ export function useUnitSlot() {
     }
 
     return filtered;
-  }, [unit, effectiveClasses, selectedCiv, selectedAge, activeAbilities]);
+  }, [unit, effectiveClasses, selectedCiv, selectedAge, activeAbilities, activeTechnologies]);
 
   const abilities = useMemo<Ability[]>(() => {
     if (!unit) return [];
@@ -464,8 +553,13 @@ export function useUnitSlot() {
     Object.entries(ABILITY_TECH_DEPENDENCIES).forEach(([abilityId, reqTech]) => {
       if (!activeTechnologies.has(reqTech)) locked.add(abilityId);
     });
+    Object.entries(ABILITY_LEVEL_DEPENDENCIES).forEach(([abilityId, { abilityIds, minLevel, civs }]) => {
+      if (civs && !civs.includes(selectedCiv)) return;
+      const counter = Math.max(...abilityIds.map(id => abilityCounters.get(id) ?? 0));
+      if (counter < minLevel) locked.add(abilityId);
+    });
     return locked;
-  }, [activeAbilities, activeTechnologies]);
+  }, [activeAbilities, activeTechnologies, abilityCounters, selectedCiv]);
 
   // Auto-activate abilities marked as 'always' active + weapon-swap unit defaults
   useEffect(() => {
@@ -615,19 +709,20 @@ export function useUnitSlot() {
       rangedResistance: getResistanceValue(data, 'ranged'),
       meleeResistance: getResistanceValue(data, 'melee'),
       siegeResistance: getResistanceValue(data, 'siege'),
-      healingRate: 0,
+      healingRate: (data as any).healingRate ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
       healingRatePerSecond: (data as any).healingRatePerSecond ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
       armorPenetration: 0,
       opponentAttackSpeedDebuff: 0,
       versusOpponentDamageDebuff: 1,
       opponentHealingRateDebuff: (data as any).opponentHealingRateDebuff ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
+      maxHpBonusFraction: (data as any).maxHpBonusFraction ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     };
 
     const techVariations = getActiveTechnologyVariationsWithTiers(activeTechnologies, selectedCiv, selectedAge);
 
     // Counter abilities are handled with a dynamic value — exclude from normal variation flow
     const counterAbilityIds = new Set(abilities.filter(a => a.counterMax !== undefined).map(a => a.id));
-    const activeAbilitiesNoCounter = new Set([...activeAbilities].filter(id => !counterAbilityIds.has(id)));
+    const activeAbilitiesNoCounter = new Set([...activeAbilities].filter(id => !counterAbilityIds.has(id) && !suppressedAbilityIds.has(id)));
     const abilityVariations = getActiveAbilityVariations(activeAbilitiesNoCounter, selectedCiv, selectedAge);
 
     // Base-modifying abilities (e.g. Clocktower) produce units with a higher HP base —
@@ -645,6 +740,15 @@ export function useUnitSlot() {
       if (
         activeTechnologies.has(interaction.requiredTech) &&
         activeAbilities.has(interaction.requiredAbility) &&
+        (!interaction.unitId || unit?.id === interaction.unitId)
+      ) {
+        result = interaction.apply(result);
+      }
+    }
+    for (const interaction of abilityAbilityInteractions) {
+      if (
+        activeAbilities.has(interaction.requiredAbility1) &&
+        activeAbilities.has(interaction.requiredAbility2) &&
         (!interaction.unitId || unit?.id === interaction.unitId)
       ) {
         result = interaction.apply(result);
@@ -767,16 +871,17 @@ export function useUnitSlot() {
       rangedResistance: getResistanceValue(data, 'ranged'),
       meleeResistance: getResistanceValue(data, 'melee'),
       siegeResistance: getResistanceValue(data, 'siege'),
-      healingRate: 0,
+      healingRate: (data as any).healingRate ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
       healingRatePerSecond: (data as any).healingRatePerSecond ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
       armorPenetration: 0,
       opponentAttackSpeedDebuff: 0,
       versusOpponentDamageDebuff: 1,
       opponentHealingRateDebuff: (data as any).opponentHealingRateDebuff ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
+      maxHpBonusFraction: (data as any).maxHpBonusFraction ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     };
     const techVariations = getActiveTechnologyVariationsWithTiers(activeTechnologies, selectedCiv, selectedAge);
     const counterAbilityIds = new Set(abilities.filter(a => a.counterMax !== undefined).map(a => a.id));
-    const activeAbilitiesFiltered = new Set([...activeAbilities].filter(id => !counterAbilityIds.has(id)));
+    const activeAbilitiesFiltered = new Set([...activeAbilities].filter(id => !counterAbilityIds.has(id) && !suppressedAbilityIds.has(id)));
     const abilityVariations = getActiveAbilityVariations(activeAbilitiesFiltered, selectedCiv, selectedAge)
       .map(v => ({ ...v, effects: (v.effects || []).filter((e: any) => !('duration' in e)) })); // eslint-disable-line @typescript-eslint/no-explicit-any
     const BASE_MODIFYING_ABILITY_IDS = new Set(['ability-astronomical-clocktower']);
@@ -789,6 +894,11 @@ export function useUnitSlot() {
       if (activeTechnologies.has(interaction.requiredTech) && activeAbilities.has(interaction.requiredAbility) && (!interaction.unitId || unit?.id === interaction.unitId)) {
         const abilityVar = getAbilityVariation(interaction.requiredAbility, selectedCiv, selectedAge);
         if (abilityVar?.effects?.some((e: any) => 'duration' in e)) continue; // eslint-disable-line @typescript-eslint/no-explicit-any
+        result = interaction.apply(result);
+      }
+    }
+    for (const interaction of abilityAbilityInteractions) {
+      if (activeAbilities.has(interaction.requiredAbility1) && activeAbilities.has(interaction.requiredAbility2) && (!interaction.unitId || unit?.id === interaction.unitId)) {
         result = interaction.apply(result);
       }
     }
@@ -919,9 +1029,66 @@ export function useUnitSlot() {
     (DEFAULT_ACTIVE_TECHS[selectedCiv] || []).forEach(id => toActivate.add(id));
     (LOCKED_UNIT_TECHS[unit?.id ?? ''] || []).forEach(id => toActivate.add(id));
 
+    // For abilities that gate techs we want to activate, boost their counters to counterMax first
+    const abilityBoosts = new Map<string, number>();
+    Object.entries(TECH_ABILITY_LEVEL_DEPENDENCIES).forEach(([techId, { abilityId, minLevel }]) => {
+      if (toActivate.has(techId)) {
+        const current = abilityBoosts.get(abilityId) ?? 0;
+        abilityBoosts.set(abilityId, Math.max(current, minLevel));
+      }
+    });
+    const effectiveCounters = new Map(abilityCounters);
+    abilityBoosts.forEach((_, abilityId) => {
+      const ability = abilitiesRef.current.find(a => a.id === abilityId);
+      if (ability?.counterMax !== undefined) effectiveCounters.set(abilityId, ability.counterMax);
+    });
+
+    // Remove techs still locked after boosting
+    Object.entries(TECH_ABILITY_LEVEL_DEPENDENCIES).forEach(([techId, { abilityId, minLevel }]) => {
+      const counter = effectiveCounters.get(abilityId) ?? 0;
+      if (counter < minLevel) toActivate.delete(techId);
+    });
+
+    // Apply tech-tech dependencies: if required tech is activated, select dependent techs (best tier)
+    const depFamilyBest = new Map<string, { id: string; tier: number }>();
+    TECH_TECH_DEPENDENCIES.forEach(dep => {
+      if (!dep.unitIds.includes(unit?.id ?? '')) return;
+      if (!toActivate.has(dep.requiredTech)) return;
+      const depTech = allTechnologies.find(t => t.id === dep.techId);
+      if (!depTech || depTech.minAge > upgradeAge) return;
+      const tierInfo = getTechnologyTier(depTech);
+      if (tierInfo) {
+        const baseName = getTechnologyBaseName(depTech.displayClasses[0]);
+        const existing = depFamilyBest.get(baseName);
+        if (!existing || existing.tier < tierInfo.tier) depFamilyBest.set(baseName, { id: depTech.id, tier: tierInfo.tier });
+      } else {
+        toActivate.add(dep.techId);
+      }
+    });
+    depFamilyBest.forEach(({ id }) => toActivate.add(id));
+
     setActiveTechnologies(toActivate);
     setFullUpgradeAge(upgradeAge);
-  }, [techs, selectedCiv, unit]);
+
+    // Persist ability counter boosts and activate the abilities
+    if (abilityBoosts.size > 0) {
+      setAbilityCounters(prev => {
+        const next = new Map(prev);
+        abilityBoosts.forEach((_, abilityId) => {
+          const ability = abilitiesRef.current.find(a => a.id === abilityId);
+          if (ability?.counterMax !== undefined && (prev.get(abilityId) ?? 0) < ability.counterMax) {
+            next.set(abilityId, ability.counterMax);
+          }
+        });
+        return next;
+      });
+      setActiveAbilities(prev => {
+        const next = new Set(prev);
+        abilityBoosts.forEach((_, abilityId) => next.add(abilityId));
+        return next;
+      });
+    }
+  }, [techs, selectedCiv, unit, abilityCounters]);
 
   const resetTechnologies = useCallback(() => {
     const defaults = new Set<string>();
@@ -933,14 +1100,35 @@ export function useUnitSlot() {
     });
     setActiveTechnologies(defaults);
     setFullUpgradeAge(null);
+
+    // Reset ability counters and active state for abilities boosted by full upgrade
+    const abilityIdsToReset = new Set(
+      Object.values(TECH_ABILITY_LEVEL_DEPENDENCIES).map(({ abilityId }) => abilityId)
+    );
+    if (abilityIdsToReset.size > 0) {
+      setAbilityCounters(prev => {
+        const next = new Map(prev);
+        abilityIdsToReset.forEach(id => next.delete(id));
+        return next;
+      });
+      setActiveAbilities(prev => {
+        const next = new Set(prev);
+        abilityIdsToReset.forEach(id => next.delete(id));
+        return next;
+      });
+    }
   }, [techs, selectedCiv, unit]);
 
   const lockedTechnologies = useMemo(() => {
     const locked = new Set<string>();
     (DEFAULT_ACTIVE_TECHS[selectedCiv] || []).forEach(id => locked.add(id));
     (LOCKED_UNIT_TECHS[unit?.id ?? ''] || []).forEach(id => locked.add(id));
+    Object.entries(TECH_ABILITY_LEVEL_DEPENDENCIES).forEach(([techId, { abilityId, minLevel }]) => {
+      const counter = abilityCounters.get(abilityId) ?? 0;
+      if (counter < minLevel) locked.add(techId);
+    });
     return locked;
-  }, [selectedCiv, unit]);
+  }, [selectedCiv, unit, abilityCounters]);
 
   return {
     unit, setUnit,

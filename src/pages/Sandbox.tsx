@@ -135,6 +135,12 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
     const javelinBase = age >= 4 ? 10 : age === 3 ? 8 : age === 2 ? 7 : 5;
     return javelinBase + rangedTechBonus;
   }
+
+  if (activeTechnologies.has('samurai-bow') && baseId === 'naginata-samurai') {
+    const rangedTechBonus = modifiedRangedAttack ?? 0;
+    const bowBase = age >= 4 ? 13 : age >= 3 ? 11 : age >= 2 ? 9 : 8;
+    return bowBase + rangedTechBonus;
+  }
   // ________________________________
   //
   // Remove charge when inactive
@@ -204,6 +210,16 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
   if (baseId === "szlachta-cavalry") {
     return 15 * charge_bonus_mult + charge_bonus;
   }
+
+  if (baseId === 'daimyo') {
+    switch (age) {
+      case 2: return 6 * charge_bonus_mult + charge_bonus;
+      case 3: return 14 * charge_bonus_mult + charge_bonus;
+      case 4: return 15 * charge_bonus_mult + charge_bonus;
+    }
+  }
+
+
   if (baseId === 'ghulam' || unitClasses.some(c => c.toLowerCase() === 'merc_ghulam')) {
     switch (age) {
       case 3: return 5 + charge_bonus;
@@ -370,17 +386,21 @@ const Sandbox = () => {
       opponentAttackSpeedDebuff: modifiedStats1.opponentAttackSpeedDebuff ?? 0,
       versusOpponentDamageDebuff: modifiedStats1.versusOpponentDamageDebuff ?? 1,
       opponentHealingRateDebuff: modifiedStats1.opponentHealingRateDebuff ?? 0,
+      maxHpBonusFraction: modifiedStats1.maxHpBonusFraction ?? 0,
       postChargeMeleeBonus: modifiedStats1.postChargeMeleeBonus ?? 0,
-      firstHitBlocked: activeAbilities1.has('ability-deflective-armor'),
+      firstHitBlocked: activeAbilities1.has('ability-deflective-armor') || activeAbilities1.has('ability-deflective-armor-sen'),
       chargeBonusBurst: getChargeBonusBurst(variation1, activeTechnologies1),
       chargeArmorType: variation1.baseId === 'earls-guard' ? 'ranged' as const :
         (variation1.baseId === 'donso' && activeAbilities1.has('javelin-throw')) ? 'ranged' as const :
-          (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(variation1.baseId) && (abilityCounters1?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
-            (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(variation1.baseId) && (abilityCounters1?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const :
-              (['musofadi-warrior', 'musofadi-gunner'].includes(variation1.baseId) && activeAbilities1.has('ability-first-strike')) ? 'first-strike' as const : undefined,
+          (variation1.baseId === 'naginata-samurai' && activeTechnologies1.has('samurai-bow')) ? 'ranged' as const :
+            (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(variation1.baseId) && (abilityCounters1?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
+              (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(variation1.baseId) && (abilityCounters1?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const :
+                (['musofadi-warrior', 'musofadi-gunner'].includes(variation1.baseId) && activeAbilities1.has('ability-first-strike')) ? 'first-strike' as const : undefined,
       chargeModifiers: (variation1.baseId === 'donso' && activeAbilities1.has('javelin-throw'))
         ? [{ target: { class: [['cavalry']] }, value: selectedAge1 >= 4 ? 10 : selectedAge1 === 3 ? 8 : selectedAge1 === 2 ? 7 : 5 }]
-        : undefined,
+        : (variation1.baseId === 'naginata-samurai' && activeTechnologies1.has('samurai-bow'))
+          ? [{ target: { class: [['light', 'melee', 'infantry']] }, value: selectedAge1 >= 4 ? 7 : selectedAge1 >= 3 ? 6 : selectedAge1 >= 2 ? 5 : 4 }]
+          : undefined,
       secondaryWeapons: (() => {
         const primaryWeapon1 = getPrimaryWeapon(variation1);
         const primaryBaseDamage = primaryWeapon1?.damage || 0;
@@ -454,17 +474,21 @@ const Sandbox = () => {
       opponentAttackSpeedDebuff: modifiedStats2.opponentAttackSpeedDebuff ?? 0,
       versusOpponentDamageDebuff: modifiedStats2.versusOpponentDamageDebuff ?? 1,
       opponentHealingRateDebuff: modifiedStats2.opponentHealingRateDebuff ?? 0,
+      maxHpBonusFraction: modifiedStats2.maxHpBonusFraction ?? 0,
       postChargeMeleeBonus: modifiedStats2.postChargeMeleeBonus ?? 0,
-      firstHitBlocked: activeAbilities2.has('ability-deflective-armor'),
+      firstHitBlocked: activeAbilities2.has('ability-deflective-armor') || activeAbilities2.has('ability-deflective-armor-sen'),
       chargeBonusBurst: getChargeBonusBurst(variation2, activeTechnologies2),
       chargeArmorType: variation2.baseId === 'earls-guard' ? 'ranged' as const :
         (variation2.baseId === 'donso' && activeAbilities2.has('javelin-throw')) ? 'ranged' as const :
-          (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(variation2.baseId) && (abilityCounters2?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
-            (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(variation2.baseId) && (abilityCounters2?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const :
-              (['musofadi-warrior', 'musofadi-gunner'].includes(variation2.baseId) && activeAbilities2.has('ability-first-strike')) ? 'first-strike' as const : undefined,
+          (variation2.baseId === 'naginata-samurai' && activeTechnologies2.has('samurai-bow')) ? 'ranged' as const :
+            (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(variation2.baseId) && (abilityCounters2?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
+              (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(variation2.baseId) && (abilityCounters2?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const :
+                (['musofadi-warrior', 'musofadi-gunner'].includes(variation2.baseId) && activeAbilities2.has('ability-first-strike')) ? 'first-strike' as const : undefined,
       chargeModifiers: (variation2.baseId === 'donso' && activeAbilities2.has('javelin-throw'))
         ? [{ target: { class: [['cavalry']] }, value: selectedAge2 >= 4 ? 10 : selectedAge2 === 3 ? 8 : selectedAge2 === 2 ? 7 : 5 }]
-        : undefined,
+        : (variation2.baseId === 'naginata-samurai' && activeTechnologies2.has('samurai-bow'))
+          ? [{ target: { class: [['light', 'melee', 'infantry']] }, value: selectedAge2 >= 4 ? 7 : selectedAge2 >= 3 ? 6 : 5 }]
+          : undefined,
       secondaryWeapons: (() => {
         const primaryWeapon2 = getPrimaryWeapon(variation2);
         const primaryBaseDamage = primaryWeapon2?.damage || 0;
@@ -535,17 +559,21 @@ const Sandbox = () => {
       opponentAttackSpeedDebuff: modifiedStats1.opponentAttackSpeedDebuff ?? 0,
       versusOpponentDamageDebuff: modifiedStats1.versusOpponentDamageDebuff ?? 1,
       opponentHealingRateDebuff: modifiedStats1.opponentHealingRateDebuff ?? 0,
+      maxHpBonusFraction: modifiedStats1.maxHpBonusFraction ?? 0,
       postChargeMeleeBonus: modifiedStats1.postChargeMeleeBonus ?? 0,
-      firstHitBlocked: activeAbilities1.has('ability-deflective-armor'),
+      firstHitBlocked: activeAbilities1.has('ability-deflective-armor') || activeAbilities1.has('ability-deflective-armor-sen'),
       chargeBonusBurst: getChargeBonusBurst(unit1, activeTechnologies1),
       chargeArmorType: unit1.id === 'earls-guard' ? 'ranged' as const :
         (unit1.id === 'donso' && activeAbilities1.has('javelin-throw')) ? 'ranged' as const :
-          (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(unit1.id) && (abilityCounters1?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
-            (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(unit1.id) && (abilityCounters1?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const :
-              (['musofadi-warrior', 'musofadi-gunner'].includes(unit1.id) && activeAbilities1.has('ability-first-strike')) ? 'first-strike' as const : undefined,
+          (unit1.id === 'naginata-samurai' && activeTechnologies1.has('samurai-bow')) ? 'ranged' as const :
+            (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(unit1.id) && (abilityCounters1?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
+              (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(unit1.id) && (abilityCounters1?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const :
+                (['musofadi-warrior', 'musofadi-gunner'].includes(unit1.id) && activeAbilities1.has('ability-first-strike')) ? 'first-strike' as const : undefined,
       chargeModifiers: (unit1.id === 'donso' && activeAbilities1.has('javelin-throw'))
         ? [{ target: { class: [['cavalry']] }, value: selectedAge1 >= 4 ? 10 : selectedAge1 === 3 ? 8 : selectedAge1 === 2 ? 7 : 5 }]
-        : undefined,
+        : (unit1.id === 'naginata-samurai' && activeTechnologies1.has('samurai-bow'))
+          ? [{ target: { class: [['light', 'melee', 'infantry']] }, value: selectedAge1 >= 4 ? 7 : selectedAge1 >= 3 ? 6 : 5 }]
+          : undefined,
       secondaryWeapons: (() => {
         const primaryWeaponU1 = getPrimaryWeapon(unit1);
         const primaryBaseDamage = primaryWeaponU1?.damage || 0;
@@ -612,17 +640,21 @@ const Sandbox = () => {
       opponentAttackSpeedDebuff: modifiedStats2.opponentAttackSpeedDebuff ?? 0,
       versusOpponentDamageDebuff: modifiedStats2.versusOpponentDamageDebuff ?? 1,
       opponentHealingRateDebuff: modifiedStats2.opponentHealingRateDebuff ?? 0,
+      maxHpBonusFraction: modifiedStats2.maxHpBonusFraction ?? 0,
       postChargeMeleeBonus: modifiedStats2.postChargeMeleeBonus ?? 0,
-      firstHitBlocked: activeAbilities2.has('ability-deflective-armor'),
+      firstHitBlocked: activeAbilities2.has('ability-deflective-armor') || activeAbilities2.has('ability-deflective-armor-sen'),
       chargeBonusBurst: getChargeBonusBurst(unit2, activeTechnologies2),
       chargeArmorType: unit2.id === 'earls-guard' ? 'ranged' as const :
         (unit2.id === 'donso' && activeAbilities2.has('javelin-throw')) ? 'ranged' as const :
-          (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(unit2.id) && (abilityCounters2?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
-            (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(unit2.id) && (abilityCounters2?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const :
-              (['musofadi-warrior', 'musofadi-gunner'].includes(unit2.id) && activeAbilities2.has('ability-first-strike')) ? 'first-strike' as const : undefined,
+          (unit2.id === 'naginata-samurai' && activeTechnologies2.has('samurai-bow')) ? 'ranged' as const :
+            (['jeanne-darc-woman-at-arms', 'jeanne-darc-knight', 'jeanne-darc-blast-cannon'].includes(unit2.id) && (abilityCounters2?.get('ability-holy-wrath') ?? 0) > 0) ? 'none' as const :
+              (['jeanne-darc-hunter', 'jeanne-darc-mounted-archer', 'jeanne-darc-markswoman'].includes(unit2.id) && (abilityCounters2?.get('ability-divine-arrow') ?? 0) > 0) ? 'none' as const :
+                (['musofadi-warrior', 'musofadi-gunner'].includes(unit2.id) && activeAbilities2.has('ability-first-strike')) ? 'first-strike' as const : undefined,
       chargeModifiers: (unit2.id === 'donso' && activeAbilities2.has('javelin-throw'))
         ? [{ target: { class: [['cavalry']] }, value: selectedAge2 >= 4 ? 10 : selectedAge2 === 3 ? 8 : selectedAge2 === 2 ? 7 : 5 }]
-        : undefined,
+        : (unit2.id === 'naginata-samurai' && activeTechnologies2.has('samurai-bow'))
+          ? [{ target: { class: [['light', 'melee', 'infantry']] }, value: selectedAge2 >= 4 ? 7 : selectedAge2 >= 3 ? 6 : 5 }]
+          : undefined,
       secondaryWeapons: (() => {
         const primaryWeaponU2 = getPrimaryWeapon(unit2);
         const primaryBaseDamage = primaryWeaponU2?.damage || 0;
@@ -678,6 +710,7 @@ const Sandbox = () => {
       armorPenetration: s.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: s.opponentAttackSpeedDebuff ?? 0,
       opponentHealingRateDebuff: s.opponentHealingRateDebuff ?? 0,
+      maxHpBonusFraction: s.maxHpBonusFraction ?? 0,
     };
   })() : undefined;
 
@@ -708,6 +741,7 @@ const Sandbox = () => {
       armorPenetration: s.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: s.opponentAttackSpeedDebuff ?? 0,
       opponentHealingRateDebuff: s.opponentHealingRateDebuff ?? 0,
+      maxHpBonusFraction: s.maxHpBonusFraction ?? 0,
     };
   })() : undefined;
 
@@ -738,6 +772,7 @@ const Sandbox = () => {
       armorPenetration: s.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: s.opponentAttackSpeedDebuff ?? 0,
       opponentHealingRateDebuff: s.opponentHealingRateDebuff ?? 0,
+      maxHpBonusFraction: s.maxHpBonusFraction ?? 0,
     };
   })() : undefined;
 
@@ -768,6 +803,7 @@ const Sandbox = () => {
       armorPenetration: s.armorPenetration ?? 0,
       opponentAttackSpeedDebuff: s.opponentAttackSpeedDebuff ?? 0,
       opponentHealingRateDebuff: s.opponentHealingRateDebuff ?? 0,
+      maxHpBonusFraction: s.maxHpBonusFraction ?? 0,
     };
   })() : undefined;
 
@@ -775,7 +811,7 @@ const Sandbox = () => {
   const stats1 = data1 ? {
     hp: modifiedStats1.hitpoints,
     attack: (() => {
-      const baseAttack = Math.max(modifiedStats1.meleeAttack, modifiedStats1.rangedAttack);
+      const baseAttack = Math.max(modifiedStats1.meleeAttack, modifiedStats1.rangedAttack, modifiedStats1.siegeAttack || 0);
       // In versus mode, apply the civ2 abilities debuff to the civ1's damage
       if (unit1 && unit2 && activeAbilities2.size > 0) {
         const debuffMultiplier = getVersusDebuffMultiplier(
@@ -802,7 +838,7 @@ const Sandbox = () => {
   const stats2 = data2 ? {
     hp: modifiedStats2.hitpoints,
     attack: (() => {
-      const baseAttack = Math.max(modifiedStats2.meleeAttack, modifiedStats2.rangedAttack);
+      const baseAttack = Math.max(modifiedStats2.meleeAttack, modifiedStats2.rangedAttack, modifiedStats2.siegeAttack || 0);
       // In versus mode, apply the civ1 abilities debuff to the civ2's damage
       if (unit1 && unit2 && activeAbilities1.size > 0) {
         const debuffMultiplier = getVersusDebuffMultiplier(
@@ -880,8 +916,8 @@ const Sandbox = () => {
 
   // Charge row — only pushed if at least one side has it
   if (hasChargeOnly1 || hasChargeOnly2) {
-    const chargeLabel1 = baseId1 === 'earls-guard' ? 'Dagger' : baseId1 === 'donso' ? 'Javelin' : ['musofadi-warrior', 'musofadi-gunner'].includes(baseId1) ? 'First Strike' : 'Charge';
-    const chargeLabel2 = baseId2 === 'earls-guard' ? 'Dagger' : baseId2 === 'donso' ? 'Javelin' : ['musofadi-warrior', 'musofadi-gunner'].includes(baseId2) ? 'First Strike' : 'Charge';
+    const chargeLabel1 = baseId1 === 'earls-guard' ? 'Dagger' : baseId1 === 'donso' ? 'Javelin' : baseId1 === 'naginata-samurai' ? 'Bow' : ['musofadi-warrior', 'musofadi-gunner'].includes(baseId1) ? 'First Strike' : 'Charge';
+    const chargeLabel2 = baseId2 === 'earls-guard' ? 'Dagger' : baseId2 === 'donso' ? 'Javelin' : baseId2 === 'naginata-samurai' ? 'Bow' : ['musofadi-warrior', 'musofadi-gunner'].includes(baseId2) ? 'First Strike' : 'Charge';
 
     alignedBonuses1.push(hasChargeOnly1
       ? { isChargeBonus: true, value: chargeOnly1, chargeBonusLabel: chargeLabel1, chargeBonusBurst: getChargeBonusBurst(data1, activeTechnologies1) }
@@ -1455,6 +1491,7 @@ const Sandbox = () => {
                       compareProductionTime={stats2?.productionTime}
                       secondaryWeapons={modifiedVariation1?.secondaryWeapons ?? secondaryWeapons1}
                       showSecondaryWeaponRow={secondaryWeapons1.length > 0 || secondaryWeapons2.length > 0}
+                      maxHpBonusFraction={modifiedStats1.maxHpBonusFraction ?? 0}
                       opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
                       opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
                       opponentVersusDebuff={modifiedStats2.versusOpponentDamageDebuff ?? 1}
@@ -1496,6 +1533,7 @@ const Sandbox = () => {
                       compareProductionTime={stats1?.productionTime}
                       secondaryWeapons={modifiedVariation2?.secondaryWeapons ?? secondaryWeapons2}
                       showSecondaryWeaponRow={secondaryWeapons1.length > 0 || secondaryWeapons2.length > 0}
+                      maxHpBonusFraction={modifiedStats2.maxHpBonusFraction ?? 0}
                       opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
                       opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
                       opponentVersusDebuff={modifiedStats1.versusOpponentDamageDebuff ?? 1}
@@ -1735,6 +1773,7 @@ const Sandbox = () => {
                           mode="versus"
                           versusMetrics={leftMetrics}
                           secondaryWeapons={modifiedVariation1?.secondaryWeapons ?? secondaryWeapons1}
+                          maxHpBonusFraction={modifiedStats1.maxHpBonusFraction ?? 0}
                           opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
                           opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
                           opponentVersusDebuff={modifiedStats2.versusOpponentDamageDebuff ?? 1}
@@ -1758,6 +1797,7 @@ const Sandbox = () => {
                           mode="versus"
                           versusMetrics={rightMetrics}
                           secondaryWeapons={modifiedVariation2?.secondaryWeapons ?? secondaryWeapons2}
+                          maxHpBonusFraction={modifiedStats2.maxHpBonusFraction ?? 0}
                           opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
                           opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
                           opponentVersusDebuff={modifiedStats1.versusOpponentDamageDebuff ?? 1}

@@ -59,6 +59,7 @@ interface UnitCardProps {
   compareProductionTime?: number;
   secondaryWeapons?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   showSecondaryWeaponRow?: boolean; // true if at least one side has secondary weapons (for alignment)
+  maxHpBonusFraction?: number; // attacker's bonus damage per hit = fraction × enemy max HP (e.g. Kanabo Samurai)
   opponentArmorPenetration?: number; // opponent's armorPenetration — reduces this unit's effective armor
   opponentAttackSpeedDebuff?: number; // opponent's AS debuff — multiplies this unit's attack interval by (1 + value)
   opponentVersusDebuff?: number; // opponent's versusOpponentDamageDebuff — multiplies this unit's damage output
@@ -195,6 +196,7 @@ export const UnitCard = ({
   compareProductionTime,
   secondaryWeapons,
   showSecondaryWeaponRow,
+  maxHpBonusFraction,
   opponentArmorPenetration,
   opponentAttackSpeedDebuff,
   opponentVersusDebuff,
@@ -397,6 +399,11 @@ export const UnitCard = ({
                         })}
                       </div>
                     ))
+                  ) : (maxHpBonusFraction ?? 0) > 0 ? (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground text-xs italic pl-2">+ Atk bonus</span>
+                      <span className="text-xs text-muted-foreground">+{Math.round((maxHpBonusFraction ?? 0) * 100)}% enemy max HP</span>
+                    </div>
                   ) : (
                     <div className="h-5" />
                   )
@@ -752,6 +759,24 @@ export const UnitCard = ({
                     </div>
                   )}
 
+                  {/* ── HP Bonus Damage ── */}
+                  {(maxHpBonusFraction ?? 0) > 0 && (
+                    <div className="space-y-1">
+                      <div className="font-semibold text-primary uppercase tracking-wide text-[9px]">
+                        ⚔️ HP Bonus Damage
+                      </div>
+                      <div className="pl-1 border-l-2 border-primary/20 space-y-0.5">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Per hit</span>
+                          <span>+{Math.round((maxHpBonusFraction ?? 0) * 100)}% of enemy max HP</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Bypasses armor & resistance</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* ── Burst Decay Bolt ── */}
                   {primaryWeapon?.burst?.count && primaryWeapon.burst.count > 1 && primaryWeapon.burst.decay !== undefined && (() => {
                     const decayDmg = (primaryWeapon.damage || 0) * primaryWeapon.burst.decay;
@@ -1045,6 +1070,9 @@ export const UnitCard = ({
                         return `${base}`;
                       })()}</span></div>
                     ))}
+                    {(maxHpBonusFraction ?? 0) > 0 && (
+                      <div className="flex justify-between"><span className="text-muted-foreground">+HP bonus</span><span>+{Math.round((maxHpBonusFraction ?? 0) * 100)}%</span></div>
+                    )}
                     <div className="flex justify-between"><span className="text-muted-foreground">AS</span><span className={effectiveAttackSpeed !== null ? 'text-orange-400' : undefined}>{effectiveAttackSpeed !== null ? effectiveAttackSpeed.toFixed(3) + 's' : (primaryWeapon.speed ? primaryWeapon.speed.toFixed(3) + 's' : '—')}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">Range</span><span>{primaryWeapon.range?.max != null ? parseFloat(primaryWeapon.range.max.toFixed(2)) : '—'}</span></div>
                   </>
