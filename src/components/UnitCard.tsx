@@ -221,6 +221,7 @@ export const UnitCard = ({
   const meleeResistanceRaw = getResistanceValue(displayData, 'melee');
   const meleeVulnerability = meleeResistanceRaw < 0 ? -meleeResistanceRaw : 0;
   const totalCost = variation ? getTotalCost(variation) : (unit ? getTotalCost(unit) : 0);
+  const effectiveHp = Math.round(displayData.hitpoints * ((displayData as any).hpStartFraction ?? 1)); // eslint-disable-line @typescript-eslint/no-explicit-any
   const costs = variation ? variation.costs : unit!.costs;
   const productionTime = (costs as unknown as { time?: number })?.time;
   const movement = 'movement' in displayData ? displayData.movement : undefined;
@@ -339,9 +340,9 @@ export const UnitCard = ({
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">HP</span>
-              <span className={cn('flex items-center gap-1', getComparisonColor(displayData.hitpoints, compareHp).color)}>
-                {getComparisonColor(displayData.hitpoints, compareHp).symbol && <span className="text-xs">{getComparisonColor(displayData.hitpoints, compareHp).symbol}</span>}
-                {Math.round(displayData.hitpoints)}
+              <span className={cn('flex items-center gap-1', getComparisonColor(effectiveHp, compareHp).color)}>
+                {getComparisonColor(effectiveHp, compareHp).symbol && <span className="text-xs">{getComparisonColor(effectiveHp, compareHp).symbol}</span>}
+                {effectiveHp}
               </span>
             </div>
             {primaryWeapon && (
@@ -597,7 +598,7 @@ export const UnitCard = ({
           const dieBeforeContact = parsed.dieBeforeContact || (isRangedSide && (parsedOpp?.dieBeforeContact ?? false));
           const meleeContactTime = parsed.meleeContactTime ?? (isRangedSide ? (parsedOpp?.meleeContactTime ?? null) : null);
 
-          const defenderTotalHp = displayData.hitpoints * (versusMetrics.opponentMultiplier || 1);
+          const defenderTotalHp = effectiveHp * (versusMetrics.opponentMultiplier || 1);
           const attackerTotalDmg = (versusMetrics.effectiveDamagePerHit || 0) * (versusMetrics.multiplier || 1);
           const cycleStr = primaryWeapon?.speed != null ? round2(primaryWeapon.speed) + 's' : '—';
           return (
@@ -918,7 +919,7 @@ export const UnitCard = ({
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Total opponent HP</span>
-                          <span>{displayData.hitpoints}×{versusMetrics.opponentMultiplier} = {defenderTotalHp}</span>
+                          <span>{effectiveHp}×{versusMetrics.opponentMultiplier} = {defenderTotalHp}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Total dmg/cycle</span>
@@ -1016,7 +1017,7 @@ export const UnitCard = ({
                   <div className="font-semibold text-yellow-700 dark:text-yellow-300">🏆 Winner Stats:</div>
                   {(() => {
                     const effectiveMultiplier = versusMetrics.multiplier && versusMetrics.multiplier > 1 ? versusMetrics.multiplier : 1;
-                    const totalHp = effectiveMultiplier * displayData.hitpoints;
+                    const totalHp = effectiveMultiplier * effectiveHp;
                     const totalCost = versusMetrics.totalCost || 0;
                     const hpPercentage = totalHp > 0 ? ((versusMetrics.winnerHpRemaining / totalHp) * 100).toFixed(1) : '0';
 
@@ -1081,7 +1082,7 @@ export const UnitCard = ({
                 )}
               </div>
               <div>
-                <div className="flex justify-between"><span className="text-muted-foreground">HP</span><span>{Math.round(displayData.hitpoints)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">HP</span><span>{effectiveHp}</span></div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Melee Armor</span>
                   <span

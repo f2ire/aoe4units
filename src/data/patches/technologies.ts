@@ -290,7 +290,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
       ...tech,
       effects: (tech.effects || []).map((e: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
         ...e,
-        select: { ...e.select, class: [['combat_monk']] }
+        select: { ...e.select, class: [['combat_monk'], ['healer_elephant']] }
       }))
     }),
   },
@@ -681,41 +681,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     }),
   },
 
-  {
-    id: "dali-horses",
-    reason: "Raw effects empty. Per-unit corrections hard-fixed from in-game measurements (no uniform model found). Average effective buff: +17.9% AS (≠ +20% announced).",
-    after: (tech: Technology) => {
-      const corrections = [
-        { id: 'lancer', value: 1.280 * 1.2 / 1.500 }, // 1.024
-        { id: 'imperial-guard', value: 1.380 * 1.2 / 1.625 }, // 1.019
-        { id: 'horseman', value: 1.470 * 1.2 / 1.750 }, // 1.008
-        { id: 'yuan-raider', value: 1.380 * 1.2 / 1.625 }, // 1.019
-      ];
-      return {
-        ...tech,
-        variations: tech.variations.map(v => ({
-          ...v,
-          effects: [
-            {
-              property: 'attackSpeed',
-              select: { class: [['cavalry']] },
-              effect: 'multiply',
-              value: 1 / 1.2,
-              type: 'passive'
-            },
-            ...corrections.map(c => ({
-              property: 'attackSpeed',
-              select: { id: [c.id] },
-              effect: 'multiply',
-              value: c.value,
-              type: 'passive'
-            }))
-          ]
-        }))
-      };
-    },
-    uiTooltip: "Model: mean +17.9% attack speed (game shows +20%; range +17.2%–+19.0%).",
-  },
+
 
   {
     id: "zeal",
@@ -783,6 +749,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: "mahouts",
     reason: "Not implemented in data file.",
+    excludedUnits: ['worker-elephant'],
     update: {
       effects: [
         {
@@ -794,6 +761,21 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         }
       ]
     }
+  },
+
+  {
+    id: "collateral-damage",
+    reason: "Bonus damage dealt by Elephants increased by 30%. Raw effects empty — replaced with bonusDamageMultiplier ×1.3 targeting elephant class. Excluded for worker-elephant (no combat role).",
+    excludedUnits: ['worker-elephant'],
+    update: {
+      effects: [{
+        property: 'bonusDamageMultiplier',
+        select: { class: [['elephant']] },
+        effect: 'multiply',
+        value: 1.3,
+        type: 'passive',
+      }],
+    },
   },
   //___________
   //
@@ -1873,7 +1855,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
   {
     id: "biology-improved",
-    reason: "Tier 2 of the Biology line. When selected, the tier system also applies Biology (tier 1) first. Available for Byzantines after building Foreign Engineering Company.",
+    reason: "Improved variant of Biology. Behaves like other improved techs (Mongol additive stacking when paired with Biology). Available for Byzantines after building Foreign Engineering Company.",
     update: {
       effects: [
         {
@@ -1886,7 +1868,6 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
           "type": "passive"
         },
       ],
-      displayClasses: ['Biology Technology 2/2']
     },
     after: (tech) => ({
       ...tech,
@@ -1900,31 +1881,64 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     foreignEngineeringUnits: ['keshik', 'mangudai'],
     uiTooltip: "Available only with Foreign Engineering Company",
   },
-  {
-    id: 'biology',
-    reason: 'Biology and Biology (Improved) form a tier line: selecting Improved automatically includes Biology effects first.',
-    update: { displayClasses: ['Biology Technology 1/2'] },
-  },
 
   {
-    id: "steppe-lancers-improved",
-    reason: "Available for Byzantines after building Foreign Engineering Company.",
+    id: "biology",
+    reason: "Available for Byzantines after building Foreign Engineering Company (auto-activated alongside Biology Improved).",
     after: (tech) => ({
       ...tech,
       civs: [...tech.civs, 'by'],
       variations: tech.variations.map(v => ({
         ...v,
-        civs: [...(v.civs || []), "by"],
-        effects: v.effects.map(e => {
-          if (e.property === 'healingRate') return { ...e, value: 1 };
-          if (e.property === 'attackSpeed') return { ...e, value: 1 / 1.1 };
-          return e;
-        }),
+        civs: [...(v.civs || []), "by"]
       }))
     }),
+  },
+
+  {
+    id: "steppe-lancers-improved",
+    reason: "Available for Byzantines after building Foreign Engineering Company. Tier 2/2: the tier system auto-applies steppe-lancers (tier 1/2) when this is active.",
+    update: { displayClasses: ['Steppe Lancers Technology 2/2'] },
+    after: (tech) => {
+      const base = tech.variations[0];
+      // mo: additive pair stacking (10/11 + 53/55 - 1) × 1.375 = 1.2
+      // by: multiplicative stacking 1.25 × 0.96 = 1.2
+      const moEffects = base.effects.map(e => {
+        if (e.property === 'healingRate') return { ...e, value: 1 };
+        if (e.property === 'attackSpeed') return { ...e, value: 53/55 };
+        return e;
+      });
+      const byEffects = base.effects.map(e => {
+        if (e.property === 'healingRate') return { ...e, value: 1 };
+        if (e.property === 'attackSpeed') return { ...e, value: 0.96 };
+        return e;
+      });
+      return {
+        ...tech,
+        civs: [...tech.civs, 'by'],
+        variations: [
+          { ...base, civs: ['mo'], effects: moEffects },
+          { ...base, civs: ['by'], effects: byEffects },
+        ],
+      };
+    },
     foreignEngineering: true,
     foreignEngineeringUnits: ['keshik'],
     uiTooltip: "Available only with Foreign Engineering Company",
+  },
+  {
+    id: "steppe-lancers",
+    reason: "Tier 1/2 of the Steppe Lancers line. Auto-applied by the tier system when steppe-lancers-improved is active (not shown directly for byz — fallback civ in getTechnologyVariation handles it).",
+    update: { displayClasses: ['Steppe Lancers Technology 1/2'] },
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: v.effects.map(e =>
+          e.property === 'attackSpeed' ? { ...e, value: 10/11 } : e
+        ),
+      }))
+    }),
   },
 
   {
@@ -2381,12 +2395,90 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     }),
   },
 
+  //____________________
+  //
+  // Thughlaq Dynasty
+  //
+  //____________________
+
+
+  {
+    id: 'neza-training',
+    reason: 'Raw effects are flat +1.35 additive on all attacks with no select. Replaced with a 35% bonus damage multiplier vs cavalry, restricted to spearman.',
+    after: (tech) => ({
+      ...tech,
+      effects: [],
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: [
+          {
+            property: 'meleeAttack',
+            select: { id: ['spearman'] },
+            effect: 'multiply',
+            value: 1.35,
+            type: 'bonus',
+            target: { class: [['cavalry']] },
+          },
+        ],
+      })),
+    }),
+  },
+
+  {
+    id: 'khanda-drills',
+    reason: 'Raw effects empty. Grants man-at-arms charge damage = 100% of primary weapon damage via chargeMultiplier.',
+    update: {
+      effects: [{
+        property: 'chargeMultiplier',
+        select: { id: ['man-at-arms'] },
+        effect: 'change',
+        value: 1,
+        type: 'passive',
+      }],
+    },
+  },
 
   //___________
   //
   // ZHU XI
   //
   //___________
+
+  {
+    id: "dali-horses",
+    reason: "Raw effects empty. Per-unit corrections hard-fixed from in-game measurements (no uniform model found). Average effective buff: +17.9% AS (≠ +20% announced).",
+    after: (tech: Technology) => {
+      const corrections = [
+        { id: 'lancer', value: 1.280 * 1.2 / 1.500 }, // 1.024
+        { id: 'imperial-guard', value: 1.380 * 1.2 / 1.625 }, // 1.019
+        { id: 'horseman', value: 1.470 * 1.2 / 1.750 }, // 1.008
+        { id: 'yuan-raider', value: 1.380 * 1.2 / 1.625 }, // 1.019
+      ];
+      return {
+        ...tech,
+        variations: tech.variations.map(v => ({
+          ...v,
+          effects: [
+            {
+              property: 'attackSpeed',
+              select: { class: [['cavalry']] },
+              effect: 'multiply',
+              value: 1 / 1.2,
+              type: 'passive'
+            },
+            ...corrections.map(c => ({
+              property: 'attackSpeed',
+              select: { id: [c.id] },
+              effect: 'multiply',
+              value: c.value,
+              type: 'passive'
+            }))
+          ]
+        }))
+      };
+    },
+    uiTooltip: "Model: mean +17.9% attack speed (game shows +20%; range +17.2%–+19.0%).",
+  },
 
   {
     id: 'bolt-magazines',
@@ -2640,6 +2732,55 @@ function createEnlistMansaJavelineers(): Technology {
 }
 
 
+//__________________
+//
+// TUGHLAQ
+//
+//__________________
+
+function createAjmerBenefactor(): Technology {
+  return {
+    id: 'ajmer-benefactor',
+    name: 'Ajmer Benefactor',
+    type: 'technology',
+    civs: ['tug'],
+    classes: [],
+    displayClasses: [],
+    minAge: 3,
+    icon: 'public/technologies/ajmer-benefactor.png',
+    description: 'Amir Warriors train 50% faster and have 50% more health.',
+    unique: true,
+    effects: [
+      {
+        property: 'hitpoints',
+        select: { id: ['amir-warrior'] },
+        effect: 'multiply',
+        value: 1.5,
+        type: 'passive',
+      },
+    ] as TechnologyEffect[],
+    variations: [
+      {
+        id: 'ajmer-benefactor-3',
+        baseId: 'ajmer-benefactor',
+        pbgid: 0,
+        attribName: '',
+        civs: ['tug'],
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        effects: [] as TechnologyEffect[],
+      }
+    ],
+    shared: {}
+  } as Technology;
+}
+
+//__________________
+//
+// SENGOKU DAIMYO
+//
+//__________________
+
+
 function createSwordHuntStatueAgeUp(): Technology {
   return {
     id: 'sword-hunt-statue-age-up',
@@ -2763,6 +2904,7 @@ export function applyTechnologyPatches(allTechs: Technology[]): Technology[] {
     createEnlistMansaMusofadi(),
     createEnlistMansaJavelineers(),
     createTempleOfEqualityAgeUp(),
+    createAjmerBenefactor(),
   ];
 
   return allWithSynthetic.map((tech) => {

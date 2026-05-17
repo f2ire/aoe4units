@@ -240,7 +240,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         active: 'manual'
       }))
     }),
-    uiTooltip: "In reality, it's a 22% attack speed bonus."
+    uiTooltip: '+20% AS announced. Effective: +23% (camel-lancer, desert-raider — uniform).'
   },
   {
     id: 'ability-atabeg-supervision',
@@ -462,7 +462,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         active: "manual",
       }))
     }),
-    uiTooltip: "Model: attack speed only. Game shows +20%; model uses +24% (Fire Lancer), +18% (Grenadier), +11% (Zhuge Nu).",
+    uiTooltip: '+20% AS announced. Effective avg: +17.5% (spread: +10.8% zhuge-nu → +24.0% fire-lancer).',
   },
 
   //___________
@@ -501,7 +501,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         }))
       };
     },
-    uiTooltip: "The 20% attack speed buff varies per unit (+15.7% Spearman to +22.8% Man-at-Arms).",
+    uiTooltip: '+20% AS announced. Effective avg: +18.4% (spread: +15.7% spearman → +22.8% man-at-arms).',
   },
 
   //___________
@@ -570,7 +570,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         ],
       }))
     }),
-    uiTooltip: "Real Attackspeed bonus : +18.3% AS with a 12–23% spread "
+    uiTooltip: '+20% AS announced. Effective avg: +18.3% (spread: +12.2% horseman → +22.8% man-at-arms).'
   },
 
   {
@@ -601,7 +601,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         ],
       }))
     }),
-    uiTooltip: "Real Attackspeed bonus : +23.8% AS with a 17–29%% spread "
+    uiTooltip: '+30% AS announced. Effective avg: +23.8% (spread: +17.4% horseman → +29.0% mangonel).'
 
   },
 
@@ -871,7 +871,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         ],
       }))
     }),
-    uiTooltip: 'Real Attackspeed bonus: ~+33% avg (24–45% spread).',
+    uiTooltip: '+35% AS announced. Effective avg: +33.3% (spread: +24.0% archer → +44.6% horseman).',
   },
 
   {
@@ -1109,7 +1109,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         ]
       }))
     }),
-    uiTooltip: "The announced +15% bonus is represented by an average measured: +14.4%.",
+    uiTooltip: '+15% AS announced. Effective avg: +14.4% (spread: +9.4% sipahi → +22.8% man-at-arms).',
   },
 
   {
@@ -3483,12 +3483,6 @@ function createAbilityDaimyoAura(): Ability {
   } as Ability;
 }
 
-//___________
-//
-// ZHU XI
-//
-//___________
-
 
 function createTanegashimaTateAbility(): Ability {
   return {
@@ -3525,6 +3519,262 @@ function createTanegashimaTateAbility(): Ability {
     shared: {}
   } as Ability;
 }
+
+//____________________
+//
+// Thughlaq Dynasty
+//
+//____________________
+
+function createTughlaqabadProtector(): Ability {
+  return {
+    id: 'ability-tughlaqabad-protector',
+    name: 'Tughlaqabad Protector',
+    type: 'ability',
+    civs: ['tug'],
+    displayClasses: [], classes: [],
+    minAge: 2, active: 'manual',
+    icon: 'public/abilities/Tughlaqabad-Protector.png',
+    description: 'When away from a Tughlaqabad Fort, Amir Warrior speed is reduced to 0.75 tiles/s and they lose -1/-1 armor every 10 seconds. They immediately regain their full stats when returning to within the radius.',
+    uiTooltip: 'Unlike what the description says, this represents 10% of current HP, not max HP.',
+    unique: true,
+    counterMax: 90,
+    counterHideMax: true,
+    counterStep: 1,
+    counterDirection: 'additive' as const,
+    counterTooltipLabel: 'intervals',
+    effects: [
+      { property: 'meleeArmor', select: { id: ['amir-warrior'] }, effect: 'change', value: -1, counterStepScale: -1, type: 'ability' },
+      { property: 'rangedArmor', select: { id: ['amir-warrior'] }, effect: 'change', value: -1, counterStepScale: -1, type: 'ability' },
+      { property: 'hpStartFraction', select: { id: ['amir-warrior'] }, effect: 'multiply', value: 0, counterStep: 0.9, counterDirection: 'geometric', type: 'ability' },
+    ],
+    variations: [{
+      id: 'ability-tughlaqabad-protector-2',
+      baseId: 'ability-tughlaqabad-protector',
+      type: 'ability',
+      name: 'Tughlaqabad Protector',
+      pbgid: 999701,
+      attribName: 'ability-tughlaqabad-protector',
+      age: 2, civs: ['tug'],
+      description: 'When away from a Tughlaqabad Fort, Amir Warrior speed is reduced to 0.75 tiles/s and they lose -1/-1 armor every 10 seconds.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createSehwansFervor(): Ability {
+  return {
+    id: 'ability-sehwans-fervor',
+    name: "Sehwan's Fervor",
+    type: 'ability',
+    civs: ['tug'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    icon: 'https://data.aoe4world.com/images/buildings/mosque-3.png',
+    description: "Units healed by Healer Elephants gain +10%/15%/20% damage for 10 seconds, depending on the level of the governor's Tughlaqabad Fort.",
+    unique: true,
+    counterMax: 3,
+    counterSteps: [0.1, 0.05, 0.05],
+    counterDirection: 'increase' as const,
+    counterTooltipLabel: 'level',
+    effects: [
+      { property: 'meleeAttack', select: { class: [['human', 'military']], excludeId: ['imam'] }, effect: 'multiply', value: 1.0, type: 'ability' },
+      { property: 'rangedAttack', select: { class: [['human', 'military']], excludeId: ['imam'] }, effect: 'multiply', value: 1.0, type: 'ability' },
+      { property: 'siegeAttack', select: { class: [['human', 'military']], excludeId: ['imam'] }, effect: 'multiply', value: 1.0, type: 'ability' },
+    ],
+    variations: [{
+      id: 'ability-sehwans-fervor-2',
+      baseId: 'ability-sehwans-fervor',
+      type: 'ability',
+      name: "Sehwan's Fervor",
+      pbgid: 999670,
+      attribName: 'ability_sehwans_fervor',
+      age: 2,
+      civs: ['tug'],
+      description: "Units healed by Healer Elephants gain +10%/15%/20% damage for 10 seconds, depending on the level of the governor's Tughlaqabad Fort.",
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+
+function createTowerOfVictoryAuraTug(): Ability {
+  return {
+    id: 'ability-tower-of-victory-aura-tug',
+    name: 'Tower of Victory Aura',
+    type: 'ability',
+    civs: ['tug'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    icon: 'https://data.aoe4world.com/images/abilities/ability-tower-of-victory-aura-1.png',
+    description: 'The Tower of Victory increases the attack speed of Elephants by +20% when produced from buildings within influence.',
+    uiTooltip: '+20% AS announced. Effective avg: +25.9% (spread: +22.8% war-elephant-spearman → +28.4% raider-elephant).',
+    unique: true,
+    effects: [
+      { property: 'attackSpeed', select: { id: ['war-elephant'] }, effect: 'multiply', value: 2.25 / 2.875, type: 'ability' },
+      { property: 'secondaryWeaponAttackSpeedMultiplier', select: { id: ['war-elephant'] }, effect: 'multiply', value: 1.12 / 1.375, type: 'ability' },
+      { property: 'attackSpeed', select: { id: ['raider-elephant'] }, effect: 'multiply', value: 1.85 / 2.375, type: 'ability' },
+      { property: 'attackSpeed', select: { id: ['healer-elephant'] }, effect: 'multiply', value: 2.37 / 3, type: 'ability' },
+      { property: 'attackSpeed', select: { id: ['ballista-elephant'] }, effect: 'multiply', value: 2.52 / 3.12, type: 'ability' },
+    ],
+    variations: [{
+      id: 'ability-tower-of-victory-aura-tug-2',
+      baseId: 'ability-tower-of-victory-aura-tug',
+      type: 'ability',
+      name: 'Tower of Victory Aura',
+      pbgid: 999703,
+      attribName: 'ability_tower_of_victory_aura_tug',
+      age: 2,
+      civs: ['tug'],
+      description: 'The Tower of Victory increases the attack speed of Elephants by +20% when produced from buildings within influence.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createGovernorOfJalor(): Ability {
+  return {
+    id: 'ability-governor-of-jalor',
+    name: 'Governor of Jalor',
+    type: 'ability',
+    civs: ['tug'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    icon: 'public/abilities/Governor_of_Jalor.png',
+    description: 'Cavalry trained within the influence of this Tughlaqabad Fort or Tower of Victory produce units with 20/35/50/65 more health.',
+    unique: true,
+    counterMax: 4,
+    counterSteps: [20, 15, 15, 15],
+    counterDirection: 'additive' as const,
+    counterTooltipLabel: 'level',
+    effects: [{
+      property: 'hitpoints',
+      select: { class: [['cavalry']] },
+      effect: 'change',
+      value: 0,
+      type: 'ability',
+    }],
+    variations: [{
+      id: 'ability-governor-of-jalor-2',
+      baseId: 'ability-governor-of-jalor',
+      type: 'ability',
+      name: 'Governor of Jalor',
+      pbgid: 999702,
+      attribName: 'ability_governor_of_jalor',
+      age: 2,
+      civs: ['tug'],
+      description: 'Cavalry trained within the influence of this Tughlaqabad Fort or Tower of Victory produce units with 20/35/50/65 more health.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createElephantFormations(): Ability {
+  return {
+    id: 'ability-elephant-formations',
+    name: 'Elephant Formations',
+    type: 'ability',
+    civs: ['tug'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    active: 'always',
+    icon: 'public/abilities/Elephant_Formations.png',
+    description: 'Gains +1 damage for each melee infantry unit within a four tile radius. There is no limit to the amount of damage that can be gained other than the size of the aura itself.',
+    unique: true,
+    counterMax: 197,
+    counterStep: 1,
+    counterDirection: 'additive' as const,
+    counterTooltipLabel: 'damage',
+    effects: [{
+      property: 'meleeAttack',
+      select: { id: ['healer-elephant'] },
+      effect: 'change',
+      value: 1,
+      type: 'ability',
+    }],
+    variations: [{
+      id: 'ability-elephant-formations-2',
+      baseId: 'ability-elephant-formations',
+      type: 'ability',
+      name: 'Elephant Formations',
+      pbgid: 999802,
+      attribName: 'ability_elephant_formations',
+      age: 2,
+      civs: ['tug'],
+      description: 'Gains +1 damage for each melee infantry unit within a four tile radius. There is no limit to the amount of damage that can be gained other than the size of the aura itself.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+function createTrampleTug(): Ability {
+  return {
+    id: 'ability-trample-tug',
+    name: 'Trample',
+    type: 'ability',
+    civs: ['tug'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    active: 'manual',
+    icon: 'public/abilities/trample_tug.png',
+    description: 'The skilled Mahout causes the Elephant to rear and enter a frenzied rage for 6 seconds. While enraged the Elephant can trample through any units, dealing 4 (or 9 for War Elephant) damage every 0.5 seconds to anything within range. This ability has a 30 second cooldown after trample ends.',
+    uiTooltip: 'Trample deals 9 dmg/0.5s (War Elephant) or 4 dmg/0.5s (Raider Elephant) = 18 / 8 raw DPS, bypassing armor. Duration: 6s.',
+    unique: true,
+    effects: [
+      { property: 'opponentHealingRateDebuff', select: { id: ['war-elephant'] }, effect: 'change', value: 18, type: 'ability', duration: 6 },
+      { property: 'opponentHealingRateDebuff', select: { id: ['raider-elephant'] }, effect: 'change', value: 8, type: 'ability', duration: 6 },
+    ],
+    variations: [{
+      id: 'ability-trample-tug-2',
+      baseId: 'ability-trample-tug',
+      type: 'ability',
+      name: 'Trample',
+      pbgid: 999801,
+      attribName: 'ability_trample_tug',
+      age: 2,
+      civs: ['tug'],
+      description: 'The skilled Mahout causes the Elephant to rear and enter a frenzied rage for 6 seconds. While enraged the Elephant can trample through any units, dealing 4 (or 9 for War Elephant) damage every 0.5 seconds to anything within range. This ability has a 30 second cooldown after trample ends.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+
+//___________
+//
+// ZHU XI
+//
+//___________
+
 
 function createHardCasedBombs(): Ability {
   return {
@@ -3613,6 +3863,12 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createDeflectiveArmorSen(),
     createAbilityDaimyoAura(),
     createTanegashimaTateAbility(),
+    createSehwansFervor(),
+    createTughlaqabadProtector(),
+    createTowerOfVictoryAuraTug(),
+    createGovernorOfJalor(),
+    createTrampleTug(),
+    createElephantFormations(),
   ];
 
   return abilitiesWithCharge.map(ability => {

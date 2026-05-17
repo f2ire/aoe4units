@@ -14,6 +14,9 @@ export interface TechnologyEffect {
   };
   duration?: number;
   counterStepScale?: number; // per-effect multiplier for counter abilities: effectiveValue × counterStepScale
+  counterStep?: number;      // per-effect override of ability-level counterStep
+  counterSteps?: number[];   // per-effect override of ability-level counterSteps array
+  counterDirection?: string; // per-effect override of ability-level counterDirection ('additive'|'increase'|'geometric'|default)
 }
 
 export interface TechnologyVariation {
@@ -122,6 +125,8 @@ const combatProperties = [
   'opponentAttackSpeedDebuff', // Opponent's attack interval × (1 + value), e.g. 0.20 = 20% slower
   'versusOpponentDamageDebuff', // Multiplier on damage dealt by opponents (e.g. 0.8 = −20% damage taken from attackers)
   'opponentHealingRateDebuff', // HP/s subtracted from opponent's healingRatePerSecond (e.g. 1 = opponent heals 1 HP/s less)
+  'hpStartFraction',           // Fraction of max HP the unit starts combat with (e.g. 0.9 = starts at 90% HP)
+  'secondaryWeaponAttackSpeedMultiplier', // Multiplier applied to secondary weapon attack speed (e.g. 0.9391 on war-elephant)
 ];
 
 // Non-combatant target classes to exclude
@@ -372,6 +377,8 @@ export interface UnitStats {
   chargeChange?: number;       // Flat additive bonus added to charge damage (requires charge-attack active)
   postChargeMeleeBonus?: number; // Melee attack bonus active only from hit 2 onward (after charge fires). Excluded from hit 1.
   maxHpBonusFraction?: number;  // Flat bonus damage per hit = this fraction × defender's max HP (bypasses armor/resistance)
+  hpStartFraction?: number;     // Fraction of max HP the unit starts combat with (default 1; e.g. 0.9 = starts at 90% HP)
+  secondaryWeaponAttackSpeedMultiplier?: number; // Multiplier on secondary weapons' attack speed (default 1; applied in Sandbox to secondaryWeapons[].speed)
 }
 
 export function applyTechnologyEffects(
@@ -490,7 +497,7 @@ export function applyTechnologyEffects(
       if (!combatProperties.includes(property)) continue;
 
       // Handle special properties
-      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'burstDecay' || property === 'costReduction' || property === 'stoneCostReduction' || property === 'foodCostReduction' || property === 'goldCostReduction' || property === 'rangedResistance' || property === 'meleeResistance' || property === 'siegeResistance' || property === 'healingRate' || property === 'healingRatePerSecond' || property === 'chargeMultiplier' || property === 'chargeChange' || property === 'bonusDamageMultiplier' || property === 'armorPenetration' || property === 'opponentAttackSpeedDebuff' || property === 'versusOpponentDamageDebuff' || property === 'opponentHealingRateDebuff') {
+      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst' || property === 'burstDecay' || property === 'costReduction' || property === 'stoneCostReduction' || property === 'foodCostReduction' || property === 'goldCostReduction' || property === 'rangedResistance' || property === 'meleeResistance' || property === 'siegeResistance' || property === 'healingRate' || property === 'healingRatePerSecond' || property === 'chargeMultiplier' || property === 'chargeChange' || property === 'bonusDamageMultiplier' || property === 'armorPenetration' || property === 'opponentAttackSpeedDebuff' || property === 'versusOpponentDamageDebuff' || property === 'opponentHealingRateDebuff' || property === 'hpStartFraction' || property === 'secondaryWeaponAttackSpeedMultiplier') {
         // versusOpponentDamageDebuff with a class selector is handled per-hit by getVersusDebuffMultiplier
         // in combat.ts — applying it here too causes double-counting.
         if (property === 'versusOpponentDamageDebuff' && effect.select?.class) continue;
@@ -849,6 +856,31 @@ export function applyTechnologyEffects(
   for (const effect of specialEffects) {
     if (effect.property === 'versusOpponentDamageDebuff' && effect.effectType === 'multiply') {
       modifiedStats.versusOpponentDamageDebuff = (modifiedStats.versusOpponentDamageDebuff ?? 1) * effect.value;
+    }
+  }
+
+  // Apply hpStartFraction (additive change on a base of 1; multiply also supported)
+  for (const effect of specialEffects) {
+    if (effect.property === 'hpStartFraction') {
+      if (effect.effectType === 'change') {
+        modifiedStats.hpStartFraction = (modifiedStats.hpStartFraction ?? 1) + effect.value;
+      } else if (effect.effectType === 'multiply') {
+        modifiedStats.hpStartFraction = (modifiedStats.hpStartFraction ?? 1) * effect.value;
+      }
+    }
+  }
+  if (modifiedStats.hpStartFraction !== undefined) {
+    modifiedStats.hpStartFraction = Math.max(0, Math.min(1, modifiedStats.hpStartFraction));
+  }
+
+  // Apply secondaryWeaponAttackSpeedMultiplier (multiplicative; applied to secondaryWeapons[].speed in Sandbox)
+  for (const effect of specialEffects) {
+    if (effect.property === 'secondaryWeaponAttackSpeedMultiplier') {
+      if (effect.effectType === 'multiply') {
+        modifiedStats.secondaryWeaponAttackSpeedMultiplier = (modifiedStats.secondaryWeaponAttackSpeedMultiplier ?? 1) * effect.value;
+      } else if (effect.effectType === 'change') {
+        modifiedStats.secondaryWeaponAttackSpeedMultiplier = (modifiedStats.secondaryWeaponAttackSpeedMultiplier ?? 1) + effect.value;
+      }
     }
   }
 

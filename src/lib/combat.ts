@@ -34,6 +34,7 @@ export interface CombatEntity {
   postChargeMeleeBonus?: number; // melee attack bonus active from hit 2 onward only — subtracted from hit 1 (charge hit)
   chargeModifiers?: Array<{ target: { class: string[][] }; value: number }>; // class-specific bonus damage applied to the dagger/javelin hit (before ranged armor)
   maxHpBonusFraction?: number; // Bonus damage per hit = fraction × defender's max HP (bypasses armor/resistance)
+  hpStartFraction?: number;    // Fraction of max HP the unit starts combat with (default 1; e.g. 0.9 = starts at 90% HP)
 }
 
 export interface VersusMetrics {
@@ -85,6 +86,7 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     postChargeMeleeBonus: (source as any).postChargeMeleeBonus ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     chargeModifiers: (source as any).chargeModifiers, // eslint-disable-line @typescript-eslint/no-explicit-any
     maxHpBonusFraction: (source as any).maxHpBonusFraction ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
+    hpStartFraction: (source as any).hpStartFraction ?? 1, // eslint-disable-line @typescript-eslint/no-explicit-any
   };
 }
 
@@ -615,7 +617,7 @@ function computeMetrics(
   // First-hit block (Deflective Armor): defender absorbs first attack completely.
   // Charge consumed but blocked. Attacker spends firstHitSpeed, then all normal hits.
   if (defender.firstHitBlocked && !bugAttackSpeed) {
-    const totalDefHP = defender.hitpoints * defenderMultiplier;
+    const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
     const normalCycle = normalAttackData.value * attackerMultiplier;
     let secNormalDPS = 0;
     for (const secWeapon of (attacker.secondaryWeapons || [])) {
@@ -646,7 +648,7 @@ function computeMetrics(
   }
 
   if (!bugAttackSpeed) {
-    const totalDefenderHP = defender.hitpoints * defenderMultiplier;
+    const totalDefenderHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
 
     if (chargeBonus > 0 || hasChargeWeapon) {
       const firstCycleDamage = firstAttackData.value * attackerMultiplier;
@@ -680,7 +682,7 @@ function computeMetrics(
         hitsToKill = null;
         timeToKill = null;
       } else {
-        const totalDefHP = defender.hitpoints * defenderMultiplier;
+        const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
         hitsToKill = Math.ceil(totalDefHP / (netDPS * attackSpeed));
         timeToKill = round(hitsToKill * attackSpeed, 1);
       }
@@ -699,7 +701,7 @@ function computeMetrics(
           // Discrete model (versus): secondary damage per primary cycle → recompute HTK then TTK = HTK × AS.
           // First cycle may differ when a charge weapon has a different speed.
           // firstAttackData already includes charge/bleed bonus, so the first-hit reduction is preserved.
-          const totalDefHP = defender.hitpoints * defenderMultiplier;
+          const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
           const secPerFirstCycle = totalSecDPS * firstHitSpeed;
           const secPerNormalCycle = totalSecDPS * attackSpeed;
           const effectiveFirstCycle = firstAttackData.value * attackerMultiplier + secPerFirstCycle;
@@ -730,7 +732,7 @@ function computeMetrics(
     const bleedDPS = attacker.opponentHealingRateDebuff ?? 0;
     if (bleedDPS !== 0 && dps !== null) {
       dps = round(dps + bleedDPS, 2);
-      const totalDefHP = defender.hitpoints * defenderMultiplier;
+      const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
       if (dps > 0) {
         timeToKill = round(totalDefHP / dps, 1);
         hitsToKill = attackSpeed > 0 ? Math.ceil(timeToKill / attackSpeed) : null;
@@ -743,7 +745,7 @@ function computeMetrics(
     // Defender per-second healing/self-damage (Triumph: +2 HP/s; Militia: −1 HP/s)
     const defenderHealPerSecond = defender.healingRatePerSecond ?? 0;
     if (defenderHealPerSecond !== 0 && dps !== null && timeToKill !== null) {
-      const totalDefHP = defender.hitpoints * defenderMultiplier;
+      const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
       const netDPS = dps - defenderHealPerSecond;
       if (netDPS <= 0) {
         hitsToKill = null;
@@ -775,7 +777,7 @@ function computeMetrics(
     const noTimerAttackSpeed = (noTimerData.weapon?.speed ?? rawSpeed) * asDebuffFactor;
     const normalDmgPerHit = normalAttackData.value * attackerMultiplier;
     if (noTimerDmgPerHit > 0 && noTimerAttackSpeed > 0 && (noTimerDmgPerHit !== normalDmgPerHit || noTimerAttackSpeed !== attackSpeed)) {
-      const totalDefHP = defender.hitpoints * defenderMultiplier;
+      const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
       const hitsInDuration = Math.floor(timedDurationAttacker / attackSpeed);
       const firstDmgPerHit = firstAttackData.value * attackerMultiplier;
       // Hit 1 carries the charge bonus (includes holy wrath); remaining hits are normal
@@ -800,7 +802,7 @@ function computeMetrics(
     const noTimerDefDmgPerHit = noTimerDefData.value * attackerMultiplier;
     const phase1DmgPerHit = normalAttackData.value * attackerMultiplier;
     if (noTimerDefDmgPerHit > 0 && attackSpeed > 0 && noTimerDefDmgPerHit !== phase1DmgPerHit) {
-      const totalDefHP = defender.hitpoints * defenderMultiplier;
+      const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
       const hitsInDuration = Math.floor(timedDurationDefender / attackSpeed);
       const dmgInDuration = hitsInDuration * phase1DmgPerHit;
       if (dmgInDuration < totalDefHP) {
@@ -822,7 +824,7 @@ function computeMetrics(
     if (phase1HealRate !== phase2HealRate && attackSpeed > 0) {
       const defenderAS = (defender.weapons[0]?.speed ?? 0) * (1 + (attacker.opponentAttackSpeedDebuff ?? 0));
       const rawDmgPerHit = normalAttackData.value * attackerMultiplier;
-      const totalDefHP = defender.hitpoints * defenderMultiplier;
+      const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
       const hitsInDuration = Math.floor(timedDurationDefender / attackSpeed);
       const phase1Time = hitsInDuration * attackSpeed;
       const healPerS1 = defenderAS > 0 ? phase1HealRate / defenderAS : 0;
@@ -1015,11 +1017,13 @@ export function computeVersus(
   if (winner === "attacker" && metricsA.timeToKill !== null) {
     const healingA = (metricsA.hitsToKill ?? 0) * (A.healingRate ?? 0)
       + metricsA.timeToKill * Math.max(0, A.healingRatePerSecond ?? 0);
-    winnerHpRemaining = Math.min(A.hitpoints, Math.max(0, A.hitpoints - computeDamageInTime(B, A, chargeBonusB, metricsA.timeToKill) + healingA));
+    const startHpA = A.hitpoints * (A.hpStartFraction ?? 1);
+    winnerHpRemaining = Math.min(A.hitpoints, Math.max(0, startHpA - computeDamageInTime(B, A, chargeBonusB, metricsA.timeToKill) + healingA));
   } else if (winner === "defender" && metricsB.timeToKill !== null) {
     const healingB = (metricsB.hitsToKill ?? 0) * (B.healingRate ?? 0)
       + metricsB.timeToKill * Math.max(0, B.healingRatePerSecond ?? 0);
-    winnerHpRemaining = Math.min(B.hitpoints, Math.max(0, B.hitpoints - computeDamageInTime(A, B, chargeBonusA, metricsB.timeToKill) + healingB));
+    const startHpB = B.hitpoints * (B.hpStartFraction ?? 1);
+    winnerHpRemaining = Math.min(B.hitpoints, Math.max(0, startHpB - computeDamageInTime(A, B, chargeBonusA, metricsB.timeToKill) + healingB));
   }
 
   return {

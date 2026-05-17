@@ -281,6 +281,91 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
     },
   },
 
+  {
+    id: 'healer-elephant',
+    reason: 'Age-4 (Elite) has higher HP and armor than the raw data shows.',
+    after: (unit: any) => ({
+      ...unit,
+      variations: unit.variations.map((v: any) =>
+        v.age === 4
+          ? {
+              ...v,
+              hitpoints: 500,
+              armor: [
+                { type: 'melee', value: 5 },
+                { type: 'ranged', value: 4 },
+              ],
+            }
+          : v
+      ),
+    }),
+  },
+
+  {
+    id: 'fishing-boat',
+    reason: 'Delhi (de) and Tughlaqabad (tug): raw data has a single age-2 variant holding age-1 stats (attack 4, bonus vs ship 1). Relabelling it as age-1 and adding age-2/3/4 variants with correct attack (6/7/9) and bonus vs ship (2/3/4).',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      const targetCivs = ['de', 'tug'];
+
+      const makeVariation = (base: Record<string, unknown>, age: number, damage: number, shipBonus: number) => {
+        const weapons = (base.weapons as Record<string, unknown>[]).map((w, i) => {
+          if (i === 0) {
+            const modifiers = (w.modifiers as Record<string, unknown>[]).map(mod => {
+              const m = mod as Record<string, unknown>;
+              return m.property === 'rangedAttack' ? { ...m, value: shipBonus } : m;
+            });
+            return { ...w, damage, modifiers };
+          }
+          return w;
+        });
+        return { ...base, age, id: `fishing-boat-${age}`, weapons };
+      };
+
+      const newVariations: Record<string, unknown>[] = [];
+      for (const v of (u.variations as Record<string, unknown>[])) {
+        const vCivs = v.civs as string[];
+        const isTarget = vCivs.some(c => targetCivs.includes(c));
+        if (isTarget && (v as any).age === 2) {
+          newVariations.push({ ...v, age: 1, id: 'fishing-boat-1' });
+          newVariations.push(makeVariation(v, 2, 6, 2));
+          newVariations.push(makeVariation(v, 3, 7, 3));
+          newVariations.push(makeVariation(v, 4, 9, 4));
+        } else {
+          newVariations.push(v);
+        }
+      }
+      return { ...u, variations: newVariations };
+    },
+  },
+
+  {
+    id: 'worker-elephant',
+    reason: 'Raw data has a single age-2 variation with no armor. Relabelling it as age-1 (armor 0/0) and adding age-2/3/4 variants with melee/ranged armor 2/4/6.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      const base = (u.variations as Record<string, unknown>[])[0];
+
+      const makeVariation = (age: number, armor: number) => ({
+        ...base,
+        age,
+        id: `worker-elephant-${age}`,
+        armor: armor > 0 ? [{ type: 'melee', value: armor }, { type: 'ranged', value: armor }] : [],
+      });
+
+      return {
+        ...u,
+        minAge: 1,
+        variations: [
+          makeVariation(1, 0),
+          makeVariation(2, 2),
+          makeVariation(3, 4),
+          makeVariation(4, 6),
+        ],
+      };
+    },
+  },
+
   //_________
   //
   // ENGLISH
@@ -1045,6 +1130,30 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
         maxHpBonusFraction: 0.06,
       })),
     }),
+  },
+
+  {
+    id: 'amir-warrior',
+    reason: 'Raw data only has age-1 variation. minAge set to 2. Adding age-3 and age-4 variations per in-game: HP (180/180/200), attack (12/12/12), armor (5/5 all ages). Population cost corrected to 1 (raw data has 0).',
+    after: (unit: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      const base = unit.variations[0];
+      const baseWithPop = { ...base, costs: { ...base.costs, popcap: 1 } };
+      const makeVariation = (age: number, hp: number) => ({
+        ...baseWithPop,
+        age,
+        id: `amir-warrior-${age}`,
+        hitpoints: hp,
+      });
+      return {
+        ...unit,
+        minAge: 2,
+        variations: [
+          { ...baseWithPop, age: 2, id: 'amir-warrior-2' },
+          makeVariation(3, 180),
+          makeVariation(4, 200),
+        ],
+      };
+    },
   },
 
   {

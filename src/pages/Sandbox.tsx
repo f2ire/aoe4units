@@ -387,6 +387,7 @@ const Sandbox = () => {
       versusOpponentDamageDebuff: modifiedStats1.versusOpponentDamageDebuff ?? 1,
       opponentHealingRateDebuff: modifiedStats1.opponentHealingRateDebuff ?? 0,
       maxHpBonusFraction: modifiedStats1.maxHpBonusFraction ?? 0,
+      hpStartFraction: modifiedStats1.hpStartFraction ?? 1,
       postChargeMeleeBonus: modifiedStats1.postChargeMeleeBonus ?? 0,
       firstHitBlocked: activeAbilities1.has('ability-deflective-armor') || activeAbilities1.has('ability-deflective-armor-sen'),
       chargeBonusBurst: getChargeBonusBurst(variation1, activeTechnologies1),
@@ -411,6 +412,7 @@ const Sandbox = () => {
         const rangedFlatDelta1 = modifiedStats1.rangedAttack / rangedMultiplier1 - rangedBase1;
         return secondaryWeapons1.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
           ...w,
+          speed: (modifiedStats1.secondaryWeaponAttackSpeedMultiplier ?? 1) !== 1 ? (w.speed || 0) * modifiedStats1.secondaryWeaponAttackSpeedMultiplier! : w.speed,
           damage: (() => {
             const raw = w.type === 'ranged' || w.type === 'siege'
               ? w.damageMultiplier != null
@@ -475,6 +477,7 @@ const Sandbox = () => {
       versusOpponentDamageDebuff: modifiedStats2.versusOpponentDamageDebuff ?? 1,
       opponentHealingRateDebuff: modifiedStats2.opponentHealingRateDebuff ?? 0,
       maxHpBonusFraction: modifiedStats2.maxHpBonusFraction ?? 0,
+      hpStartFraction: modifiedStats2.hpStartFraction ?? 1,
       postChargeMeleeBonus: modifiedStats2.postChargeMeleeBonus ?? 0,
       firstHitBlocked: activeAbilities2.has('ability-deflective-armor') || activeAbilities2.has('ability-deflective-armor-sen'),
       chargeBonusBurst: getChargeBonusBurst(variation2, activeTechnologies2),
@@ -499,6 +502,7 @@ const Sandbox = () => {
         const rangedFlatDelta2 = modifiedStats2.rangedAttack / rangedMultiplier2 - rangedBase2;
         return secondaryWeapons2.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
           ...w,
+          speed: (modifiedStats2.secondaryWeaponAttackSpeedMultiplier ?? 1) !== 1 ? (w.speed || 0) * modifiedStats2.secondaryWeaponAttackSpeedMultiplier! : w.speed,
           damage: (() => {
             const raw = w.type === 'ranged' || w.type === 'siege'
               ? w.damageMultiplier != null
@@ -560,6 +564,7 @@ const Sandbox = () => {
       versusOpponentDamageDebuff: modifiedStats1.versusOpponentDamageDebuff ?? 1,
       opponentHealingRateDebuff: modifiedStats1.opponentHealingRateDebuff ?? 0,
       maxHpBonusFraction: modifiedStats1.maxHpBonusFraction ?? 0,
+      hpStartFraction: modifiedStats1.hpStartFraction ?? 1,
       postChargeMeleeBonus: modifiedStats1.postChargeMeleeBonus ?? 0,
       firstHitBlocked: activeAbilities1.has('ability-deflective-armor') || activeAbilities1.has('ability-deflective-armor-sen'),
       chargeBonusBurst: getChargeBonusBurst(unit1, activeTechnologies1),
@@ -584,6 +589,7 @@ const Sandbox = () => {
         const rangedFlatDeltaU1 = modifiedStats1.rangedAttack / rangedMultiplierU1 - rangedBaseU1;
         return secondaryWeapons1.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
           ...w,
+          speed: (modifiedStats1.secondaryWeaponAttackSpeedMultiplier ?? 1) !== 1 ? (w.speed || 0) * modifiedStats1.secondaryWeaponAttackSpeedMultiplier! : w.speed,
           damage: (() => {
             const raw = w.type === 'ranged' || w.type === 'siege'
               ? w.damageMultiplier != null
@@ -641,6 +647,7 @@ const Sandbox = () => {
       versusOpponentDamageDebuff: modifiedStats2.versusOpponentDamageDebuff ?? 1,
       opponentHealingRateDebuff: modifiedStats2.opponentHealingRateDebuff ?? 0,
       maxHpBonusFraction: modifiedStats2.maxHpBonusFraction ?? 0,
+      hpStartFraction: modifiedStats2.hpStartFraction ?? 1,
       postChargeMeleeBonus: modifiedStats2.postChargeMeleeBonus ?? 0,
       firstHitBlocked: activeAbilities2.has('ability-deflective-armor') || activeAbilities2.has('ability-deflective-armor-sen'),
       chargeBonusBurst: getChargeBonusBurst(unit2, activeTechnologies2),
@@ -665,6 +672,7 @@ const Sandbox = () => {
         const rangedFlatDeltaU2 = modifiedStats2.rangedAttack / rangedMultiplierU2 - rangedBaseU2;
         return secondaryWeapons2.map((w: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
           ...w,
+          speed: (modifiedStats2.secondaryWeaponAttackSpeedMultiplier ?? 1) !== 1 ? (w.speed || 0) * modifiedStats2.secondaryWeaponAttackSpeedMultiplier! : w.speed,
           damage: (() => {
             const raw = w.type === 'ranged' || w.type === 'siege'
               ? w.damageMultiplier != null
@@ -809,7 +817,7 @@ const Sandbox = () => {
 
   // Final stats with costs
   const stats1 = data1 ? {
-    hp: modifiedStats1.hitpoints,
+    hp: modifiedStats1.hitpoints * (modifiedStats1.hpStartFraction ?? 1),
     attack: (() => {
       const baseAttack = Math.max(modifiedStats1.meleeAttack, modifiedStats1.rangedAttack, modifiedStats1.siegeAttack || 0);
       // In versus mode, apply the civ2 abilities debuff to the civ1's damage
@@ -836,7 +844,7 @@ const Sandbox = () => {
   } : null;
 
   const stats2 = data2 ? {
-    hp: modifiedStats2.hitpoints,
+    hp: modifiedStats2.hitpoints * (modifiedStats2.hpStartFraction ?? 1),
     attack: (() => {
       const baseAttack = Math.max(modifiedStats2.meleeAttack, modifiedStats2.rangedAttack, modifiedStats2.siegeAttack || 0);
       // In versus mode, apply the civ1 abilities debuff to the civ2's damage
@@ -1043,20 +1051,23 @@ const Sandbox = () => {
                   const effectiveCost1 = modifiedVariation1 ? getTotalCost(modifiedVariation1) : (stats1?.cost ?? 0);
                   const effectiveCost2 = modifiedVariation2 ? getTotalCost(modifiedVariation2) : (stats2?.cost ?? 0);
                   const sameCost = unit1 && unit2 && effectiveCost1 > 0 && effectiveCost2 > 0 && effectiveCost1 === effectiveCost2;
+                  const zeroCost = (!!unit1 && effectiveCost1 === 0) || (!!unit2 && effectiveCost2 === 0);
+                  const isEqualCostDisabled = !!sameCost || zeroCost;
+                  const disabledTitle = sameCost ? 'Units have the same cost' : zeroCost ? 'A unit has no cost' : undefined;
                   return (
                     <div
-                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card ${sameCost ? 'opacity-50' : ''}`}
-                      title={sameCost ? 'Units have the same cost' : undefined}
+                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card ${isEqualCostDisabled ? 'opacity-50' : ''}`}
+                      title={disabledTitle}
                     >
                       <input
                         type="checkbox"
                         id="atEqualCost"
                         checked={atEqualCost}
-                        onChange={(e) => !sameCost && setAtEqualCost(e.target.checked)}
-                        disabled={!!sameCost}
+                        onChange={(e) => !isEqualCostDisabled && setAtEqualCost(e.target.checked)}
+                        disabled={isEqualCostDisabled}
                         className="w-4 h-4 rounded border-border disabled:cursor-not-allowed"
                       />
-                      <label htmlFor="atEqualCost" className={`text-sm font-medium ${sameCost ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                      <label htmlFor="atEqualCost" className={`text-sm font-medium ${isEqualCostDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                         At Equal Cost
                       </label>
                     </div>
@@ -1598,7 +1609,10 @@ const Sandbox = () => {
               const noTimerData1 = modifiedVariation1NoTimer || modifiedUnit1NoTimer;
               const noTimerData2 = modifiedVariation2NoTimer || modifiedUnit2NoTimer;
 
-              if (atEqualCost) {
+              const cost1 = modifiedVariation1 ? getTotalCost(modifiedVariation1) : (stats1?.cost ?? 0);
+              const cost2 = modifiedVariation2 ? getTotalCost(modifiedVariation2) : (stats2?.cost ?? 0);
+
+              if (atEqualCost && cost1 > 0 && cost2 > 0) {
                 const result = computeVersusAtEqualCost(
                   modifiedVariation1 || modifiedUnit1!,
                   modifiedVariation2 || modifiedUnit2!,

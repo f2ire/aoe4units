@@ -37,8 +37,11 @@ export const TechnologySelector = ({
   onApplyFullUpgrade,
   onReset,
 }: TechnologySelectorProps) => {
-  // Filter out improved techs — they're controlled via the "^" button on their base tech
-  const visibleTechnologies = technologies.filter(t => !IMPROVED_TECH_BASE[t.id]);
+  // Filter out improved techs — they're controlled via the "^" button on their base tech.
+  // Exception: FEC improved techs for Byzantines are shown directly (no base tech available).
+  const visibleTechnologies = technologies.filter(t =>
+    !IMPROVED_TECH_BASE[t.id] || (selectedCiv === 'by' && foreignEngineeringTechIds.has(t.id))
+  );
 
   if (visibleTechnologies.length === 0) return null;
 

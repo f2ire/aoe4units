@@ -258,6 +258,20 @@ ikko-ikki-monk          | 1.375 | 1.019  | 1.00     | +37.5%  |
 **Average effective bonus:** +34.8% AS (≠ +35% announced). Spread: +25.0% (yumi-ashigaru) to +44.6% (yari-cavalry).
 **Conclusion:** No uniform model. Hard-coded per unit in `patches/technologies.ts`.
 
+## [TECH] Tower of victory — tug — 2026/05/17
+
+**Description:** 20% attack speed
+
+Unit                  | Base  | Theory | Practice | Eff. %  |
+----------------------|-------|--------|----------|---------|
+war-elephant          | 2.875 | 2.396  | 2.25     | +27.8%  |
+war-elephant-spearman | 1.375 | 1.146  | 1.12     | +22.8%  |
+raider-elephant       | 2.375 | 1.979  | 1.85     | +28.4%  |
+healer-elephant       | 3     | 2.500  | 2.37     | +26.6%  |
+ballista-elephant     | 3.120 | 2.600  | 2.52     | +23.8%  |
+
+**Average effective bonus:** +25.9% AS (≠ +20% announced). Spread: +22.8% (war-elephant-spearman) to +28.4% (raider-elephant).
+**Conclusion:** No uniform model. Hard-coded per unit in `patches/abilities.ts`.
 
 ## [TECH] Dali horses — zx — 2026/05/15
 

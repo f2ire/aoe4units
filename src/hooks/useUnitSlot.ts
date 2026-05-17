@@ -4,7 +4,7 @@ import type { UnifiedVariation } from "@/data/unified-units";
 import { getTechnologiesForUnit, getActiveTechnologyVariationsWithTiers, applyTechnologyEffects, getAllTiersFromSameLine, allTechnologies, IMPROVED_TECH_PAIRS, IMPROVED_TECH_BASE, getTechnologyTier, getTechnologyBaseName, type UnitStats } from "@/data/unified-technologies";
 import { getAbilitiesForUnit, getActiveAbilityVariations, getAbilityVariation } from "@/data/unified-abilities";
 import { techAbilityInteractions, abilityAbilityInteractions } from "@/data/patches/abilities";
-import { foreignEngineeringUnitRestrictions, techUnitExclusions, weaponInjectionMap } from "@/data/patches/technologies";
+import { foreignEngineeringUnitRestrictions, foreignEngineeringTechIds, techUnitExclusions, weaponInjectionMap } from "@/data/patches/technologies";
 import type { UnifiedWeapon } from "@/data/unified-units";
 import { foreignEngineeringAbilityUnitRestrictions } from "@/data/patches/abilities";
 import type { Ability, AbilityVariation } from "@/data/unified-abilities";
@@ -56,6 +56,9 @@ const DEFAULT_OPEN_CATEGORIES: Record<string, boolean> = {
   khaganate: false,
 };
 
+
+// FEC improved techs that activate their base too, and keep it active when the improved is deactivated (e.g. biology)
+const FEC_IMPROVED_WITH_BASE = new Set(['biology-improved']);
 
 export function useUnitSlot() {
   const [unit, setUnitInternal] = useState<AoE4Unit | null>(null);
@@ -115,8 +118,17 @@ export function useUnitSlot() {
       const next = new Set(prev);
 
       if (baseId) {
-        // Called with an improved ID (from the + badge)
-        if (next.has(techId)) {
+        const isByFec = selectedCivRef.current === 'by' && foreignEngineeringTechIds.has(techId);
+        if (isByFec && !FEC_IMPROVED_WITH_BASE.has(techId)) {
+          // Byz FEC standalone: only toggle the improved, never touch the base
+          if (next.has(techId)) {
+            next.delete(techId);
+            next.delete(baseId); // clean up base if accidentally added
+          } else {
+            next.add(techId);
+          }
+          // Called with an improved ID (from the + badge, or biology-improved for byz)
+        } else if (next.has(techId)) {
           // improved active → deactivate improved only (keep base)
           next.delete(techId);
         } else {
@@ -511,6 +523,7 @@ export function useUnitSlot() {
     const all = getAbilitiesForUnit(effectiveClasses, selectedCiv, selectedAge, unit.id);
     // Knight types without charge attack
     let filtered = (
+      unit.id === 'scout' ||
       unit.id === 'desert-raider' ||
       unit.id === 'cataphract' ||
       unit.id == "camel-rider" ||
@@ -525,7 +538,7 @@ export function useUnitSlot() {
       unit.id === 'hippodrome-riddari' ||
       unit.id === 'musofadi-warrior' ||
       unit.id === 'warrior-scout' ||
-      unit.id === 'sofa'
+      unit.id === 'healer-elephant'
 
     )
       ? all.filter(a => a.id !== 'charge-attack')
@@ -716,6 +729,7 @@ export function useUnitSlot() {
       versusOpponentDamageDebuff: 1,
       opponentHealingRateDebuff: (data as any).opponentHealingRateDebuff ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
       maxHpBonusFraction: (data as any).maxHpBonusFraction ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
+      hpStartFraction: 1,
     };
 
     const techVariations = getActiveTechnologyVariationsWithTiers(activeTechnologies, selectedCiv, selectedAge);
@@ -786,6 +800,10 @@ export function useUnitSlot() {
       if (armorDelta > 0) result = { ...result, meleeArmor: result.meleeArmor + armorDelta };
     }
 
+    if (unit?.id === 'amir-warrior' && activeAbilities.has('ability-tughlaqabad-protector')) {
+      result = { ...result, moveSpeed: result.moveSpeed - 0.37 };
+    }
+
     if (result.moveSpeed > 2) result = { ...result, moveSpeed: 2 };
     if (result.meleeArmor < 0) result = { ...result, meleeArmor: 0 };
     if (result.rangedArmor < 0) result = { ...result, rangedArmor: 0 };
@@ -801,25 +819,33 @@ export function useUnitSlot() {
       if (!activeAbilities.has(ability.id)) continue;
       const count = abilityCounters.get(ability.id) ?? 0;
       if (count === 0) continue;
-      const step = (unit?.id ? ability.unitCounterStep?.[unit.id] : undefined) ?? ability.counterStep ?? 0.05;
-      const stepsSum = ability.counterSteps !== undefined
-        ? ability.counterSteps.slice(0, count).reduce((a, b) => a + b, 0)
-        : undefined;
-      const effectiveValue = stepsSum !== undefined
-        ? (ability.counterDirection === 'additive' ? stepsSum : 1 + stepsSum)
-        : ability.counterDirection === 'increase'
-          ? 1 + count * step
-          : ability.counterDirection === 'additive'
-            ? count * step
-            : 1 / (1 + count * step);
+      const abilityStep = (unit?.id ? ability.unitCounterStep?.[unit.id] : undefined) ?? ability.counterStep ?? 0.05;
       const counterVariation = getAbilityVariation(ability.id, selectedCiv, ability.minAge);
       if (!counterVariation) continue;
       const syntheticVariation = {
         ...counterVariation,
-        effects: (counterVariation.effects || []).map((e: any) => ({ ...e, value: effectiveValue * (e.counterStepScale ?? 1) })), // eslint-disable-line @typescript-eslint/no-explicit-any
+        effects: (counterVariation.effects || []).map((e: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+          const eStep = e.counterStep ?? abilityStep;
+          const eDir = e.counterDirection ?? ability.counterDirection;
+          const eStepsArr: number[] | undefined = e.counterSteps ?? ability.counterSteps;
+          const eStepsSum = eStepsArr !== undefined ? eStepsArr.slice(0, count).reduce((a: number, b: number) => a + b, 0) : undefined;
+          const eValue = eStepsSum !== undefined
+            ? (eDir === 'additive' ? eStepsSum : 1 + eStepsSum)
+            : eDir === 'increase'
+              ? 1 + count * eStep
+              : eDir === 'additive'
+                ? count * eStep
+                : eDir === 'geometric'
+                  ? Math.pow(eStep, count)
+                  : 1 / (1 + count * eStep);
+          return { ...e, value: eValue * (e.counterStepScale ?? 1) };
+        }),
       };
       result = applyTechnologyEffects(result, effectiveClasses, [syntheticVariation], unit?.id, selectedCiv);
     }
+
+    if (result.meleeArmor < 0) result = { ...result, meleeArmor: 0 };
+    if (result.rangedArmor < 0) result = { ...result, rangedArmor: 0 };
 
     return result;
   }, [unit, variation, effectiveClasses, activeTechnologies, activeAbilities, selectedCiv, selectedAge, abilities, abilityCounters]);
@@ -878,6 +904,7 @@ export function useUnitSlot() {
       versusOpponentDamageDebuff: 1,
       opponentHealingRateDebuff: (data as any).opponentHealingRateDebuff ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
       maxHpBonusFraction: (data as any).maxHpBonusFraction ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
+      hpStartFraction: 1,
     };
     const techVariations = getActiveTechnologyVariationsWithTiers(activeTechnologies, selectedCiv, selectedAge);
     const counterAbilityIds = new Set(abilities.filter(a => a.counterMax !== undefined).map(a => a.id));
@@ -926,22 +953,27 @@ export function useUnitSlot() {
       if (ability.counterMax === undefined || !activeAbilities.has(ability.id)) continue;
       const count = abilityCounters.get(ability.id) ?? 0;
       if (count === 0) continue;
-      const step = (unit?.id ? ability.unitCounterStep?.[unit.id] : undefined) ?? ability.counterStep ?? 0.05;
-      const stepsSum = ability.counterSteps !== undefined
-        ? ability.counterSteps.slice(0, count).reduce((a, b) => a + b, 0)
-        : undefined;
-      const effectiveValue = stepsSum !== undefined
-        ? (ability.counterDirection === 'additive' ? stepsSum : 1 + stepsSum)
-        : ability.counterDirection === 'increase'
-          ? 1 + count * step
-          : ability.counterDirection === 'additive'
-            ? count * step
-            : 1 / (1 + count * step);
+      const abilityStep = (unit?.id ? ability.unitCounterStep?.[unit.id] : undefined) ?? ability.counterStep ?? 0.05;
       const counterVariation = getAbilityVariation(ability.id, selectedCiv, ability.minAge);
       if (!counterVariation) continue;
       const syntheticVariation = {
         ...counterVariation,
-        effects: (counterVariation.effects || []).map((e: any) => ({ ...e, value: effectiveValue * (e.counterStepScale ?? 1) })), // eslint-disable-line @typescript-eslint/no-explicit-any
+        effects: (counterVariation.effects || []).map((e: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+          const eStep = e.counterStep ?? abilityStep;
+          const eDir = e.counterDirection ?? ability.counterDirection;
+          const eStepsArr: number[] | undefined = e.counterSteps ?? ability.counterSteps;
+          const eStepsSum = eStepsArr !== undefined ? eStepsArr.slice(0, count).reduce((a: number, b: number) => a + b, 0) : undefined;
+          const eValue = eStepsSum !== undefined
+            ? (eDir === 'additive' ? eStepsSum : 1 + eStepsSum)
+            : eDir === 'increase'
+              ? 1 + count * eStep
+              : eDir === 'additive'
+                ? count * eStep
+                : eDir === 'geometric'
+                  ? Math.pow(eStep, count)
+                  : 1 / (1 + count * eStep);
+          return { ...e, value: eValue * (e.counterStepScale ?? 1) };
+        }),
       };
       result = applyTechnologyEffects(result, effectiveClasses, [syntheticVariation], unit?.id, selectedCiv);
     }
