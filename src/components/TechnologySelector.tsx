@@ -279,10 +279,11 @@ export const TechnologySelector = ({
                         const patch = technologyPatches.find(p => p.id === tech.id);
                         const isForeignEngineering = selectedCiv === 'by' && foreignEngineeringTechIds.has(tech.id);
                         const unitTooltip = unitId ? patch?.unitTooltips?.[unitId] : undefined;
+                        const resolvedUiTooltip = patch?.uiTooltip || tech.uiTooltip;
                         const patchTooltip = unitTooltip ?? (isForeignEngineering
-                          ? patch?.uiTooltip
+                          ? resolvedUiTooltip
                           : (!foreignEngineeringTechIds.has(tech.id)
-                            ? (patch?.uiTooltip || patch?.variations?.find(vp => vp.uiTooltip)?.uiTooltip)
+                            ? (resolvedUiTooltip || patch?.variations?.find(vp => vp.uiTooltip)?.uiTooltip)
                             : patch?.uiTooltipNative));
 
                         const improvedId = IMPROVED_TECH_PAIRS[tech.id];

@@ -157,7 +157,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     update: {
       effects: [{
         property: 'rangedAttack',
-        select: { class: [['handcannon']] },
+        select: { class: [['handcannon']], excludeId: ['militia-handcannoneer'] },
         effect: 'change',
         value: 5,
         type: 'bonus',
@@ -193,14 +193,14 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
           property: 'maxRange',
           select: { id: ['longbowman', 'wynguard-ranger', 'archer', 'gilded-archer', 'yumi-ashigaru', 'yumi-bannerman', 'khan'] },
           effect: 'change',
-          value: 1.5,
+          value: 1,
           type: 'passive'
         },
         {
           property: 'maxRange',
           select: { id: ['mangudai', 'khaganate-elite-mangudai', 'khaganate-horse-archer', 'horse-archer', 'camel-archer', 'khan', 'desert-raider'] },
           effect: 'change',
-          value: -0.75,
+          value: -0.5,
           type: 'passive'
         },
       ]
@@ -587,15 +587,18 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
   {
     id: 'additional-barrels',
-    reason: 'Available for Mongols. Extended to khaganate-nest-of-bees.',
+    reason: 'Available for Mongols (extended to khaganate-nest-of-bees) and Byzantines via Foreign Engineering Company.',
     after: (tech) => ({
       ...tech,
-      civs: [...tech.civs, 'mo'],
+      civs: [...tech.civs, 'mo', 'by'],
       effects: (tech.effects || []).map(e =>
         e.select?.id ? { ...e, select: { ...e.select, id: [...e.select.id, 'khaganate-nest-of-bees'] } } : e
       ),
-      variations: tech.variations.map(v => ({ ...v, civs: [...(v.civs || []), 'mo'] }))
+      variations: tech.variations.map(v => ({ ...v, civs: [...(v.civs || []), 'mo', 'by'] }))
     }),
+    foreignEngineering: true,
+    foreignEngineeringUnits: ['nest-of-bees'],
+    uiTooltip: 'Available only with Foreign Engineering Company',
   },
 
   {
@@ -1905,7 +1908,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
       // by: multiplicative stacking 1.25 × 0.96 = 1.2
       const moEffects = base.effects.map(e => {
         if (e.property === 'healingRate') return { ...e, value: 1 };
-        if (e.property === 'attackSpeed') return { ...e, value: 53/55 };
+        if (e.property === 'attackSpeed') return { ...e, value: 53 / 55 };
         return e;
       });
       const byEffects = base.effects.map(e => {
@@ -1935,7 +1938,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
       variations: tech.variations.map(v => ({
         ...v,
         effects: v.effects.map(e =>
-          e.property === 'attackSpeed' ? { ...e, value: 10/11 } : e
+          e.property === 'attackSpeed' ? { ...e, value: 10 / 11 } : e
         ),
       }))
     }),
@@ -1993,6 +1996,17 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
           { property: 'siegeAttack', select: { id: ['huihui-pao', 'counterweight-trebuchet', 'traction-trebuchet'] }, effect: 'multiply', value: 1.1, type: 'bonus', target: { class: [['naval', 'unit']] } },
         ],
       }))
+    }),
+  },
+
+  {
+    id: "roller-shutter-triggers",
+    reason: "Raw JSON attackSpeed value 0.77 is incorrect; measured practice 2.49s (base 3.125s) → multiplier 0.7968.",
+    after: (tech) => ({
+      ...tech,
+      effects: tech.effects.map(e =>
+        e.property === 'attackSpeed' ? { ...e, value: 0.7968 } : e
+      ),
     }),
   },
 
@@ -2188,9 +2202,9 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
       ...tech,
       variations: tech.variations.map(v => ({
         ...v, effects: [
-          { property: 'meleeAttack', select: { class: [["land", "military"]], excludeId: ['warrior-monk'] }, effect: 'multiply', value: 1, type: 'passive' },
-          { property: 'rangedAttack', select: { class: [["land", "military"]], excludeId: ['warrior-monk'] }, effect: 'multiply', value: 1, type: 'passive' },
-          { property: 'siegeAttack', select: { class: [["land", "military"]], excludeId: ['warrior-monk'] }, effect: 'multiply', value: 1, type: 'passive' }
+          { property: 'meleeAttack', select: { class: [["land", "military"]], excludeId: ['warrior-monk'], id: ['militia-halberdier'] }, effect: 'multiply', value: 1, type: 'passive' },
+          { property: 'rangedAttack', select: { class: [["land", "military"]], excludeId: ['warrior-monk'], id: ['militia-halberdier'] }, effect: 'multiply', value: 1, type: 'passive' },
+          { property: 'siegeAttack', select: { class: [["land", "military"]], excludeId: ['warrior-monk'], id: ['militia-halberdier'] }, effect: 'multiply', value: 1, type: 'passive' }
         ]
       }))
     }),
@@ -2371,6 +2385,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     id: 'mounted-samurai-odachi',
     reason: 'Raw effects empty. +3 bonus melee damage vs infantry for mounted-samurai.',
     update: {
+      description: 'Equip Mounted Samurai with an Odachi, a long sword that deals +3 bonus damage against infantry.',
       effects: [{
         property: 'meleeAttack',
         select: { id: ['mounted-samurai'] },
@@ -2388,8 +2403,10 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     after: (tech) => ({
       ...tech,
       minAge: 2,
+      description: 'Cavalry movement speed is increased by 5%.',
       variations: tech.variations.map(v => ({
         ...v,
+        description: 'Cavalry movement speed is increased by 5%.',
         effects: [{ property: 'moveSpeed', select: { class: [['cavalry']] }, effect: 'multiply', value: 1.05, type: 'passive' }],
       })),
     }),

@@ -95,6 +95,12 @@ export const techAbilityInteractions: TechAbilityInteraction[] = [
   { requiredTech: 'sword-hunt-statue-age-up', requiredAbility: 'ability-daimyo-aura', unitId: 'mounted-samurai', apply: (s) => ({ ...s, attackSpeed: 1.15 }) },
   { requiredTech: 'sword-hunt-statue-age-up', requiredAbility: 'ability-daimyo-aura', unitId: 'yari-cavalry', apply: (s) => ({ ...s, attackSpeed: 1.21 }) },
   { requiredTech: 'sword-hunt-statue-age-up', requiredAbility: 'ability-daimyo-aura', unitId: 'ikko-ikki-monk', apply: (s) => ({ ...s, attackSpeed: 1.00 }) },
+
+  { requiredTech: 'zeal', requiredAbility: 'ability-tower-of-victory-aura', unitId: 'spearman', apply: (s) => ({ ...s, attackSpeed: 1.00 }) },
+  { requiredTech: 'zeal', requiredAbility: 'ability-tower-of-victory-aura', unitId: 'man-at-arms', apply: (s) => ({ ...s, attackSpeed: 0.75 }) },
+  { requiredTech: 'zeal', requiredAbility: 'ability-tower-of-victory-aura', unitId: 'archer', apply: (s) => ({ ...s, attackSpeed: 1.00 }) },
+  { requiredTech: 'zeal', requiredAbility: 'ability-tower-of-victory-aura', unitId: 'crossbowman', apply: (s) => ({ ...s, attackSpeed: 1.24 }) },
+  { requiredTech: 'zeal', requiredAbility: 'ability-tower-of-victory-aura', unitId: 'handcannoneer', apply: (s) => ({ ...s, attackSpeed: 1.24 }) },
 ];
 
 export interface AbilityAbilityInteraction {
@@ -473,14 +479,14 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
 
   {
     id: "ability-tower-of-victory-aura",
-    reason: "Per-unit corrections hard-fixed from in-game measurements (no uniform model found). Average effective buff: −18.4% cycle (+18.4% AS).",
+    reason: "Per-unit corrections hard-fixed from in-game measurements (no uniform model found). Average effective buff: +23.7% AS (2026/05/17).",
     after: (ability: Ability) => {
       const corrections = [
-        { id: 'spearman', value: 1.620 * 1.2 / 1.875 },
-        { id: 'man-at-arms', value: 1.120 * 1.2 / 1.375 },
-        { id: 'archer', value: 1.370 * 1.2 / 1.625 },
-        { id: 'crossbowman', value: 1.830 * 1.2 / 2.125 },
-        { id: 'handcannoneer', value: 1.790 * 1.2 / 2.125 },
+        { id: 'spearman', value: 1.56 * 1.2 / 1.875 },
+        { id: 'man-at-arms', value: 1.12 * 1.2 / 1.375 },
+        { id: 'archer', value: 1.31 * 1.2 / 1.625 },
+        { id: 'crossbowman', value: 1.69 * 1.2 / 2.125 },
+        { id: 'handcannoneer', value: 1.69 * 1.2 / 2.125 },
       ];
       return {
         ...ability,
@@ -501,7 +507,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         }))
       };
     },
-    uiTooltip: '+20% AS announced. Effective avg: +18.4% (spread: +15.7% spearman → +22.8% man-at-arms).',
+    uiTooltip: '+20% AS announced. Effective avg: +23.7% (spread: +20.2% spearman → +25.7% crossbowman/handcannoneer).',
   },
 
   //___________
@@ -1126,7 +1132,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
             property: 'attackSpeed',
             select: { id: ['sipahi'] },
             effect: 'multiply',
-            value: 0.645,
+            value: 0.674,
             type: 'ability',
             duration: 10
           },
@@ -3356,7 +3362,7 @@ function createDeflectiveArmorSen(): Ability {
     minAge: 2,
     active: 'manual',
     icon: 'https://data.aoe4world.com/images/abilities/ability-deflective-armor-1.png',
-    description: 'Deflective Armor charge can block one melee or ranged attack. Recharges while out of combat for 8 seconds.',
+    description: 'Deflective Armor charge can block one melee or ranged attack. Recharges while out of combat for 15 seconds.',
     unique: false,
     effects: [{
       property: 'hitpoints',

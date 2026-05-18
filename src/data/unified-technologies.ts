@@ -70,6 +70,7 @@ export interface Technology {
   counterDirection?: 'increase' | 'decrease' | 'additive'; // 'decrease' (default): 1/(1+N×step) — 'increase': 1+N×step — 'additive': N×step (flat bonus, used with effect:'change')
   counterTooltipLabel?: string;             // label shown in tooltip (e.g. 'HP', defaults to 'attack cycle')
   counterHideMax?: boolean;                 // if true, hides the '/max' from the counter display (e.g. for unbounded-feeling counters)
+  uiTooltip?: string;
 }
 import allTechnologiesData from './all-optimized_tec.json';
 import { applyTechnologyPatches } from './patches/technologies';

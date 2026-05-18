@@ -289,13 +289,13 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       variations: unit.variations.map((v: any) =>
         v.age === 4
           ? {
-              ...v,
-              hitpoints: 500,
-              armor: [
-                { type: 'melee', value: 5 },
-                { type: 'ranged', value: 4 },
-              ],
-            }
+            ...v,
+            hitpoints: 500,
+            armor: [
+              { type: 'melee', value: 5 },
+              { type: 'ranged', value: 4 },
+            ],
+          }
           : v
       ),
     }),
@@ -676,7 +676,10 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
     id: 'shinobi',
     reason: 'Only age-2 variation in raw data. upgrade-shinobi-3/4 scaling techs (×1.15 per age) baked into age-3 and age-4 variations. Techs excluded via techUnitExclusions.',
     after: (unit: any) => {
-      const base = unit.variations[0];
+      const base = {
+        ...unit.variations[0],
+        armor: [...(unit.variations[0].armor ?? []).filter((a: any) => a.type !== 'ranged'), { type: 'ranged', value: 1 }],
+      };
       const makeVariation = (age: number, hp: number, wakizashiDmg: number, torchDmg: number) => ({
         ...base,
         age,
@@ -721,6 +724,15 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
         ],
       };
     },
+  },
+
+  {
+    id: 'yatai',
+    reason: 'In-game HP is 320, not 370.',
+    after: (unit: any) => ({
+      ...unit,
+      variations: unit.variations.map((v: any) => ({ ...v, hitpoints: 320 })),
+    }),
   },
 
   {
@@ -862,12 +874,12 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
 
   {
     id: 'condottiero',
-    reason: 'Condottiero takes 33% less damage from gunpowder/siege attacks per in-game stats.',
+    reason: 'Condottiero takes 50% less damage from gunpowder/siege attacks per in-game stats.',
     after: (unit: any) => ({
       ...unit,
       variations: unit.variations.map((v: any) => ({
         ...v,
-        resistance: [...(v.resistance || []), { type: 'gunpowder', value: 33 }],
+        resistance: [...(v.resistance || []), { type: 'gunpowder', value: 50 }],
       })),
     }),
   },
@@ -924,6 +936,18 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       }
       return u;
     },
+  },
+
+  {
+    id: 'khan',
+    reason: 'Khan costs 1 population in-game.',
+    after: (unit: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+      ...unit,
+      variations: unit.variations.map((v: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...v,
+        costs: { ...v.costs, popcap: 1 },
+      })),
+    }),
   },
 
   //_____________________
@@ -1004,6 +1028,25 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
     },
   },
 
+  //_________________
+  //
+  // OTTOMANS
+  //
+  //_________________
+
+  {
+    id: 'akinji',
+    reason: 'Raw JSON burst count is 2.25; in-game the Akinji fires 2 arrows per attack.',
+    after: (unit: any) => ({
+      ...unit,
+      variations: unit.variations.map((v: any) => ({
+        ...v,
+        weapons: v.weapons.map((w: any) =>
+          w.burst ? { ...w, burst: { ...w.burst, count: 2 } } : w
+        ),
+      })),
+    }),
+  },
 
   //_________________
   //
@@ -1027,14 +1070,15 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
   },
 
   {
-    id: 'militia',
-    reason: 'Raw data is a placeholder with no stats. Adding age -3/4 variations per in-game.',
+    id: 'militia-halberdier',
+    reason: 'Raw JSON age-2 is placeholder stats. Adding age-3/4 variations per in-game; same approach as militia.',
     after: (unit: any) => {
       const base = unit.variations[0];
       const makeVariation = (age: number, hp: number, swordDmg: number, food: number, popcap: number, bonusCav: number) => ({
         ...base,
         age,
-        id: `militia-${age}`,
+        id: `militia-halberdier-${age}`,
+        baseId: 'militia-halberdier',
         hitpoints: hp,
         weapons: base.weapons.map((w: any, i: number) => i === 0 ? {
           ...w,
@@ -1048,38 +1092,14 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
         ...unit,
         variations: [
           { ...base, healingRatePerSecond: -1 },
-          makeVariation(3, 115, 10, 27.5, 1, 12),
-          makeVariation(4, 165, 18, 27.5, 1, 18),
+          makeVariation(3, 115, 10, 12.5, 1, 12),
+          makeVariation(4, 165, 16, 12.5, 1, 16),
         ],
       };
     },
   },
 
-  {
-    id: 'khan',
-    reason: 'Khan costs 1 population in-game.',
-    after: (unit: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-      ...unit,
-      variations: unit.variations.map((v: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-        ...v,
-        costs: { ...v.costs, popcap: 1 },
-      })),
-    }),
-  },
 
-  {
-    id: 'akinji',
-    reason: 'Raw JSON burst count is 2.25; in-game the Akinji fires 2 arrows per attack.',
-    after: (unit: any) => ({
-      ...unit,
-      variations: unit.variations.map((v: any) => ({
-        ...v,
-        weapons: v.weapons.map((w: any) =>
-          w.burst ? { ...w, burst: { ...w.burst, count: 2 } } : w
-        ),
-      })),
-    }),
-  },
 
   //_____________
   //
@@ -1133,30 +1153,6 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
   },
 
   {
-    id: 'amir-warrior',
-    reason: 'Raw data only has age-1 variation. minAge set to 2. Adding age-3 and age-4 variations per in-game: HP (180/180/200), attack (12/12/12), armor (5/5 all ages). Population cost corrected to 1 (raw data has 0).',
-    after: (unit: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-      const base = unit.variations[0];
-      const baseWithPop = { ...base, costs: { ...base.costs, popcap: 1 } };
-      const makeVariation = (age: number, hp: number) => ({
-        ...baseWithPop,
-        age,
-        id: `amir-warrior-${age}`,
-        hitpoints: hp,
-      });
-      return {
-        ...unit,
-        minAge: 2,
-        variations: [
-          { ...baseWithPop, age: 2, id: 'amir-warrior-2' },
-          makeVariation(3, 180),
-          makeVariation(4, 200),
-        ],
-      };
-    },
-  },
-
-  {
     id: 'ikko-ikki-monk',
     reason: 'Heals 2 HP per hit landed (aura heal on attack).',
     after: (unit: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -1167,6 +1163,43 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       })),
     }),
   },
+
+  //_____________
+  //
+  // TUGHLAQ DYNASTY
+  //
+  //_____________
+
+  {
+    id: 'amir-warrior',
+    reason: 'Raw data only has age-1 variation. minAge set to 2. Adding age-3 and age-4 variations per in-game: HP (180/180/200), attack (12/12/12), armor (5/5 all ages). Population cost corrected to 1 (raw data has 0).',
+    after: (unit: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      const base = unit.variations[0];
+      const baseWithPop = { ...base, costs: { ...base.costs, popcap: 1 } };
+      const makeVariation = (age: number, hp: number, attack: number, meleeArmor: number, rangedArmor: number) => ({
+        ...baseWithPop,
+        age,
+        id: `amir-warrior-${age}`,
+        hitpoints: hp,
+        weapons: baseWithPop.weapons.map((w: any, i: number) => i === 0 ? { ...w, damage: attack } : w),
+        armor: baseWithPop.armor.map((a: any) =>
+          a.type === 'melee' ? { ...a, value: meleeArmor } :
+          a.type === 'ranged' ? { ...a, value: rangedArmor } : a
+        ),
+      });
+      return {
+        ...unit,
+        minAge: 2,
+        variations: [
+          { ...baseWithPop, age: 2, id: 'amir-warrior-2' },
+          makeVariation(3, 180, 12, 5, 5),
+          makeVariation(4, 200, 14, 5, 5),
+        ],
+      };
+    },
+  },
+
+
 ];
 //   after: (unit: unknown) => {
 //     const u = unit as Record<string, unknown>;
@@ -1192,10 +1225,87 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
 //   },
 // },
 
+// Fully-defined synthetic units injected at load time.
+// Each entry must conform to the UnifiedUnit shape (id, name, type:'unit', civs, unique,
+// displayClasses, classes, minAge, icon, description, variations[]).
+// Variations must include: id, baseId, type, name, pbgid, attribName, age, civs,
+// description, classes, displayClasses, unique, costs, producedBy, icon, hitpoints, weapons.
+const MILITIA_HC_CLASSES = [
+  'annihilation_condition', 'find_non_siege_land_military', 'formational',
+  'gunpowder', 'handcannon', 'human', 'included_by_military_hotkeys',
+  'infantry', 'land_military', 'military', 'ranged', 'ranged_infantry', 'militia',
+];
+const MILITIA_HC_COSTS = { food: 10, wood: 0, stone: 0, gold: 0, total: 10, popcap: 1, time: 25 };
+const MILITIA_HC_WEAPON = (damage: number) => ({
+  name: 'Militia Escopette', type: 'siege', damage, speed: 2.12, attackSpeed: 2.12,
+  range: { min: 0, max: 3.25 }, modifiers: [],
+});
+
+export const newUnits: unknown[] = [
+  {
+    id: 'militia-handcannoneer',
+    name: 'Militia Handcannoneer',
+    type: 'unit',
+    civs: ['ru'],
+    unique: true,
+    displayClasses: ['Ranged Gunpowder Infantry'],
+    classes: MILITIA_HC_CLASSES,
+    minAge: 3,
+    icon: 'public/units/militia_handcannoneer.png',
+    description: 'Light distance infantry equipped with a culverin.\n+ Fast moving\n- Countered by Archers\n- Can\'t garrison\n- Loses life over time',
+    variations: [
+      {
+        id: 'militia-handcannoneer-3',
+        baseId: 'militia-handcannoneer',
+        type: 'unit',
+        name: 'Militia Handcannoneer',
+        pbgid: 2104839,
+        attribName: 'unit_militia_hc_3_rus',
+        age: 3,
+        civs: ['ru'],
+        description: '',
+        classes: MILITIA_HC_CLASSES,
+        displayClasses: ['Ranged Gunpowder Infantry'],
+        unique: true,
+        costs: MILITIA_HC_COSTS,
+        producedBy: ['town-center'],
+        icon: 'public/units/militia_handcannoneer.png',
+        hitpoints: 85,
+        weapons: [MILITIA_HC_WEAPON(12)],
+        armor: [],
+        movement: { speed: 1.5 },
+        healingRatePerSecond: -1,
+      },
+      {
+        id: 'militia-handcannoneer-4',
+        baseId: 'militia-handcannoneer',
+        type: 'unit',
+        name: 'Militia Handcannoneer',
+        pbgid: 0,
+        attribName: 'unit_militia_hc_4_rus',
+        age: 4,
+        civs: ['ru'],
+        description: '',
+        classes: MILITIA_HC_CLASSES,
+        displayClasses: ['Ranged Gunpowder Infantry'],
+        unique: true,
+        costs: MILITIA_HC_COSTS,
+        producedBy: ['town-center'],
+        icon: 'public/units/militia_handcannoneer.png',
+        hitpoints: 150,
+        weapons: [MILITIA_HC_WEAPON(15)],
+        armor: [],
+        movement: { speed: 1.5 },
+        healingRatePerSecond: -1,
+      },
+    ],
+  },
+];
+
 export function applyUnitPatches(unifiedUnits: unknown[]): unknown[] {
   if (!Array.isArray(unifiedUnits) || unitPatches.length === 0) return unifiedUnits;
 
-  return unifiedUnits.map((unit) => {
+  const patched = unifiedUnits.map((unit) => {
     const u = unit as Record<string, unknown>;
     const patches = unitPatches.filter(p => p.id === u.id);
     if (patches.length === 0) return u;
@@ -1234,4 +1344,6 @@ export function applyUnitPatches(unifiedUnits: unknown[]): unknown[] {
 
     return updated;
   });
+
+  return newUnits.length > 0 ? [...patched, ...newUnits] : patched;
 }

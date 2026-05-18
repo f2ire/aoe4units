@@ -418,6 +418,7 @@ export function useUnitSlot() {
     'tanegashima-ashigaru-levy',
     'yari-cavalry-levy',
     'yumi-ashigaru-levy',
+    'militia',
 
   ]);
 
@@ -538,7 +539,8 @@ export function useUnitSlot() {
       unit.id === 'hippodrome-riddari' ||
       unit.id === 'musofadi-warrior' ||
       unit.id === 'warrior-scout' ||
-      unit.id === 'healer-elephant'
+      unit.id === 'healer-elephant' ||
+      unit.id === 'militia-halberdier'
 
     )
       ? all.filter(a => a.id !== 'charge-attack')

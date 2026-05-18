@@ -16,8 +16,17 @@ Unit           | Base  | Theory  | Practice | Eff. %  |
 ---------------|-------|---------|----------|---------|
 unit-name      | x.xxx | x.xxx   | x.xxx    | +xx.x%  |
 ```
+## [TECH] Roller Shutter Triggers — Base game — 2026/05/17
 
----
+**Description:** 30% attack speed
+
+Unit             | Base  | Theory | Practice | Eff. %  |
+-----------------|-------|--------|----------|---------|
+Springald        | 3.125 | 2.404  | 2.49     | +25.5%  |
+
+**Average effective bonus:** +25.5% AS (≠ +30% announced).
+**Conclusion:** Hard-coded per unit in `patches/technologies.ts`.
+
 
 ## [TECH] Spirit Way — Chinese — 2026/04/14
 
@@ -70,6 +79,19 @@ handcannoneer  | 2.125 | 1.771   | 1.790    | +18.7%  |
 **Average effective bonus:** +18.4% AS (≠ +20% announced).
 **Conclusion:** No uniform model. Hard-coded per unit in `patches/techologies.ts`.
 
+## Tower of Victory — 2026/05/17
+
+Unit           | Base  | Theory  | Practice | Eff. %  |
+---------------|-------|---------|----------|---------|
+spearman       | 1.875 | 1.563   | 1.56     | +20.2%  |
+man-at-arms    | 1.375 | 1.146   | 1.12     | +22.8%  |
+archer         | 1.625 | 1.354   | 1.31     | +24.0%  |
+crossbowman    | 2.125 | 1.771   | 1.69     | +25.7%  |
+handcannoneer  | 2.125 | 1.771   | 1.69     | +25.7%  |
+
+**Average effective bonus:** +23.7% AS (≠ +20% announced).
+**Conclusion:** No uniform model. Hard-coded per unit in `patches/technologies.ts`.
+
 ---
 
 ## [TECH] Tower of Victory + Zeal — Delhi — 2026/04/14
@@ -86,6 +108,21 @@ handcannoneer  | 2.125 | 1.181   | 1.310    | +62.2%  |
 
 **Average effective bonus:** +68.4% AS (theory: +80% combined).
 **Conclusion:**
+
+## Tower of Victory + Zeal — 2026/05/17
+
+Unit           | Base  | Theory  | Practice | Eff. %  |
+---------------|-------|---------|----------|---------|
+spearman       | 1.875 | 1.563   | 1.00     | +87.5%  |
+man-at-arms    | 1.375 | 1.146   | 0.75     | +83.3%  |
+archer         | 1.625 | 1.354   | 1.00     | +62.5%  |
+crossbowman    | 2.125 | 1.771   | 1.24     | +71.4%  |
+handcannoneer  | 2.125 | 1.771   | 1.24     | +71.4%  |
+
+**Average effective bonus:** +75.2% AS (theory: +80% combined).
+**Conclusion:** Proche des mesures Delhi 04/14 (+68.4%). Écart de ~4.8 pp avec la théorie. No uniform model. Hard-coded in `patches/abilities.ts`.
+
+
 
 ## [TECH] Network of Castle — English — 2026/04/18
 
@@ -213,10 +250,19 @@ hulk               | 1.500   | 1.304  | 1.280    | +17.2%  |
 grand-galley       | 4.000   | 3.478  | 3.610    | +10.8%  |
  
 
-
-
 **Average effective bonus:** +14.4% AS (≠ +15% announced). Spread: +9.4% (siphahi) to +22.8% (man-at-arms).
 **Conclusion:** No uniform model. Hard-coded per unit in `patches/abilities.ts`.
+
+## [TECH] Fortitude — Ot — 2026/05/18
+
+**Description:** 40% attack speed
+
+Unit               | Base    | Theory | Practice | Eff. %  |
+-------------------|---------|--------|----------|---------|
+siphahi            | 1.750   | 1.250  | 1.18     | +48.3%  |
+
+**Average effective bonus:** +48.3% AS (≠ +40% announced).
+
 
 ## [TECH] Daimyo Aura — Sen — 2026/05/15
 
