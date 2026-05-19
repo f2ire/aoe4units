@@ -181,8 +181,8 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
               'trade-caravan',
               'camel'
             ],
-            class: [['cavalry', 'horse']]
           },
+          attackerClass: [['cavalry', 'horse']],
           effect: 'multiply',
           value: 0.8,
           type: 'ability'
@@ -741,6 +741,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         {
           property: 'versusOpponentDamageDebuff',
           select: { class: [['annihilation_condition']], excludeId: ['shinto-priest'] },
+          attackerClass: [['annihilation_condition']],
           effect: 'multiply',
           value: 0.5,
           type: 'ability',
@@ -1039,6 +1040,32 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
       variations: ability.variations.map(v => ({ ...v, effects: [] })),
     }),
   },
+
+  //___________
+  //
+  // JIN
+  //
+  //___________
+
+  // JIN
+  {
+    id: 'ability-flower-garden',
+    reason: 'Raw effects empty. Per-unit AS from measurements 2026/05/19. Effective avg ~19.9% (≠ +25% announced).',
+    update: {
+      uiTooltip: '+25% AS announced. Effective avg: +19.9% (spread: +14.4% horseman → +22.8% man-at-arms).',
+      effects: [
+        { property: 'attackSpeed', select: { id: ['spearman'] }, effect: 'multiply', value: 0.8533, type: 'ability' },
+        { property: 'attackSpeed', select: { id: ['man-at-arms'] }, effect: 'multiply', value: 0.8145, type: 'ability' },
+        { property: 'attackSpeed', select: { id: ['zhanma-swordsman'] }, effect: 'multiply', value: 0.8145, type: 'ability' },
+        { property: 'attackSpeed', select: { id: ['mohe-tribesman'] }, effect: 'multiply', value: 0.8308, type: 'ability' },
+        { property: 'attackSpeed', select: { id: ['eruptor'] }, effect: 'multiply', value: 0.8235, type: 'ability' },
+        { property: 'attackSpeed', select: { id: ['crossbowman'] }, effect: 'multiply', value: 0.8329, type: 'ability' },
+        { property: 'attackSpeed', select: { id: ['horseman'] }, effect: 'multiply', value: 0.8743, type: 'ability' },
+        { property: 'attackSpeed', select: { id: ['iron-pagoda'] }, effect: 'multiply', value: 0.8333, type: 'ability' },
+      ],
+    },
+  },
+
 
   //___________________
   //
@@ -1582,8 +1609,6 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
       }))
     })
   },
-
-
 
 ];
 
@@ -2260,6 +2285,74 @@ function createNehan(): Ability {
     shared: {}
   } as Ability;
 }
+
+
+//___________
+//
+// JIN
+//
+//___________
+
+
+function createGrasslandInfluence(): Ability {
+  return {
+    id: 'ability-grassland-influence',
+    name: 'Grassland Influence',
+    type: 'ability',
+    civs: ['jin'],
+    displayClasses: [],
+    classes: [],
+    minAge: 2,
+    active: 'manual',
+    icon: 'https://data.aoe4world.com/images/buildings/grassland-2.png',
+    description: 'Must be constructed on a Grassland Post. Spawns a Horse up to the max of 5 every 90/60/45 seconds in Feudal/Castle/Imperial Ages. Each Horse in a Grassland grants +2 maximum Health to all Melee Cavalry and +1 to all Ranged Cavalry. Horses can be used by War Stables in Influence to instantly train Cavalry at a 25 resources discount.',
+    unique: true,
+    counterMax: 20,
+    counterStep: 1,
+    counterDirection: 'additive' as const,
+    counterTooltipLabel: 'Horses',
+    effects: [
+      {
+        property: 'hitpoints',
+        select: { class: [['cavalry']] },
+        effect: 'change',
+        value: 0,
+        counterStep: 2,
+        type: 'ability',
+      },
+      {
+        property: 'hitpoints',
+        select: { class: [['cavalry_archer']] },
+        effect: 'change',
+        value: 0,
+        counterStep: -1,
+        type: 'ability',
+      },
+    ],
+    variations: [{
+      id: 'ability-grassland-influence-2',
+      baseId: 'ability-grassland-influence',
+      type: 'ability',
+      name: 'Grassland Influence',
+      pbgid: 999900,
+      attribName: 'ability_grassland_influence',
+      age: 2,
+      civs: ['jin'],
+      description: 'Must be constructed on a Grassland Post. Spawns a Horse up to the max of 5 every 90/60/45 seconds in Feudal/Castle/Imperial Ages. Each Horse in a Grassland grants +2 maximum Health to all Melee Cavalry and +1 to all Ranged Cavalry. Horses can be used by War Stables in Influence to instantly train Cavalry at a 25 resources discount.',
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+//___________
+//
+// KNIGHT TEMPLAR
+//
+//___________
 
 // Synthetic ability — Teutonic Wrath (Knights Templar).
 // Teutonic Knight reduces the opponent's melee and ranged armor by 2.
@@ -3821,8 +3914,8 @@ function createHardCasedBombs(): Ability {
 export function applyAbilityPatches(abilities: Ability[]): Ability[] {
   // Add the created synthetic abilities
   const chargeAttackAbility = createChargeAttackAbility();
-  const abilitiesWithCharge = [
-    ...abilities,
+  const allAbilitiesMerged = [
+    ...abilities.filter(a => a.id !== 'ability-grassland-influence'),
     chargeAttackAbility,
     createYuanDynastyAbility(),
     createMingDynastyAbility(),
@@ -3875,9 +3968,10 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createGovernorOfJalor(),
     createTrampleTug(),
     createElephantFormations(),
+    createGrasslandInfluence(),
   ];
 
-  return abilitiesWithCharge.map(ability => {
+  return allAbilitiesMerged.map(ability => {
     const patch = abilityPatches.find(p => p.id === ability.id);
     if (!patch) return ability;
 

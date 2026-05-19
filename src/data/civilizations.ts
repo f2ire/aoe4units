@@ -18,6 +18,7 @@ export const CIVILIZATIONS: Civilization[] = [
   { abbr: 'hl', name: 'House of Lancaster', slug: 'lancaster', flagPath: '/flags/hl.png' },
   { abbr: 'ja', name: 'Japanese', slug: 'japanese', flagPath: '/flags/ja.png' },
   { abbr: 'je', name: "Jeanne d'Arc", slug: 'jeannedarc', flagPath: '/flags/je.png' },
+  { abbr: 'jin', name: 'Jin Dynasty', slug: 'jin', flagPath: '/flags/jin.png' },
   { abbr: 'kt', name: 'Knights Templar', slug: 'templar', flagPath: '/flags/kt.png' },
   { abbr: 'mac', name: 'Macedonian Dynasty', slug: 'macedonian', flagPath: '/flags/mac.png' },
   { abbr: 'ma', name: 'Malians', slug: 'malians', flagPath: '/flags/ma.png' },

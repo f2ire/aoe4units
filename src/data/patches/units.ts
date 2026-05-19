@@ -419,6 +419,19 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
   },
 
 
+  {
+    id: 'iron-pagoda',
+    reason: 'Correct food cost to 140 (was 115).',
+    after: (unit: any) => ({
+      ...unit,
+      variations: unit.variations.map((v: any) => ({
+        ...v,
+        costs: { ...v.costs, food: 140, total: v.costs.total - v.costs.food + 140, time: 40 },
+      })),
+    }),
+  },
+
+
   //_________
   //
   // FRENCH
@@ -1184,7 +1197,7 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
         weapons: baseWithPop.weapons.map((w: any, i: number) => i === 0 ? { ...w, damage: attack } : w),
         armor: baseWithPop.armor.map((a: any) =>
           a.type === 'melee' ? { ...a, value: meleeArmor } :
-          a.type === 'ranged' ? { ...a, value: rangedArmor } : a
+            a.type === 'ranged' ? { ...a, value: rangedArmor } : a
         ),
       });
       return {
@@ -1199,6 +1212,26 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
     },
   },
 
+  //_____________
+  //
+  // JIN
+  //
+  //_____________
+
+  {
+    id: 'zhanma-swordsman',
+    reason: 'Weapon modifier type corrected to bonus — +12 bonus damage vs cavalry.',
+    after: (unit: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+      ...unit,
+      variations: unit.variations.map((v: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...v,
+        weapons: v.weapons.map((w: any, i: number) => i === 0 ? { // eslint-disable-line @typescript-eslint/no-explicit-any
+          ...w,
+          modifiers: w.modifiers.map((m: any) => ({ ...m, type: 'bonus' })), // eslint-disable-line @typescript-eslint/no-explicit-any
+        } : w),
+      })),
+    }),
+  },
 
 ];
 //   after: (unit: unknown) => {
@@ -1230,6 +1263,15 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
 // displayClasses, classes, minAge, icon, description, variations[]).
 // Variations must include: id, baseId, type, name, pbgid, attribName, age, civs,
 // description, classes, displayClasses, unique, costs, producedBy, icon, hitpoints, weapons.
+const MENG_AN_MOUKE_DEFENDER_CLASSES = [
+  'cavalry', 'human', 'knight', 'land_military', 'melee', 'military',
+  'formational', 'included_by_military_hotkeys', 'find_non_siege_land_military', 'annihilation_condition',
+];
+const MENG_AN_MOUKE_DEFENDER_WEAPON = (damage: number) => ({
+  name: 'Spear', type: 'melee', damage, speed: 1.125, attackSpeed: 1.125,
+  range: { min: 0, max: 0.29 }, modifiers: [],
+});
+
 const MILITIA_HC_CLASSES = [
   'annihilation_condition', 'find_non_siege_land_military', 'formational',
   'gunpowder', 'handcannon', 'human', 'included_by_military_hotkeys',
@@ -1242,6 +1284,101 @@ const MILITIA_HC_WEAPON = (damage: number) => ({
 });
 
 export const newUnits: unknown[] = [
+  {
+    id: 'mounted-grenadier',
+    name: 'Mounted Grenadier',
+    type: 'unit',
+    civs: ['jin'],
+    unique: true,
+    displayClasses: ['Heavy Ranged Cavalry'],
+    classes: ['cavalry', 'heavy', 'military', 'annihilation_condition', 'human'],
+    minAge: 4,
+    icon: 'public/units/Mengan_Mouke_Defender.png',
+    description: '',
+    variations: [
+      {
+        id: 'mounted-grenadier-4',
+        baseId: 'mounted-grenadier',
+        type: 'unit',
+        name: 'Mounted Grenadier',
+        pbgid: 0,
+        attribName: 'unit_mounted_grenadier_4_jin',
+        age: 4,
+        civs: ['jin'],
+        description: '',
+        classes: ['cavalry', 'heavy', 'military', 'annihilation_condition', 'human'],
+        displayClasses: ['Heavy Ranged Cavalry'],
+        unique: true,
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, total: 0, popcap: 0, time: 0 },
+        producedBy: [],
+        icon: 'public/units/Mengan_Mouke_Defender.png',
+        hitpoints: 200,
+        weapons: [{
+          name: 'Grenade', type: 'siege', damage: 12, speed: 2.12, attackSpeed: 2.12,
+          range: { min: 0, max: 3.5 }, modifiers: [],
+        }],
+        armor: [{ type: 'melee', value: 3 }, { type: 'ranged', value: 3 }],
+        movement: { speed: 1.9 },
+      },
+    ],
+  },
+  {
+    id: 'meng-an-mouke-defender',
+    name: 'Meng-an Mouke Defender',
+    type: 'unit',
+    civs: ['jin'],
+    unique: true,
+    displayClasses: ['Heavy Cavalry'],
+    classes: MENG_AN_MOUKE_DEFENDER_CLASSES,
+    minAge: 3,
+    icon: 'public/units/Mengan_Mouke_Defender.png',
+    description: '',
+    variations: [
+      {
+        id: 'meng-an-mouke-defender-3',
+        baseId: 'meng-an-mouke-defender',
+        type: 'unit',
+        name: 'Meng-an Mouke Defender',
+        pbgid: 0,
+        attribName: 'unit_meng_an_mouke_defender_3_jin',
+        age: 3,
+        civs: ['jin'],
+        description: '',
+        classes: MENG_AN_MOUKE_DEFENDER_CLASSES,
+        displayClasses: ['Heavy Cavalry'],
+        unique: true,
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, total: 0, popcap: 0, time: 0 },
+        producedBy: [],
+        icon: 'public/units/Mengan_Mouke_Defender.png',
+        hitpoints: 160,
+        weapons: [MENG_AN_MOUKE_DEFENDER_WEAPON(20)],
+        armor: [{ type: 'melee', value: 4 }, { type: 'ranged', value: 4 }],
+        movement: { speed: 1.9 },
+      },
+      {
+        id: 'meng-an-mouke-defender-4',
+        baseId: 'meng-an-mouke-defender',
+        type: 'unit',
+        name: 'Meng-an Mouke Defender',
+        pbgid: 0,
+        attribName: 'unit_meng_an_mouke_defender_4_jin',
+        age: 4,
+        civs: ['jin'],
+        description: '',
+        classes: MENG_AN_MOUKE_DEFENDER_CLASSES,
+        displayClasses: ['Heavy Cavalry'],
+        unique: true,
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, total: 0, popcap: 0, time: 0 },
+        producedBy: [],
+        icon: 'public/units/Mengan_Mouke_Defender.png',
+        hitpoints: 192,
+        weapons: [MENG_AN_MOUKE_DEFENDER_WEAPON(25)],
+        armor: [{ type: 'melee', value: 5 }, { type: 'ranged', value: 6 }],
+        movement: { speed: 1.9 },
+      },
+    ],
+  },
+
   {
     id: 'militia-handcannoneer',
     name: 'Militia Handcannoneer',

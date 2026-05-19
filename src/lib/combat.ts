@@ -1,5 +1,6 @@
 import { AoE4Unit, UnifiedVariation, UnifiedWeapon, UnifiedArmor, UnifiedResistance, getArmorValue, getResistanceValue } from "@/data/unified-units";
 import { allAbilities } from "@/data/unified-abilities";
+import { allTechnologies } from "@/data/unified-technologies";
 
 // Unified type to accept unit or modified variation
 export interface CombatEntity {
@@ -18,6 +19,8 @@ export interface CombatEntity {
   };
   classes: string[];
   activeAbilities?: string[]; // IDs of active abilities
+  activeTechs?: string[];     // IDs of active technologies (for class-conditional debuffs)
+  baseId?: string;            // Base unit ID for select.id matching in tech effects
   moveSpeed: number; // tiles/s (movement.speed from unit data)
   healingRate?: number; // HP healed per hit the unit lands (e.g. Keshik: 3 HP/hit)
   healingRatePerSecond?: number; // HP healed per second (e.g. Triumph: 2 HP/s)
@@ -25,6 +28,7 @@ export interface CombatEntity {
   opponentAttackSpeedDebuff?: number; // Opponent's attack interval multiplied by (1 + value), e.g. 0.20 = 20% slower
   versusOpponentDamageDebuff?: number; // Multiplier on damage dealt by attackers (e.g. 0.8 = −20%); default 1
   opponentHealingRateDebuff?: number; // HP/s subtracted from opponent's healingRatePerSecond
+  bonusDamageReduction?: number;      // Fraction [0,1] — incoming attacker bonus damage × (1 − value), clamped to [0,1]
   chargeBonusBurst?: number; // Burst count for first-hit bonus display (e.g. 2 daggers for Earl's Guard)
   chargeArmorType?: 'ranged' | 'none' | 'first-strike'; // 'ranged': charge uses ranged armor (dagger); 'none': charge ignores armor+resistance entirely (holy wrath); 'first-strike': label only, normal melee damage path
   continuousMovement?: boolean; // unit can move throughout entire attack cycle (e.g. Mangudai)
@@ -35,6 +39,7 @@ export interface CombatEntity {
   chargeModifiers?: Array<{ target: { class: string[][] }; value: number }>; // class-specific bonus damage applied to the dagger/javelin hit (before ranged armor)
   maxHpBonusFraction?: number; // Bonus damage per hit = fraction × defender's max HP (bypasses armor/resistance)
   hpStartFraction?: number;    // Fraction of max HP the unit starts combat with (default 1; e.g. 0.9 = starts at 90% HP)
+  dpsVsMeleeASCoeff?: number;  // Bonus DPS vs melee attackers = coeff / attacker.attackSpeed (bypasses armor)
 }
 
 export interface VersusMetrics {
@@ -48,6 +53,7 @@ export interface VersusMetrics {
   bugAttackSpeed: boolean;
   cannotAttackUnits: boolean; // e.g. ram — attacks buildings only
   formula: string; // detailed description for tooltip
+  dpsContact?: number; // DPS only active during contact (e.g. thorns from dpsVsMeleeASCoeff) — used by kiting to separate pre-contact vs contact phases
 }
 
 export interface VersusResult {
@@ -70,6 +76,8 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     costs: source.costs,
     classes: source.classes || [],
     activeAbilities: activeAbilities || [],
+    activeTechs: (source as any)._activeTechs || [],
+    baseId: (source as any).baseId || source.id,
     moveSpeed: source.movement?.speed ?? 0,
     healingRate: (source as any).healingRate ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     healingRatePerSecond: (source as any).healingRatePerSecond ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -77,6 +85,7 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     opponentAttackSpeedDebuff: (source as any).opponentAttackSpeedDebuff ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     versusOpponentDamageDebuff: (source as any).versusOpponentDamageDebuff ?? 1, // eslint-disable-line @typescript-eslint/no-explicit-any
     opponentHealingRateDebuff: (source as any).opponentHealingRateDebuff ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
+    bonusDamageReduction: (source as any).bonusDamageReduction ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     chargeBonusBurst: (source as any).chargeBonusBurst ?? 1, // eslint-disable-line @typescript-eslint/no-explicit-any
     chargeArmorType: (source as any).chargeArmorType, // eslint-disable-line @typescript-eslint/no-explicit-any
     continuousMovement: (source as any).continuousMovement ?? false, // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -87,6 +96,7 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: s
     chargeModifiers: (source as any).chargeModifiers, // eslint-disable-line @typescript-eslint/no-explicit-any
     maxHpBonusFraction: (source as any).maxHpBonusFraction ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
     hpStartFraction: (source as any).hpStartFraction ?? 1, // eslint-disable-line @typescript-eslint/no-explicit-any
+    dpsVsMeleeASCoeff: (source as any).dpsVsMeleeASCoeff ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
   };
 }
 
@@ -112,35 +122,68 @@ function shouldIgnoreArmor(attacker: CombatEntity, weapon?: UnifiedWeapon): bool
   return false;
 }
 
-// Computes the versus debuff multiplier applied by the defender's abilities on the attacker
-export function getVersusDebuffMultiplier(attackerClasses: string[], defenderAbilities: string[]): number {
-  if (!defenderAbilities || defenderAbilities.length === 0) return 1.0;
+// Computes the versus debuff multiplier applied by the defender's abilities/techs on the attacker
+export function getVersusDebuffMultiplier(attackerClasses: string[], defenderAbilities: string[], defenderTechs?: string[], defenderBaseId?: string): number {
+  if ((!defenderAbilities || defenderAbilities.length === 0) && (!defenderTechs || defenderTechs.length === 0)) return 1.0;
 
   let multiplier = 1.0;
   const attackerClassesLower = attackerClasses.map(c => c.toLowerCase());
 
-  // For each active ability of the defender
+  function applyClassDebuff(effects: any[]) {
+    for (const effect of effects) {
+      if (effect.property !== 'versusOpponentDamageDebuff') continue;
+      if (effect.effect !== 'multiply') continue;
+      const raw = effect.attackerClass ?? effect.select?.class;
+      if (!raw) continue;
+
+      const groups: string[][] = Array.isArray(raw) && raw.some((v: any) => Array.isArray(v))
+        ? raw
+        : [raw];
+
+      const matches = groups.some((group: string[]) => {
+        if (!Array.isArray(group)) return false;
+        return group.every(req => attackerClassesLower.includes(req.toLowerCase()));
+      });
+
+      if (matches) {
+        multiplier *= effect.value;
+      }
+    }
+  }
+
+  // Ability-based debuffs
   for (const abilityId of defenderAbilities) {
     const ability = allAbilities.find(a => a.id === abilityId);
     if (!ability || !ability.effects) continue;
+    applyClassDebuff(ability.effects);
+  }
 
-    // Look for effects of type versusOpponentDamageDebuff
-    for (const effect of ability.effects) {
-      if (effect.property !== 'versusOpponentDamageDebuff') continue;
-      if (effect.effect !== 'multiply') continue;
+  // Tech-based class-conditional debuffs (attackerClass path)
+  if (defenderTechs && defenderTechs.length > 0) {
+    for (const techId of defenderTechs) {
+      const tech = allTechnologies.find(t => t.id === techId);
+      if (!tech || !tech.effects) continue;
 
-      // Check whether the attacker matches the targeted classes
-      if (effect.select?.class) {
-        const groups: string[][] = Array.isArray(effect.select.class) && effect.select.class.some(v => Array.isArray(v))
-          ? (effect.select.class as unknown as string[][])
-          : [effect.select.class as unknown as string[]];
+      for (const effect of tech.effects as any[]) {
+        if (effect.property !== 'versusOpponentDamageDebuff') continue;
+        if (effect.effect !== 'multiply') continue;
+        if (!effect.attackerClass) continue;
 
-        const matches = groups.some(group => {
+        // When select.id is present, verify the defender unit matches
+        if (effect.select?.id && defenderBaseId) {
+          if (!effect.select.id.some((id: string) => id.toLowerCase() === defenderBaseId.toLowerCase())) continue;
+        }
+
+        // When requiredTech is present, the effect only fires if that tech is also active
+        if (effect.requiredTech && !defenderTechs.includes(effect.requiredTech)) continue;
+
+        const groups: string[][] = Array.isArray(effect.attackerClass) && effect.attackerClass.some((v: any) => Array.isArray(v))
+          ? effect.attackerClass
+          : [effect.attackerClass];
+
+        const matches = groups.some((group: string[]) => {
           if (!Array.isArray(group)) return false;
-          return group.every(req => {
-            const r = req.toLowerCase();
-            return attackerClassesLower.includes(r);
-          });
+          return group.every((req: string) => attackerClassesLower.includes(req.toLowerCase()));
         });
 
         if (matches) {
@@ -264,12 +307,17 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
   const isStrikeCharge = chargeBonus_applied > 0 && attacker.chargeArmorType === 'none';
   const chargeInPrimary = (isDaggerCharge || isStrikeCharge) ? 0 : chargeBonus_applied;
 
+  // Apply defender's bonus damage reduction (fraction [0,1] — multiplicative, e.g. 0.5 = −50%)
+  if (bonusDamage > 0 && (defender.bonusDamageReduction ?? 0) > 0) {
+    bonusDamage *= (1 - Math.min(1, defender.bonusDamageReduction!));
+  }
+
   // Damage per projectile: (effectiveBaseDamage + bonus + chargeBonus - armor) * burst
   // Armor is applied to each projectile individually
   let damagePerProjectile = effectiveBaseDamage + bonusDamage + chargeInPrimary - armorValue;
 
   // Apply versus debuffs (e.g. Camel Unease, Ruinous Blinding)
-  const debuffMultiplier = getVersusDebuffMultiplier(attacker.classes, defender.activeAbilities || [])
+  const debuffMultiplier = getVersusDebuffMultiplier(attacker.classes, defender.activeAbilities || [], defender.activeTechs, defender.baseId)
     * (defender.versusOpponentDamageDebuff ?? 1);
   if (debuffMultiplier !== 1.0) {
     damagePerProjectile = damagePerProjectile * debuffMultiplier;
@@ -551,7 +599,14 @@ function applyKitingToMetrics(
       newTTKranged = round(t_approach + (hitsToKill - freeHits) * attackCycle, 1);
     } else {
       // Dies during close combat
-      newTTKranged = round(contactTime + (hitsToKill - preContactHits) * attackCycle, 1);
+      // When thorns DPS is active (dpsContact > 0), it only applies from contactTime onward.
+      // Remaining HP is bolt-damage-based (pre-contact had no thorns); contact phase uses full combined DPS.
+      if (mRanged.dpsContact && mRanged.dps && mRanged.effectiveDamagePerHit) {
+        const remainingHP = (hitsToKill - preContactHits) * mRanged.effectiveDamagePerHit;
+        newTTKranged = round(contactTime + remainingHP / mRanged.dps, 1);
+      } else {
+        newTTKranged = round(contactTime + (hitsToKill - preContactHits) * attackCycle, 1);
+      }
     }
   }
 
@@ -613,6 +668,7 @@ function computeMetrics(
   let hitsToKill: number | null = null;
   let timeToKill: number | null = null;
   let dpsPerCost: number | null = null;
+  let thornsDPS = 0;
 
   // First-hit block (Deflective Armor): defender absorbs first attack completely.
   // Charge consumed but blocked. Attacker spends firstHitSpeed, then all normal hits.
@@ -739,6 +795,22 @@ function computeMetrics(
       } else {
         hitsToKill = null;
         timeToKill = null;
+      }
+    }
+
+    // Thorns DPS: bonus damage against melee attackers = coeff / defender.attackSpeed (bypasses armor).
+    // hitsToKill intentionally NOT updated — keeps actual projectile count for kiting phase determination.
+    // dpsContact carries the thorns component; adjustForKiting uses it to handle pre-contact vs contact phases.
+    const thornCoeff = attacker.dpsVsMeleeASCoeff ?? 0;
+    if (thornCoeff > 0 && dps !== null) {
+      const defenderAS = (defender.weapons[0]?.speed ?? 0) * (1 + (attacker.opponentAttackSpeedDebuff ?? 0));
+      if (defenderAS > 0 && defender.classes.some(c => c.toLowerCase() === 'melee')) {
+        thornsDPS = thornCoeff / defenderAS;
+        dps = round(dps + thornsDPS, 2);
+        const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
+        if (dps > 0) {
+          timeToKill = round(totalDefHP / dps, 1);
+        }
       }
     }
 
@@ -889,6 +961,7 @@ function computeMetrics(
     bugAttackSpeed,
     cannotAttackUnits: false,
     formula,
+    ...(thornsDPS > 0 ? { dpsContact: thornsDPS } : {}),
   };
 }
 

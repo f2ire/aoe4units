@@ -199,6 +199,28 @@ Royal Culverin     | 3.625   | 2.685  | 2.790    | +29.9%  |
 Ribauldequin       | 5.250   | 3.889  | 4.160    | +26.2%  |
 
 
+**Average effective bonus:** +33.3% AS (≠ +35% announced). Spread: 24.0%–44.6%.
+**Conclusion:** No uniform model. Hard-coded per unit in `patches/technologies.ts`.
+
+## [TECH] Flower Garden — Jin — 2026/05/19
+
+**Description:** +25% attack speed
+
+Unit               | Base    | Theory | Practice | Eff. %  |
+-------------------|---------|--------|----------|---------|
+spearman           | 1.875   | 1.500  | 1.60     | +17.2%  |
+man-at-arms        | 1.375   | 1.100  | 1.120    | +22.8%  |
+zhanma-swordsman   | 1.375   | 1.100  | 1.120    | +22.8%  |
+mohe-tribesman     | 1.625   | 1.300  | 1.35     | +20.4%  |
+eruptor            | 2.125   | 1.700  | 1.75     | +21.4%  |
+crossbowman        | 2.125   | 1.700  | 1.77     | +20.1%  |
+Horseman           | 1.750   | 1.400  | 1.530    | +14.4%  |
+iron-pagoda        | 1.500   | 1.200  | 1.250    | +20.0%  |
+
+
+**Average effective bonus:** +19.9% AS (≠ +25% announced). Spread: 14.4%–22.8%.
+**Conclusion:** No uniform model. Hard-coded per unit in `patches/technologies.ts`.
+
 ## [TECH] Khan attack speed arrow — MG — 2026/05/14
 
 **Description:** 50% attack speed

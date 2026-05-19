@@ -730,6 +730,7 @@ export function useUnitSlot() {
       opponentAttackSpeedDebuff: 0,
       versusOpponentDamageDebuff: 1,
       opponentHealingRateDebuff: (data as any).opponentHealingRateDebuff ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
+      bonusDamageReduction: 0,
       maxHpBonusFraction: (data as any).maxHpBonusFraction ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
       hpStartFraction: 1,
     };
@@ -905,6 +906,7 @@ export function useUnitSlot() {
       opponentAttackSpeedDebuff: 0,
       versusOpponentDamageDebuff: 1,
       opponentHealingRateDebuff: (data as any).opponentHealingRateDebuff ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
+      bonusDamageReduction: 0,
       maxHpBonusFraction: (data as any).maxHpBonusFraction ?? 0, // eslint-disable-line @typescript-eslint/no-explicit-any
       hpStartFraction: 1,
     };

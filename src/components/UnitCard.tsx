@@ -63,6 +63,24 @@ interface UnitCardProps {
   opponentArmorPenetration?: number; // opponent's armorPenetration — reduces this unit's effective armor
   opponentAttackSpeedDebuff?: number; // opponent's AS debuff — multiplies this unit's attack interval by (1 + value)
   opponentVersusDebuff?: number; // opponent's versusOpponentDamageDebuff — multiplies this unit's damage output
+  opponentBonusDamageReduction?: number; // opponent's bonusDamageReduction — reduces this unit's effective bonus damage
+  opponentClasses?: string[]; // defender's classes — filters which bonus damage entries show the reduction
+}
+
+// Returns true if the modifier's target classes match any of the opponent's classes
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function bonusAppliesTo(modTarget: any, opponentClasses: string[]): boolean {
+  const spec = modTarget?.class;
+  if (!spec || !Array.isArray(spec) || spec.length === 0) return true;
+  const tokens = new Set<string>();
+  opponentClasses.forEach(c => {
+    const lower = c.toLowerCase();
+    lower.split(/\s+/).forEach(t => tokens.add(t));
+    tokens.add(lower);
+  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const groups: string[][] = spec.some((v: any) => Array.isArray(v)) ? spec : [spec];
+  return groups.some((group: string[]) => Array.isArray(group) && group.every(req => tokens.has(req.toLowerCase())));
 }
 
 // ── Formula parser ────────────────────────────────────────────────────────────
@@ -200,6 +218,8 @@ export const UnitCard = ({
   opponentArmorPenetration,
   opponentAttackSpeedDebuff,
   opponentVersusDebuff,
+  opponentBonusDamageReduction,
+  opponentClasses,
   className
 }: UnitCardProps) => {
   const [showFormula, setShowFormula] = useState(false);
@@ -212,6 +232,7 @@ export const UnitCard = ({
   const armorPen = opponentArmorPenetration ?? 0;
   const effectiveMeleeArmor = armorPen > 0 ? Math.max(0, meleeArmor - armorPen) : null;
   const effectiveRangedArmor = armorPen > 0 ? Math.max(0, rangedArmor - armorPen) : null;
+  const bonusDmgReduction = opponentBonusDamageReduction ?? 0;
   const asDebuff = opponentAttackSpeedDebuff ?? 0;
   const effectiveAttackSpeed = (asDebuff > 0 && primaryWeapon?.speed) ? primaryWeapon.speed * (1 + asDebuff) : null;
   const versusDebuff = opponentVersusDebuff ?? 1;
@@ -376,25 +397,32 @@ export const UnitCard = ({
                           <span className="text-xs text-muted-foreground">
                             {(() => {
                               const mods = w.modifiers || [];
-                              // Only sum bonus inline if there is a single modifier.
-                              const totalBonus = mods.length === 1 ? (mods[0].value || 0) : 0;
                               const hasBurst = w.burst?.count && w.burst.count > 1;
-                              const hasBonus = totalBonus > 0;
                               const base = Math.round(w.damage || 0);
-                              if (hasBurst && hasBonus) return `(${base} + ${Math.round(totalBonus)}) × ${w.burst.count}`;
                               if (hasBurst) return `${base} × ${w.burst.count}`;
-                              if (hasBonus) return `${base} + ${Math.round(totalBonus)}`;
                               return `${base}`;
                             })()} ({w.type})
                           </span>
                         </div>
-                        {(w.modifiers || []).length > 1 && (w.modifiers || []).map((mod: any, mi: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+                        {(w.modifiers || []).length > 0 && (w.modifiers || []).map((mod: any, mi: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
                           const targetClasses = mod.target?.class?.flat() || [];
                           const targetName = formatClassNames(targetClasses);
+                          const rawBonus = Math.round(mod.value || 0);
+                          const applies = !opponentClasses || opponentClasses.length === 0 || bonusAppliesTo(mod.target, opponentClasses);
+                          const effectiveBonus = bonusDmgReduction > 0 && applies ? Math.round(rawBonus * (1 - bonusDmgReduction)) : null;
                           return (
                             <div key={mi} className="flex justify-between text-xs pl-4">
-                              <span className="text-muted-foreground">+{Math.round(mod.value || 0)} vs</span>
-                              <span className="text-muted-foreground capitalize">{targetName}</span>
+                              <span className="text-muted-foreground">+{rawBonus} vs</span>
+                              <span className="text-muted-foreground capitalize flex items-center gap-1">
+                                {targetName}
+                                {effectiveBonus !== null && (
+                                  <span
+                                    className="text-orange-400 underline decoration-dotted cursor-help"
+                                    title={`Effective bonus vs opponent: ${rawBonus} × (1 − ${Math.round(bonusDmgReduction * 100)}%) = ${effectiveBonus} (opponent's bonus damage reduction)`}>
+                                    {' '}(→{effectiveBonus})
+                                  </span>
+                                )}
+                              </span>
                             </div>
                           );
                         })}
@@ -442,13 +470,15 @@ export const UnitCard = ({
                           comparison = getComparisonColor(modifier.value, compareModifier.value);
                         }
                       }
+                      const modApplies = !opponentClasses || opponentClasses.length === 0 || bonusAppliesTo(modifier.target, opponentClasses);
+                      const effectiveReduction = bonusDmgReduction > 0 && modApplies ? bonusDmgReduction : 0;
                       return (
                         <div key={idx} className="flex justify-between text-xs">
                           <span className={cn('flex items-center gap-1', comparison.color)}>
                             {comparison.symbol && <span className="text-[10px]">{comparison.symbol}</span>}
-                            +{Math.round(modifier.value)}{versusDebuff < 1 && (
+                            +{Math.round(modifier.value)}{(versusDebuff < 1 || effectiveReduction > 0) && (
                               <span className="text-orange-400">
-                                (→{Math.round(modifier.value * versusDebuff)})
+                                (→{Math.round(modifier.value * (versusDebuff < 1 ? versusDebuff : 1) * (1 - effectiveReduction))})
                               </span>
                             )} vs
                           </span>
@@ -542,8 +572,8 @@ export const UnitCard = ({
                 </span>
               </div>
             )}
-            <div className="border-t border-border my-2" />
-            {population && (
+            {(!!population || !!productionTime) && <div className="border-t border-border my-2" />}
+            {!!population && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Population</span>
                 <span className={cn('flex items-center gap-1', getComparisonColor(population, comparePopulation, false, 0.01, true).color)}>
@@ -1055,7 +1085,7 @@ export const UnitCard = ({
               <div>
                 {primaryWeapon ? (
                   <>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Atk</span><span className={effectiveAttackDmg !== null ? 'text-orange-400' : undefined}>{effectiveAttackDmg !== null ? effectiveAttackDmg : Math.round(primaryWeapon.damage || 0)}{primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 && primaryWeapon.burst.decay === undefined ? `×${primaryWeapon.burst.count}` : ''}{applicableBonus > 0 && ` + ${Math.round(versusDebuff < 1 ? applicableBonus * versusDebuff : applicableBonus)}`}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Atk</span><span className={effectiveAttackDmg !== null ? 'text-orange-400' : undefined}>{effectiveAttackDmg !== null ? effectiveAttackDmg : Math.round(primaryWeapon.damage || 0)}{primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 && primaryWeapon.burst.decay === undefined ? `×${primaryWeapon.burst.count}` : ''}{applicableBonus > 0 && ` + ${Math.round(applicableBonus * (versusDebuff < 1 ? versusDebuff : 1) * (1 - bonusDmgReduction))}`}</span></div>
                     {primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 && primaryWeapon.burst.decay !== undefined && (
                       <div className="flex justify-end"><span className="text-muted-foreground text-xs italic">{Math.round((primaryWeapon.damage || 0) * primaryWeapon.burst.decay)}</span></div>
                     )}
@@ -1121,7 +1151,7 @@ export const UnitCard = ({
 
             <div className="flex justify-between">
               <span className="text-muted-foreground">Population</span>
-              <span>{population ?? '—'}</span>
+              <span>{population || '—'}</span>
             </div>
 
             <div className="flex justify-between">

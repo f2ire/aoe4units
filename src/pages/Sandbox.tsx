@@ -211,6 +211,21 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
     return 15 * charge_bonus_mult + charge_bonus;
   }
 
+  if (baseId === "iron-pagoda") {
+    switch (age) {
+      case 2: return 8 * charge_bonus_mult + charge_bonus;
+      case 3: return 10 * charge_bonus_mult + charge_bonus;
+      case 4: return 12 * charge_bonus_mult + charge_bonus;
+    }
+  }
+
+  if (baseId === "meng-an-mouke-defender") {
+    switch (age) {
+      case 3: return 10 * charge_bonus_mult + charge_bonus;
+      case 4: return 5 * charge_bonus_mult + charge_bonus;
+    }
+  }
+
   if (baseId === 'daimyo') {
     switch (age) {
       case 2: return 6 * charge_bonus_mult + charge_bonus;
@@ -340,16 +355,12 @@ const Sandbox = () => {
 
   // Build variations with applied technologies
   const modifiedVariation1 = variation1 ? (() => {
-    const debuffMultiplier = unit2 && activeAbilities2.size > 0
-      ? getVersusDebuffMultiplier(variation1.classes || [], Array.from(activeAbilities2))
-      : 1.0;
-
     return {
       ...variation1,
       hitpoints: modifiedStats1.hitpoints,
       weapons: variation1.weapons.map(weapon => ({
         ...weapon,
-        damage: (weapon.type === 'melee' ? modifiedStats1.meleeAttack : weapon.type === 'siege' ? (modifiedStats1.siegeAttack ?? modifiedStats1.rangedAttack) : modifiedStats1.rangedAttack) * debuffMultiplier,
+        damage: weapon.type === 'melee' ? modifiedStats1.meleeAttack : weapon.type === 'siege' ? (modifiedStats1.siegeAttack ?? modifiedStats1.rangedAttack) : modifiedStats1.rangedAttack,
         speed: modifiedStats1.attackSpeed,
         range: weapon.range ? {
           ...weapon.range,
@@ -386,9 +397,12 @@ const Sandbox = () => {
       opponentAttackSpeedDebuff: modifiedStats1.opponentAttackSpeedDebuff ?? 0,
       versusOpponentDamageDebuff: modifiedStats1.versusOpponentDamageDebuff ?? 1,
       opponentHealingRateDebuff: modifiedStats1.opponentHealingRateDebuff ?? 0,
+      bonusDamageReduction: modifiedStats1.bonusDamageReduction ?? 0,
       maxHpBonusFraction: modifiedStats1.maxHpBonusFraction ?? 0,
       hpStartFraction: modifiedStats1.hpStartFraction ?? 1,
+      dpsVsMeleeASCoeff: modifiedStats1.dpsVsMeleeASCoeff ?? 0,
       postChargeMeleeBonus: modifiedStats1.postChargeMeleeBonus ?? 0,
+      _activeTechs: [...activeTechnologies1],
       firstHitBlocked: activeAbilities1.has('ability-deflective-armor') || activeAbilities1.has('ability-deflective-armor-sen'),
       chargeBonusBurst: getChargeBonusBurst(variation1, activeTechnologies1),
       chargeArmorType: variation1.baseId === 'earls-guard' ? 'ranged' as const :
@@ -416,9 +430,9 @@ const Sandbox = () => {
           damage: (() => {
             const raw = w.type === 'ranged' || w.type === 'siege'
               ? w.damageMultiplier != null
-                ? (rangedBase1 * w.damageMultiplier + rangedFlatDelta1) * rangedMultiplier1 * debuffMultiplier
-                : (w.injectedWeapon ? w.damage : modifiedStats1.rangedAttack) * debuffMultiplier
-              : (w.damage + meleeAttackDelta) * debuffMultiplier;
+                ? (rangedBase1 * w.damageMultiplier + rangedFlatDelta1) * rangedMultiplier1
+                : (w.injectedWeapon ? w.damage : modifiedStats1.rangedAttack)
+              : (w.damage + meleeAttackDelta);
             return w.maxDamage != null ? Math.min(raw, w.maxDamage) : raw;
           })(),
           modifiers: (w.type === 'ranged' || w.type === 'siege')
@@ -430,16 +444,12 @@ const Sandbox = () => {
   })() : undefined;
 
   const modifiedVariation2 = variation2 ? (() => {
-    const debuffMultiplier = unit1 && activeAbilities1.size > 0
-      ? getVersusDebuffMultiplier(variation2.classes || [], Array.from(activeAbilities1))
-      : 1.0;
-
     return {
       ...variation2,
       hitpoints: modifiedStats2.hitpoints,
       weapons: variation2.weapons.map(weapon => ({
         ...weapon,
-        damage: (weapon.type === 'melee' ? modifiedStats2.meleeAttack : weapon.type === 'siege' ? (modifiedStats2.siegeAttack ?? modifiedStats2.rangedAttack) : modifiedStats2.rangedAttack) * debuffMultiplier,
+        damage: weapon.type === 'melee' ? modifiedStats2.meleeAttack : weapon.type === 'siege' ? (modifiedStats2.siegeAttack ?? modifiedStats2.rangedAttack) : modifiedStats2.rangedAttack,
         speed: modifiedStats2.attackSpeed,
         range: weapon.range ? {
           ...weapon.range,
@@ -476,9 +486,12 @@ const Sandbox = () => {
       opponentAttackSpeedDebuff: modifiedStats2.opponentAttackSpeedDebuff ?? 0,
       versusOpponentDamageDebuff: modifiedStats2.versusOpponentDamageDebuff ?? 1,
       opponentHealingRateDebuff: modifiedStats2.opponentHealingRateDebuff ?? 0,
+      bonusDamageReduction: modifiedStats2.bonusDamageReduction ?? 0,
       maxHpBonusFraction: modifiedStats2.maxHpBonusFraction ?? 0,
       hpStartFraction: modifiedStats2.hpStartFraction ?? 1,
+      dpsVsMeleeASCoeff: modifiedStats2.dpsVsMeleeASCoeff ?? 0,
       postChargeMeleeBonus: modifiedStats2.postChargeMeleeBonus ?? 0,
+      _activeTechs: [...activeTechnologies2],
       firstHitBlocked: activeAbilities2.has('ability-deflective-armor') || activeAbilities2.has('ability-deflective-armor-sen'),
       chargeBonusBurst: getChargeBonusBurst(variation2, activeTechnologies2),
       chargeArmorType: variation2.baseId === 'earls-guard' ? 'ranged' as const :
@@ -506,9 +519,9 @@ const Sandbox = () => {
           damage: (() => {
             const raw = w.type === 'ranged' || w.type === 'siege'
               ? w.damageMultiplier != null
-                ? (rangedBase2 * w.damageMultiplier + rangedFlatDelta2) * rangedMultiplier2 * debuffMultiplier
-                : (w.injectedWeapon ? w.damage : modifiedStats2.rangedAttack) * debuffMultiplier
-              : (w.damage + meleeAttackDelta) * debuffMultiplier;
+                ? (rangedBase2 * w.damageMultiplier + rangedFlatDelta2) * rangedMultiplier2
+                : (w.injectedWeapon ? w.damage : modifiedStats2.rangedAttack)
+              : (w.damage + meleeAttackDelta);
             return w.maxDamage != null ? Math.min(raw, w.maxDamage) : raw;
           })(),
           modifiers: (w.type === 'ranged' || w.type === 'siege')
@@ -524,17 +537,12 @@ const Sandbox = () => {
   const data2 = modifiedVariation2 || unit2;
 
   const modifiedUnit1 = unit1 && !variation1 ? (() => {
-    // Compute the versus debuff from civ2 abilities
-    const debuffMultiplier = unit2 && activeAbilities2.size > 0
-      ? getVersusDebuffMultiplier(unit1.classes || [], Array.from(activeAbilities2))
-      : 1.0;
-
     return {
       ...unit1,
       hitpoints: modifiedStats1.hitpoints,
       weapons: unit1.weapons.map(weapon => ({
         ...weapon,
-        damage: (weapon.type === 'melee' ? modifiedStats1.meleeAttack : weapon.type === 'siege' ? (modifiedStats1.siegeAttack ?? modifiedStats1.rangedAttack) : modifiedStats1.rangedAttack) * debuffMultiplier,
+        damage: weapon.type === 'melee' ? modifiedStats1.meleeAttack : weapon.type === 'siege' ? (modifiedStats1.siegeAttack ?? modifiedStats1.rangedAttack) : modifiedStats1.rangedAttack,
         speed: modifiedStats1.attackSpeed,
         range: weapon.range ? {
           ...weapon.range,
@@ -563,9 +571,12 @@ const Sandbox = () => {
       opponentAttackSpeedDebuff: modifiedStats1.opponentAttackSpeedDebuff ?? 0,
       versusOpponentDamageDebuff: modifiedStats1.versusOpponentDamageDebuff ?? 1,
       opponentHealingRateDebuff: modifiedStats1.opponentHealingRateDebuff ?? 0,
+      bonusDamageReduction: modifiedStats1.bonusDamageReduction ?? 0,
       maxHpBonusFraction: modifiedStats1.maxHpBonusFraction ?? 0,
       hpStartFraction: modifiedStats1.hpStartFraction ?? 1,
+      dpsVsMeleeASCoeff: modifiedStats1.dpsVsMeleeASCoeff ?? 0,
       postChargeMeleeBonus: modifiedStats1.postChargeMeleeBonus ?? 0,
+      _activeTechs: [...activeTechnologies1],
       firstHitBlocked: activeAbilities1.has('ability-deflective-armor') || activeAbilities1.has('ability-deflective-armor-sen'),
       chargeBonusBurst: getChargeBonusBurst(unit1, activeTechnologies1),
       chargeArmorType: unit1.id === 'earls-guard' ? 'ranged' as const :
@@ -593,9 +604,9 @@ const Sandbox = () => {
           damage: (() => {
             const raw = w.type === 'ranged' || w.type === 'siege'
               ? w.damageMultiplier != null
-                ? (rangedBaseU1 * w.damageMultiplier + rangedFlatDeltaU1) * rangedMultiplierU1 * debuffMultiplier
-                : (w.injectedWeapon ? w.damage : modifiedStats1.rangedAttack) * debuffMultiplier
-              : (w.damage + meleeAttackDelta) * debuffMultiplier;
+                ? (rangedBaseU1 * w.damageMultiplier + rangedFlatDeltaU1) * rangedMultiplierU1
+                : (w.injectedWeapon ? w.damage : modifiedStats1.rangedAttack)
+              : (w.damage + meleeAttackDelta);
             return w.maxDamage != null ? Math.min(raw, w.maxDamage) : raw;
           })(),
           modifiers: (w.type === 'ranged' || w.type === 'siege')
@@ -607,17 +618,12 @@ const Sandbox = () => {
   })() : undefined;
 
   const modifiedUnit2 = unit2 && !variation2 ? (() => {
-    // Compute the versus debuff from civ1 abilities
-    const debuffMultiplier = unit1 && activeAbilities1.size > 0
-      ? getVersusDebuffMultiplier(unit2.classes || [], Array.from(activeAbilities1))
-      : 1.0;
-
     return {
       ...unit2,
       hitpoints: modifiedStats2.hitpoints,
       weapons: unit2.weapons.map(weapon => ({
         ...weapon,
-        damage: (weapon.type === 'melee' ? modifiedStats2.meleeAttack : weapon.type === 'siege' ? (modifiedStats2.siegeAttack ?? modifiedStats2.rangedAttack) : modifiedStats2.rangedAttack) * debuffMultiplier,
+        damage: weapon.type === 'melee' ? modifiedStats2.meleeAttack : weapon.type === 'siege' ? (modifiedStats2.siegeAttack ?? modifiedStats2.rangedAttack) : modifiedStats2.rangedAttack,
         speed: modifiedStats2.attackSpeed,
         range: weapon.range ? {
           ...weapon.range,
@@ -646,9 +652,12 @@ const Sandbox = () => {
       opponentAttackSpeedDebuff: modifiedStats2.opponentAttackSpeedDebuff ?? 0,
       versusOpponentDamageDebuff: modifiedStats2.versusOpponentDamageDebuff ?? 1,
       opponentHealingRateDebuff: modifiedStats2.opponentHealingRateDebuff ?? 0,
+      bonusDamageReduction: modifiedStats2.bonusDamageReduction ?? 0,
       maxHpBonusFraction: modifiedStats2.maxHpBonusFraction ?? 0,
       hpStartFraction: modifiedStats2.hpStartFraction ?? 1,
+      dpsVsMeleeASCoeff: modifiedStats2.dpsVsMeleeASCoeff ?? 0,
       postChargeMeleeBonus: modifiedStats2.postChargeMeleeBonus ?? 0,
+      _activeTechs: [...activeTechnologies2],
       firstHitBlocked: activeAbilities2.has('ability-deflective-armor') || activeAbilities2.has('ability-deflective-armor-sen'),
       chargeBonusBurst: getChargeBonusBurst(unit2, activeTechnologies2),
       chargeArmorType: unit2.id === 'earls-guard' ? 'ranged' as const :
@@ -676,9 +685,9 @@ const Sandbox = () => {
           damage: (() => {
             const raw = w.type === 'ranged' || w.type === 'siege'
               ? w.damageMultiplier != null
-                ? (rangedBaseU2 * w.damageMultiplier + rangedFlatDeltaU2) * rangedMultiplierU2 * debuffMultiplier
-                : (w.injectedWeapon ? w.damage : modifiedStats2.rangedAttack) * debuffMultiplier
-              : (w.damage + meleeAttackDelta) * debuffMultiplier;
+                ? (rangedBaseU2 * w.damageMultiplier + rangedFlatDeltaU2) * rangedMultiplierU2
+                : (w.injectedWeapon ? w.damage : modifiedStats2.rangedAttack)
+              : (w.damage + meleeAttackDelta);
             return w.maxDamage != null ? Math.min(raw, w.maxDamage) : raw;
           })(),
           modifiers: (w.type === 'ranged' || w.type === 'siege')
@@ -693,13 +702,12 @@ const Sandbox = () => {
   // Built whenever a timed ability is active on that side.
   const modifiedVariation1NoTimer = (timedDuration1 && modifiedVariation1 && variation1) ? (() => {
     const s = modifiedStats1NoTimer;
-    const debuffMult = unit2 && activeAbilities2.size > 0 ? getVersusDebuffMultiplier(variation1.classes || [], Array.from(activeAbilities2)) : 1.0;
     return {
       ...modifiedVariation1,
       hitpoints: s.hitpoints,
       weapons: variation1.weapons.map(w => ({
         ...w,
-        damage: (w.type === 'melee' ? s.meleeAttack : w.type === 'siege' ? (s.siegeAttack ?? s.rangedAttack) : s.rangedAttack) * debuffMult,
+        damage: w.type === 'melee' ? s.meleeAttack : w.type === 'siege' ? (s.siegeAttack ?? s.rangedAttack) : s.rangedAttack,
         speed: s.attackSpeed,
         range: w.range ? { ...w.range, max: s.maxRange || w.range.max } : undefined,
         modifiers: filterBonusForWeapon(s.bonusDamage || [], w.type),
@@ -724,13 +732,12 @@ const Sandbox = () => {
 
   const modifiedVariation2NoTimer = (timedDuration2 && modifiedVariation2 && variation2) ? (() => {
     const s = modifiedStats2NoTimer;
-    const debuffMult = unit1 && activeAbilities1.size > 0 ? getVersusDebuffMultiplier(variation2.classes || [], Array.from(activeAbilities1)) : 1.0;
     return {
       ...modifiedVariation2,
       hitpoints: s.hitpoints,
       weapons: variation2.weapons.map(w => ({
         ...w,
-        damage: (w.type === 'melee' ? s.meleeAttack : w.type === 'siege' ? (s.siegeAttack ?? s.rangedAttack) : s.rangedAttack) * debuffMult,
+        damage: w.type === 'melee' ? s.meleeAttack : w.type === 'siege' ? (s.siegeAttack ?? s.rangedAttack) : s.rangedAttack,
         speed: s.attackSpeed,
         range: w.range ? { ...w.range, max: s.maxRange || w.range.max } : undefined,
         modifiers: filterBonusForWeapon(s.bonusDamage || [], w.type),
@@ -755,13 +762,12 @@ const Sandbox = () => {
 
   const modifiedUnit1NoTimer = (timedDuration1 && unit1 && !variation1) ? (() => {
     const s = modifiedStats1NoTimer;
-    const debuffMult = unit2 && activeAbilities2.size > 0 ? getVersusDebuffMultiplier(unit1.classes || [], Array.from(activeAbilities2)) : 1.0;
     return {
       ...modifiedUnit1!,
       hitpoints: s.hitpoints,
       weapons: unit1.weapons.map(w => ({
         ...w,
-        damage: (w.type === 'melee' ? s.meleeAttack : w.type === 'siege' ? (s.siegeAttack ?? s.rangedAttack) : s.rangedAttack) * debuffMult,
+        damage: w.type === 'melee' ? s.meleeAttack : w.type === 'siege' ? (s.siegeAttack ?? s.rangedAttack) : s.rangedAttack,
         speed: s.attackSpeed,
         range: w.range ? { ...w.range, max: s.maxRange || w.range.max } : undefined,
         modifiers: filterBonusForWeapon(s.bonusDamage || [], w.type),
@@ -786,13 +792,12 @@ const Sandbox = () => {
 
   const modifiedUnit2NoTimer = (timedDuration2 && unit2 && !variation2) ? (() => {
     const s = modifiedStats2NoTimer;
-    const debuffMult = unit1 && activeAbilities1.size > 0 ? getVersusDebuffMultiplier(unit2.classes || [], Array.from(activeAbilities1)) : 1.0;
     return {
       ...modifiedUnit2!,
       hitpoints: s.hitpoints,
       weapons: unit2.weapons.map(w => ({
         ...w,
-        damage: (w.type === 'melee' ? s.meleeAttack : w.type === 'siege' ? (s.siegeAttack ?? s.rangedAttack) : s.rangedAttack) * debuffMult,
+        damage: w.type === 'melee' ? s.meleeAttack : w.type === 'siege' ? (s.siegeAttack ?? s.rangedAttack) : s.rangedAttack,
         speed: s.attackSpeed,
         range: w.range ? { ...w.range, max: s.maxRange || w.range.max } : undefined,
         modifiers: filterBonusForWeapon(s.bonusDamage || [], w.type),
@@ -1505,7 +1510,9 @@ const Sandbox = () => {
                       maxHpBonusFraction={modifiedStats1.maxHpBonusFraction ?? 0}
                       opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
                       opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
-                      opponentVersusDebuff={modifiedStats2.versusOpponentDamageDebuff ?? 1}
+                      opponentVersusDebuff={(modifiedStats2.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(variation1?.classes || unit1?.classes || [], [...activeAbilities2], [...activeTechnologies2], variation2?.baseId || unit2?.id)}
+                      opponentBonusDamageReduction={modifiedStats2.bonusDamageReduction ?? 0}
+                      opponentClasses={variation2?.classes || unit2?.classes || []}
                     />
                   </div>
                 </div>
@@ -1547,7 +1554,9 @@ const Sandbox = () => {
                       maxHpBonusFraction={modifiedStats2.maxHpBonusFraction ?? 0}
                       opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
                       opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
-                      opponentVersusDebuff={modifiedStats1.versusOpponentDamageDebuff ?? 1}
+                      opponentVersusDebuff={(modifiedStats1.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(variation2?.classes || unit2?.classes || [], [...activeAbilities1], [...activeTechnologies1], variation1?.baseId || unit1?.id)}
+                      opponentBonusDamageReduction={modifiedStats1.bonusDamageReduction ?? 0}
+                      opponentClasses={variation1?.classes || unit1?.classes || []}
                     />
                   </div>
                   <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
@@ -1790,7 +1799,9 @@ const Sandbox = () => {
                           maxHpBonusFraction={modifiedStats1.maxHpBonusFraction ?? 0}
                           opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
                           opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
-                          opponentVersusDebuff={modifiedStats2.versusOpponentDamageDebuff ?? 1}
+                          opponentVersusDebuff={(modifiedStats2.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(unit1?.classes || [], [...activeAbilities2], [...activeTechnologies2], unit2?.id)}
+                          opponentBonusDamageReduction={modifiedStats2.bonusDamageReduction ?? 0}
+                          opponentClasses={modifiedVariation2?.classes || unit2?.classes || []}
                         />
                       </div>
                     </div>
@@ -1814,7 +1825,9 @@ const Sandbox = () => {
                           maxHpBonusFraction={modifiedStats2.maxHpBonusFraction ?? 0}
                           opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
                           opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
-                          opponentVersusDebuff={modifiedStats1.versusOpponentDamageDebuff ?? 1}
+                          opponentVersusDebuff={(modifiedStats1.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(unit2?.classes || [], [...activeAbilities1], [...activeTechnologies1], unit1?.id)}
+                          opponentBonusDamageReduction={modifiedStats1.bonusDamageReduction ?? 0}
+                          opponentClasses={modifiedVariation1?.classes || unit1?.classes || []}
                         />
                       </div>
                       <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">

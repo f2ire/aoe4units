@@ -198,7 +198,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         },
         {
           property: 'maxRange',
-          select: { id: ['mangudai', 'khaganate-elite-mangudai', 'khaganate-horse-archer', 'horse-archer', 'camel-archer', 'khan', 'desert-raider'] },
+          select: { id: ['mangudai', 'khaganate-elite-mangudai', 'khaganate-horse-archer', 'horse-archer', 'camel-archer', 'khan', 'desert-raider', 'cavalry_archer'] },
           effect: 'change',
           value: -0.5,
           type: 'passive'
@@ -1448,6 +1448,140 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     }),
   },
 
+  //_____________
+  //
+  // JIN
+  //
+  //_____________
+
+  {
+    id: 'storm-lances',
+    reason: 'UI tooltip only — burst is too random to model.',
+    update: {
+      uiTooltip: 'Acts too randomly to be modeled. The burst of 4 projectiles can deal between 0 and 24 damage (28 at Age IV) depending on whether the target moves, is at close range, or dodges the full burst by luck.',
+      effects: [{ property: 'meleeAttack', select: { id: ['spearman'] }, effect: 'change', value: 0 }, { property: 'rangedArmor', select: { id: ['spearman'] }, effect: 'change', value: 0 }]
+    },
+  },
+
+  {
+    id: 'heaven-shaking-thunder',
+    reason: 'Raw effects empty. Models −20% damage debuff on cavalry attacking Eruptor or Spearman (Storm Lance) for 5s.',
+    update: {
+      effects: [
+        { property: 'versusOpponentDamageDebuff', select: { id: ['eruptor'] }, attackerClass: [['cavalry']], effect: 'multiply', value: 0.8, type: 'passive' },
+        { property: 'versusOpponentDamageDebuff', select: { id: ['spearman'] }, attackerClass: [['cavalry']], effect: 'multiply', value: 0.8, type: 'passive', requiredTech: 'storm-lances' },
+      ] as any
+    }
+  },
+
+  {
+    id: 'padded-lamellar',
+    reason: 'Raw effect has no select — restricts to cavalry and melee infantry.',
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: v.effects.map(e => ({ ...e, select: { class: [['cavalry'], ['melee', 'infantry']] } })),
+      })),
+    }),
+  },
+
+  {
+    id: 'quilted-armor',
+    reason: 'Raw effects empty. Reduces bonus damage taken by mohe-tribesman by 50% (multiplicative).',
+    update: {
+      effects: [{
+        property: 'bonusDamageReduction',
+        select: { id: ['mohe-tribesman'] },
+        effect: 'change',
+        value: 0.5,
+        type: 'passive',
+      }],
+    },
+  },
+
+  {
+    id: 'porcupine-defense',
+    reason: 'Raw effects model thorns as flat attack bonus — replaced with dpsVsMeleeASCoeff: bonus DPS against melee = 10 / attacker.attackSpeed.',
+    after: (tech) => {
+      const effect = { property: 'dpsVsMeleeASCoeff', select: { id: ['nest-of-bees'] }, effect: 'change', value: 10, type: 'passive' } as any;
+      return {
+        ...tech,
+        effects: [effect],
+        variations: tech.variations.map(v => ({ ...v, effects: [effect] })),
+      };
+    },
+  },
+
+  {
+    id: 'tower-shields',
+    reason: 'Raw effect has no select — restricts to man-at-arms.',
+    after: (tech) => ({
+      ...tech,
+      variations: tech.variations.map(v => ({
+        ...v,
+        effects: v.effects.map(e => ({ ...e, select: { id: ['man-at-arms'] } })),
+      })),
+    }),
+  },
+
+  {
+    id: 'lightweight-frames',
+    reason: 'Raw effects empty. Siege engines +10% move speed. Part of Siege Speed Technology 1/2 family.',
+    update: {
+      effects: [
+        { property: 'moveSpeed', select: { class: [['siege']] }, effect: 'multiply', value: 1.1, type: 'passive' },
+      ],
+    },
+    after: (tech) => ({
+      ...tech,
+      displayClasses: ['Siege Speed Technology 1/2'],
+      variations: tech.variations.map(v => ({ ...v, displayClasses: ['Siege Speed Technology 1/2'] })),
+    }),
+  },
+
+  {
+    id: 'reinforced-axles',
+    reason: 'Raw effects empty. Siege engines +10% move speed. Part of Siege Speed Technology 2/2 family.',
+    update: {
+      effects: [
+        { property: 'moveSpeed', select: { class: [['siege']] }, effect: 'multiply', value: 1.1, type: 'passive' },
+      ],
+    },
+    after: (tech) => ({
+      ...tech,
+      displayClasses: ['Siege Speed Technology 2/2'],
+      variations: tech.variations.map(v => ({ ...v, displayClasses: ['Siege Speed Technology 2/2'] })),
+    }),
+  },
+
+  {
+    id: 'naval-crossbows',
+    reason: 'Raw effects empty — grants burst +2 to attack-ship (War Junk).',
+    update: {
+      effects: [
+        {
+          property: 'burst',
+          select: { id: ['war-junk'] },
+          effect: 'change',
+          value: 1,
+        },
+      ],
+    },
+  },
+
+
+  {
+    id: 'pili-pao',
+    reason: 'Variation-level attack effects promoted to top-level. Added maxRange +1 for nest-of-bees and traction-trebuchet.',
+    after: (tech) => ({
+      ...tech,
+      effects: [
+        ...tech.variations[0].effects,
+        { property: 'maxRange', select: { id: ['nest-of-bees', 'traction-trebuchet'] }, effect: 'change', value: 1, type: 'passive' },
+      ],
+    }),
+  },
 
   //___________________
   //
