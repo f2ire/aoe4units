@@ -30,6 +30,8 @@ interface VersusMetricsProps {
   winnerHpRemaining?: number;
   winnerUnitsRemaining?: number;
   resourceDifference?: number;
+  loserUnitsToWin?: number;
+  opponentName?: string;
 }
 
 interface UnitCardProps {
@@ -1074,6 +1076,41 @@ export const UnitCard = ({
                   })()}
                 </div>
               )}
+
+              {/* Loser units-to-win banner */}
+              {versusMetrics.isLoser && (versusMetrics.loserUnitsToWin ?? 0) >= 2 && (() => {
+                const n = versusMetrics.loserUnitsToWin!;
+                const shown = Math.min(n, 10);
+                const overflow = n - 10;
+                return (
+                  <div className="mt-3 pl-2.5 pr-2 py-1.5 rounded-r text-xs" style={{ borderLeft: '2px solid #c8a84b99', background: 'rgba(200,168,75,0.06)' }}>
+                    <div className="mb-1.5">
+                      <span className="text-muted-foreground">Units to win : </span>
+                      <span className="font-bold text-sm" style={{ color: '#c8a84b' }}>{n}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: shown }).map((_, i) => (
+                        <div
+                          key={i}
+                          style={{
+                            width: 16, height: 16, borderRadius: 3,
+                            background: '#c8a84b22', border: '1px solid #c8a84b88',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}
+                        >
+                          <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+                            <circle cx="5" cy="3" r="2" fill="#c8a84b" />
+                            <rect x="1" y="5.5" width="8" height="4.5" rx="1" fill="#c8a84b" />
+                          </svg>
+                        </div>
+                      ))}
+                      {overflow > 0 && (
+                        <span className="text-[10px]" style={{ color: '#c8a84b88' }}>+{overflow}</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           );
         })()}

@@ -1693,6 +1693,19 @@ const Sandbox = () => {
                 leftIsWinner = false;
                 rightIsWinner = false;
               }
+              let loserUnitsToWin: number | undefined;
+              if (!atEqualCost && versusData.winner !== 'draw') {
+                const winnerTTK = versusData.winner === 'attacker'
+                  ? versusData.attacker.timeToKill
+                  : versusData.defender.timeToKill;
+                const loserTTK = versusData.winner === 'attacker'
+                  ? versusData.defender.timeToKill
+                  : versusData.attacker.timeToKill;
+                if (winnerTTK !== null && winnerTTK > 0 && loserTTK !== null) {
+                  loserUnitsToWin = Math.max(2, Math.ceil(loserTTK / winnerTTK));
+                }
+              }
+
               const leftMetrics = {
                 dps: versusData.attacker.dps,
                 dpsPerCost: versusData.attacker.dpsPerCost,
@@ -1716,7 +1729,9 @@ const Sandbox = () => {
                 opponentTotalCost: multipliers?.totalCostB,
                 winnerHpRemaining: leftIsWinner ? versusData.winnerHpRemaining : undefined,
                 winnerUnitsRemaining: leftIsWinner ? versusData.winnerUnitsRemaining : undefined,
-                resourceDifference: leftIsWinner ? versusData.resourceDifference : undefined
+                resourceDifference: leftIsWinner ? versusData.resourceDifference : undefined,
+                loserUnitsToWin: (!leftIsWinner && !isDraw) ? loserUnitsToWin : undefined,
+                opponentName: versusData.defender.name,
               };
               const rightMetrics = {
                 dps: versusData.defender.dps,
@@ -1741,7 +1756,9 @@ const Sandbox = () => {
                 opponentTotalCost: multipliers?.totalCostA,
                 winnerHpRemaining: rightIsWinner ? versusData.winnerHpRemaining : undefined,
                 winnerUnitsRemaining: rightIsWinner ? versusData.winnerUnitsRemaining : undefined,
-                resourceDifference: rightIsWinner ? versusData.resourceDifference : undefined
+                resourceDifference: rightIsWinner ? versusData.resourceDifference : undefined,
+                loserUnitsToWin: (!rightIsWinner && !isDraw) ? loserUnitsToWin : undefined,
+                opponentName: versusData.attacker.name,
               };
               return (
                 <>
