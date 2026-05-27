@@ -1155,7 +1155,7 @@ export function computeVersus(
     ({ adjustedA: metricsA, adjustedB: metricsB } = applyKitingToMetrics(metricsA, metricsB, A, B, startDistance, AnoTimer, timedDurationA, BnoTimer, timedDurationB));
   }
 
-  // Determine winner via TTK (lower wins), draw if within <=5%
+  // Determine winner via TTK (lower wins), draw only if TTKs are exactly equal
   let winner: "draw" | "attacker" | "defender" = "draw";
   if (metricsA.cannotAttackUnits && metricsB.cannotAttackUnits) {
     winner = "draw";
@@ -1171,9 +1171,7 @@ export function computeVersus(
     } else if (tB !== null && tA === null) {
       winner = "defender"; // A can never kill B (kiting)
     } else if (tA !== null && tB !== null) {
-      const diff = Math.abs(tA - tB);
-      const threshold = Math.max(tA, tB) * 0.05; // 5%
-      winner = diff <= threshold ? "draw" : (tA < tB ? "attacker" : "defender");
+      winner = tA === tB ? "draw" : (tA < tB ? "attacker" : "defender");
     }
   }
 
