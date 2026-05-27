@@ -140,10 +140,10 @@ export const TechnologySelector = ({
   return (
     <div className="space-y-2 mt-2">
       {(onApplyFullUpgrade || onReset) && (
-        <div className={`flex items-center gap-2 mb-5 ${orientation === 'right' ? 'flex-row-reverse' : ''}`}>
-          <span className="text-[11px] uppercase tracking-wide text-[#6a6a7a]">Full upgrade</span>
-          {onApplyFullUpgrade && (
-            <div className="flex rounded overflow-hidden border border-[#3a3a4a] bg-[#1a1a2a]">
+        <div className="mb-5">
+          <div className="text-[11px] uppercase tracking-wide text-[#6a6a7a] mb-1">Full upgrade</div>
+          <div className={`flex items-center gap-2 ${orientation === 'left' ? 'flex-row-reverse' : ''}`}>            {onApplyFullUpgrade && (
+            <div className="flex rounded overflow-hidden border border-[#3a3a4a] bg-[#1a1a2a] flex-1">
               {AGE_LABELS.map((label, i) => {
                 const age = i + 1;
                 const isDisabled = age < unitMinAge;
@@ -154,7 +154,7 @@ export const TechnologySelector = ({
                     disabled={isDisabled}
                     onClick={() => onApplyFullUpgrade(age)}
                     className={[
-                      'px-3 py-1 text-xs font-medium border-l border-[#3a3a4a] first:border-l-0 transition-colors',
+                      'flex-1 py-1 text-xs font-medium border-l border-[#3a3a4a] first:border-l-0 transition-colors',
                       isActive
                         ? 'bg-[#c9a227] text-[#0f0f17] font-bold'
                         : isDisabled
@@ -168,14 +168,15 @@ export const TechnologySelector = ({
               })}
             </div>
           )}
-          {onReset && (
-            <button
-              onClick={onReset}
-              className="px-2 py-1 text-xs rounded border border-[#3a3a4a] bg-[#1a1a2a] text-[#6a6a7a] hover:bg-[#2a2a3a] hover:text-red-400 transition-colors"
-            >
-              Reset
-            </button>
-          )}
+            {onReset && (
+              <button
+                onClick={onReset}
+                className="px-2 py-1 text-xs rounded border border-[#3a3a4a] bg-[#1a1a2a] text-[#6a6a7a] hover:bg-[#2a2a3a] hover:text-red-400 transition-colors flex-shrink-0"
+              >
+                Reset
+              </button>
+            )}
+          </div>
         </div>
       )}
       {categories.map(category => {
@@ -343,10 +344,10 @@ export const TechnologySelector = ({
                                     <button
                                       onClick={(e) => { e.stopPropagation(); onToggle(improvedId!); }}
                                       className={`absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full border text-[9px] font-bold flex items-center justify-center transition-all hover:scale-110 active:scale-90 z-20 ${isMongolActive
-                                          ? 'border-green-500 bg-green-900/80 text-green-400'
-                                          : isActive
-                                            ? 'border-orange-500 bg-orange-900/80 text-orange-400'
-                                            : 'border-orange-500/40 bg-orange-900/30 text-orange-400/50'
+                                        ? 'border-green-500 bg-green-900/80 text-green-400'
+                                        : isActive
+                                          ? 'border-orange-500 bg-orange-900/80 text-orange-400'
+                                          : 'border-orange-500/40 bg-orange-900/30 text-orange-400/50'
                                         }`}
                                     >
                                       {isMongolActive ? '✓' : '+'}

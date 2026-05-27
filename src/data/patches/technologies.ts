@@ -1490,6 +1490,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     id: 'quilted-armor',
     reason: 'Raw effects empty. Reduces bonus damage taken by mohe-tribesman by 50% (multiplicative).',
     update: {
+      minAge: 2,
       effects: [{
         property: 'bonusDamageReduction',
         select: { id: ['mohe-tribesman'] },

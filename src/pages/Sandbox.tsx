@@ -3,7 +3,8 @@ import { aoe4Units, AoE4Unit, getAvailableAges, getPrimaryWeapon, getTotalCost }
 import type { UnifiedVariation } from "@/data/unified-units";
 import { CIVILIZATIONS } from "@/data/civilizations";
 import { UnitCard } from "@/components/UnitCard";
-import { computeVersus, computeVersusAtEqualCost, getVersusDebuffMultiplier } from "@/lib/combat";
+import { computeVersus, computeVersusAtEqualCost, getVersusDebuffMultiplier, aggregatedDPSModel, focusFireModel, focusFireBatchesModel, focusFireBatchesPureModel, focusFireBatchesMCModel, focusFireBatchesMCAsymmetricModel, focusFireAsymmetricModel, calculateEqualCostMultipliers, computeLoserUnitsToWin } from "@/lib/combat";
+import type { MultiUnitModel } from "@/lib/combat";
 import { AgeSelector } from "@/components/AgeSelector";
 import { TechnologySelector } from "@/components/TechnologySelector";
 import { AbilitySelector } from "@/components/AbilitySelector";
@@ -272,6 +273,7 @@ const getChargeBonusBurst = (unitData: AoE4Unit | UnifiedVariation | undefined, 
 const Sandbox = () => {
   const [isVersus, setIsVersus] = useState<boolean>(false);
   const [atEqualCost, setAtEqualCost] = useState<boolean>(false);
+  const [multiUnitModelKey, setMultiUnitModelKey] = useState<'aggregated' | 'focusFire' | 'mixed' | 'focusFireBatches' | 'focusFireBatchesPure' | 'focusFireBatchesMC'>('focusFireBatches');
   const [allowKiting, setAllowKiting] = useState<boolean>(false);
   const [startDistancePreset, setStartDistancePreset] = useState<string>("medium");
   const [customDistance, setCustomDistance] = useState<number>(5);
@@ -1068,7 +1070,7 @@ const Sandbox = () => {
                         type="checkbox"
                         id="atEqualCost"
                         checked={atEqualCost}
-                        onChange={(e) => !isEqualCostDisabled && setAtEqualCost(e.target.checked)}
+                        onChange={(e) => { if (!isEqualCostDisabled) { setAtEqualCost(e.target.checked); if (e.target.checked) setAllowKiting(false); } }}
                         disabled={isEqualCostDisabled}
                         className="w-4 h-4 rounded border-border disabled:cursor-not-allowed"
                       />
@@ -1078,12 +1080,41 @@ const Sandbox = () => {
                     </div>
                   );
                 })()}
+                {atEqualCost && (
+                  <div className="inline-flex items-center rounded-md border border-border overflow-hidden bg-card">
+                    <span className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-r border-border">
+                      Model
+                    </span>
+                    {([
+                      { key: 'aggregated', label: 'Aggregated DPS', title: 'All units deal and take damage simultaneously as one pool', devOnly: true },
+                      { key: 'focusFire', label: 'Focus Fire', title: 'Each side concentrates fire on one target at a time. Ranged vs Melee: auto-switches to Asymmetric (ranged concentrates on one melee target; melee distributes in batches round-robin).', devOnly: false },
+                      { key: 'focusFireBatches', label: 'FF Batches', title: 'Units fight in parallel lanes (nBatches = min(nA, nB)); the larger side is split evenly. Survivors are redistributed after each death. Both-ranged falls back to plain Focus Fire.', devOnly: true },
+                      { key: 'focusFireBatchesPure', label: 'FF Batches (pur)', title: 'Identique à FF Batches mais sans le fallback Focus Fire pour les unitées range — les archers se distribuent aussi sur des cibles différentes.', devOnly: true },
+                      { key: 'focusFireBatchesMC', label: 'Attack move', title: `Batches Monte Carlo: ${200} simulations with random batch assignment per iteration. Both-melee/both-ranged: random batch redistribution. Ranged vs Melee: auto-switches to Batches MC Asymmetric.`, devOnly: false },
+                      { key: 'mixed', label: 'Mixed', title: 'Focus Fire for ranged units or groups of 3 or fewer, Aggregated DPS otherwise', devOnly: true },
+                    ] as { key: 'aggregated' | 'focusFire' | 'mixed' | 'focusFireBatches' | 'focusFireBatchesPure' | 'focusFireBatchesMC'; label: string; title: string; devOnly: boolean }[])
+                    .filter(opt => import.meta.env.DEV || !opt.devOnly)
+                    .map((opt, i) => (
+                      <React.Fragment key={opt.key}>
+                        {i > 0 && <div className="w-px bg-border self-stretch" />}
+                        <button
+                          type="button"
+                          title={opt.title}
+                          onClick={() => setMultiUnitModelKey(opt.key)}
+                          className={`px-3 py-2 text-sm font-medium transition-colors ${multiUnitModelKey === opt.key ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-foreground'}`}
+                        >
+                          {opt.label}
+                        </button>
+                      </React.Fragment>
+                    ))}
+                  </div>
+                )}
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card">
                   <input
                     type="checkbox"
                     id="allowKiting"
                     checked={allowKiting}
-                    onChange={(e) => setAllowKiting(e.target.checked)}
+                    onChange={(e) => { setAllowKiting(e.target.checked); if (e.target.checked) setAtEqualCost(false); }}
                     className="w-4 h-4 rounded border-border"
                   />
                   <label htmlFor="allowKiting" className="text-sm font-medium cursor-pointer">
@@ -1622,6 +1653,19 @@ const Sandbox = () => {
               const cost2 = modifiedVariation2 ? getTotalCost(modifiedVariation2) : (stats2?.cost ?? 0);
 
               if (atEqualCost && cost1 > 0 && cost2 > 0) {
+                const preMultipliers = calculateEqualCostMultipliers(cost1, cost2);
+                const unit1 = modifiedVariation1 || modifiedUnit1!;
+                const unit2 = modifiedVariation2 || modifiedUnit2!;
+                const isRanged1 = getPrimaryWeapon(unit1)?.type === 'ranged';
+                const isRanged2 = getPrimaryWeapon(unit2)?.type === 'ranged';
+                const focusFireValid = (isRanged1 || preMultipliers.multA <= 3) && (isRanged2 || preMultipliers.multB <= 3);
+                const multiUnitModel: MultiUnitModel =
+                  multiUnitModelKey === 'focusFire' ? (isRanged1 !== isRanged2 ? focusFireAsymmetricModel : focusFireModel) :
+                    multiUnitModelKey === 'focusFireBatches' ? focusFireBatchesModel :
+                      multiUnitModelKey === 'focusFireBatchesPure' ? focusFireBatchesPureModel :
+                        multiUnitModelKey === 'focusFireBatchesMC' ? (isRanged1 !== isRanged2 ? focusFireBatchesMCAsymmetricModel : focusFireBatchesMCModel) :
+                          multiUnitModelKey === 'mixed' && focusFireValid ? focusFireModel :
+                          aggregatedDPSModel;
                 const result = computeVersusAtEqualCost(
                   modifiedVariation1 || modifiedUnit1!,
                   modifiedVariation2 || modifiedUnit2!,
@@ -1631,6 +1675,7 @@ const Sandbox = () => {
                   charge2,
                   allowKiting,
                   startDistance,
+                  multiUnitModel,
                 );
                 versusData = result;
                 multipliers = result.multipliers;
@@ -1695,21 +1740,18 @@ const Sandbox = () => {
               }
               let loserUnitsToWin: number | undefined;
               if (!atEqualCost && versusData.winner !== 'draw') {
-                const winnerTTK = versusData.winner === 'attacker'
-                  ? versusData.attacker.timeToKill
-                  : versusData.defender.timeToKill;
-                const loserTTK = versusData.winner === 'attacker'
-                  ? versusData.defender.timeToKill
-                  : versusData.attacker.timeToKill;
-                if (winnerTTK !== null && winnerTTK > 0 && loserTTK !== null) {
-                  loserUnitsToWin = Math.max(2, Math.ceil(loserTTK / winnerTTK));
-                }
+                loserUnitsToWin = computeLoserUnitsToWin(
+                  versusData,
+                  modifiedVariation1 || modifiedUnit1!,
+                  modifiedVariation2 || modifiedUnit2!,
+                );
               }
 
               const leftMetrics = {
                 dps: versusData.attacker.dps,
                 dpsPerCost: versusData.attacker.dpsPerCost,
                 hitsToKill: versusData.attacker.hitsToKill,
+                approachShots: versusData.attacker.approachShots,
                 timeToKill: versusData.attacker.timeToKill,
                 effectiveDamagePerHit: versusData.attacker.effectiveDamagePerHit,
                 bugAttackSpeed: versusData.attacker.bugAttackSpeed,
@@ -1721,15 +1763,19 @@ const Sandbox = () => {
                 opponentClasses: (modifiedVariation2 || modifiedUnit2)?.classes ?? unit2?.classes ?? [],
                 opponentDps: versusData.defender.dps,
                 opponentDpsPerCost: versusData.defender.dpsPerCost,
-                opponentHitsToKill: versusData.defender.hitsToKill,
+                opponentHitsToKill: (versusData.defender.hitsToKill ?? 0) + (versusData.defender.approachShots ?? 0) || null,
                 opponentTimeToKill: versusData.defender.timeToKill,
                 multiplier: multipliers?.multA,
                 totalCost: multipliers?.totalCostA,
                 opponentMultiplier: multipliers?.multB,
                 opponentTotalCost: multipliers?.totalCostB,
-                winnerHpRemaining: leftIsWinner ? versusData.winnerHpRemaining : undefined,
-                winnerUnitsRemaining: leftIsWinner ? versusData.winnerUnitsRemaining : undefined,
-                resourceDifference: leftIsWinner ? versusData.resourceDifference : undefined,
+                winnerHpRemaining: versusData.mcDistribution?.whenAWins?.hpMedian ?? (leftIsWinner ? versusData.winnerHpRemaining : undefined),
+                winnerHpStd: versusData.mcDistribution?.whenAWins?.hpStd,
+                winnerUnitsRemaining: versusData.mcDistribution?.whenAWins?.unitsMedian ?? (leftIsWinner ? versusData.winnerUnitsRemaining : undefined),
+                winnerUnitsStd: versusData.mcDistribution?.whenAWins?.unitsStd,
+                resourceDifference: versusData.mcDistribution?.whenAWins?.resourceMedian ?? (leftIsWinner ? versusData.resourceDifference : undefined),
+                resourceStd: versusData.mcDistribution?.whenAWins?.resourceStd,
+                winRate: versusData.mcDistribution?.winRateA,
                 loserUnitsToWin: (!leftIsWinner && !isDraw) ? loserUnitsToWin : undefined,
                 opponentName: versusData.defender.name,
               };
@@ -1737,6 +1783,7 @@ const Sandbox = () => {
                 dps: versusData.defender.dps,
                 dpsPerCost: versusData.defender.dpsPerCost,
                 hitsToKill: versusData.defender.hitsToKill,
+                approachShots: versusData.defender.approachShots,
                 timeToKill: versusData.defender.timeToKill,
                 effectiveDamagePerHit: versusData.defender.effectiveDamagePerHit,
                 bugAttackSpeed: versusData.defender.bugAttackSpeed,
@@ -1748,15 +1795,19 @@ const Sandbox = () => {
                 opponentClasses: (modifiedVariation1 || modifiedUnit1)?.classes ?? unit1?.classes ?? [],
                 opponentDps: versusData.attacker.dps,
                 opponentDpsPerCost: versusData.attacker.dpsPerCost,
-                opponentHitsToKill: versusData.attacker.hitsToKill,
+                opponentHitsToKill: (versusData.attacker.hitsToKill ?? 0) + (versusData.attacker.approachShots ?? 0) || null,
                 opponentTimeToKill: versusData.attacker.timeToKill,
                 multiplier: multipliers?.multB,
                 totalCost: multipliers?.totalCostB,
                 opponentMultiplier: multipliers?.multA,
                 opponentTotalCost: multipliers?.totalCostA,
-                winnerHpRemaining: rightIsWinner ? versusData.winnerHpRemaining : undefined,
-                winnerUnitsRemaining: rightIsWinner ? versusData.winnerUnitsRemaining : undefined,
-                resourceDifference: rightIsWinner ? versusData.resourceDifference : undefined,
+                winnerHpRemaining: versusData.mcDistribution?.whenBWins?.hpMedian ?? (rightIsWinner ? versusData.winnerHpRemaining : undefined),
+                winnerHpStd: versusData.mcDistribution?.whenBWins?.hpStd,
+                winnerUnitsRemaining: versusData.mcDistribution?.whenBWins?.unitsMedian ?? (rightIsWinner ? versusData.winnerUnitsRemaining : undefined),
+                winnerUnitsStd: versusData.mcDistribution?.whenBWins?.unitsStd,
+                resourceDifference: versusData.mcDistribution?.whenBWins?.resourceMedian ?? (rightIsWinner ? versusData.resourceDifference : undefined),
+                resourceStd: versusData.mcDistribution?.whenBWins?.resourceStd,
+                winRate: versusData.mcDistribution?.winRateB,
                 loserUnitsToWin: (!rightIsWinner && !isDraw) ? loserUnitsToWin : undefined,
                 opponentName: versusData.attacker.name,
               };

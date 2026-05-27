@@ -1219,6 +1219,18 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
   //_____________
 
   {
+    id: 'mohe-tribesman',
+    reason: 'Correct cost to 60f 35w (total 95) and production time to 17s.',
+    after: (unit: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+      ...unit,
+      variations: unit.variations.map((v: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+        ...v,
+        costs: { ...v.costs, food: 60, wood: 35, total: 95, time: 17 },
+      })),
+    }),
+  },
+
+  {
     id: 'zhanma-swordsman',
     reason: 'Weapon modifier type corrected to bonus — +12 bonus damage vs cavalry.',
     after: (unit: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any

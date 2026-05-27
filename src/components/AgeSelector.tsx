@@ -19,7 +19,7 @@ export const AgeSelector = ({
   // If orientation is "left", reverse the order to display 1,2,3,4 from left to right
   const displayAges = orientation === "left" ? [...ages].reverse() : ages;
   const displayLabels = orientation === "left" ? [...ageLabels].reverse() : ageLabels;
-  
+
   return (
     <div className={`flex ${orientation === "right" ? "flex-row" : "flex-row-reverse"} gap-2`}>
       {displayAges.map((age, index) => {

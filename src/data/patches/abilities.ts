@@ -123,20 +123,21 @@ const JD_FORM_IDS = ['jeanne-darc-peasant', 'jeanne-darc-woman-at-arms', 'jeanne
 export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
   {
     id: 'ability-quick-strike',
-    reason: 'Quick Strike (Ghulam): deals two attacks in rapid succession. Effective cycle = (base + 0.5) × 0.5. Base speed 1.125s → 1.625s → 0.8125s. Applied as top-level effects so combat.ts can apply them via applyAbilityWeaponEffects.',
+    reason: 'Quick Strike (Ghulam): deals two attacks in rapid succession. Effective AS = base × 0.5 + 0.5 = 1.0625s. Multiply first, then change (reversed order). Base speed 1.125s → 0.5625s → 1.0625s. Applied as top-level effects so combat.ts can apply them via applyAbilityWeaponEffects.',
+    uiTooltip: 'The game show a 0.813 average Attack Speed. But in reality the ghulam Attack Speed is closer to 1.0625.',
     update: {
       effects: [
         {
           property: 'attackSpeed',
           select: { id: ['ghulam'] },
-          effect: 'change',
+          effect: 'multiply',
           value: 0.5,
           type: 'ability'
         },
         {
           property: 'attackSpeed',
           select: { id: ['ghulam'] },
-          effect: 'multiply',
+          effect: 'change',
           value: 0.5,
           type: 'ability'
         }
@@ -1623,7 +1624,7 @@ export const foreignEngineeringAbilityUnitRestrictions: Map<string, string[]> = 
 );
 
 // Synthetic ability — not a patch on existing data.
-// ALL melee units can charge: +20% movement speed until the first attack.
+// ALL melee units can charge: +25% movement speed until the first attack.
 // Additional bonus damage on first hit only for: knight (age 2: +10, age 3: +12, age 4: +14)
 // and merc_ghulam (age 3: +5, age 4: +6). Per-age bonus applied in Sandbox.tsx.
 function createChargeAttackAbility(): Ability {
@@ -1640,7 +1641,7 @@ function createChargeAttackAbility(): Ability {
       property: 'moveSpeed',
       select: { class: [['melee']], id: ["warrior-monk"] },
       effect: 'multiply',
-      value: 1.2, // +20% speed until first attack
+      value: 1.25, // +25% speed until first attack
       type: 'ability',
     },
     // Extra damage on first hit — knight only
@@ -1677,7 +1678,7 @@ function createChargeAttackAbility(): Ability {
     classes: [],
     minAge: 1,
     icon: 'https://data.aoe4world.com/images/abilities/ability-tactical-charge-1.png',
-    description: 'All melee: +20% move speed until first attack. Knights & Ghulams also deal bonus damage on first hit.',
+    description: 'All melee: +25% move speed until first attack. Knights & Ghulams also deal bonus damage on first hit.',
     unique: false,
     effects: chargeEffects,
     variations: [
@@ -1690,7 +1691,7 @@ function createChargeAttackAbility(): Ability {
         attribName: 'charge_attack_1',
         age: 1,
         civs: [],
-        description: 'All melee: +20% move speed until first attack. Knights & Ghulams also deal bonus damage on first hit.',
+        description: 'All melee: +25% move speed until first attack. Knights & Ghulams also deal bonus damage on first hit.',
         classes: [],
         displayClasses: [],
         unique: false,
