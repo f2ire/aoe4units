@@ -143,8 +143,11 @@ const ARCHER_TRAVEL_TIME = 0.67;
 // Determines whether the entity is gunpowder (ignores ranged armor when firing)
 function isGunpowder(entity: CombatEntity, weapon?: UnifiedWeapon): boolean {
   if (!weapon) return false;
-  // Based on classes containing "gunpowder"
   return entity.classes.some(c => c.toLowerCase().includes("gunpowder"));
+}
+
+function isArcher(entity: CombatEntity): boolean {
+  return entity.classes.some(c => c.toLowerCase() === "archer");
 }
 
 // Determines whether armor should be ignored (siege, gunpowder, or weapon.type === 'siege')
@@ -464,6 +467,16 @@ function getRetreatTime(entity: CombatEntity): number {
   // The unit can move during winddown (end of attack animation) AND reload.
   const d = entity.weapons[0]?.durations;
   return (d?.winddown ?? 0) + (d?.reload ?? 0);
+}
+
+function canPermanentlyKite(ranged: CombatEntity, melee: CombatEntity): boolean {
+  const hasMeleeCharge = melee.activeAbilities?.includes('charge-attack') ?? false;
+  const effectiveMeleeSpeed = hasMeleeCharge ? melee.moveSpeed * 1.2 : melee.moveSpeed;
+  if (ranged.continuousMovement && ranged.moveSpeed > effectiveMeleeSpeed) return true;
+  const attackCycle = (ranged.weapons[0]?.speed ?? 0) * (1 + (melee.opponentAttackSpeedDebuff ?? 0));
+  if (attackCycle <= 0 || effectiveMeleeSpeed <= 0) return false;
+  const delta = ranged.moveSpeed * getRetreatTime(ranged) - effectiveMeleeSpeed * attackCycle;
+  return delta >= 0;
 }
 
 /**
@@ -1074,10 +1087,7 @@ function computeDamageInTime(attacker: CombatEntity, defender: CombatEntity, cha
   // their attack windup during the sprint, so the first hit fires at contact (t=0).
   const isChargingMelee = !hasChargeWeapon && (attacker.activeAbilities?.includes('charge-attack') ?? false) && normalData.weapon?.type === 'melee';
   const firstHitSpeed = (hasChargeWeapon ? (chargeWeapon!.speed || rawSpeed) : isChargingMelee ? 0 : rawSpeed) * asDebuffFactor;
-  // Non-gunpowder ranged attackers have projectile travel time: only count shots whose
-  // projectile arrives within `duration` (i.e. fired at most ARCHER_TRAVEL_TIME before deadline).
-  const weapon = normalData.weapon;
-  const attackerTravelTime = (weapon?.type === 'ranged' && !isGunpowder(attacker, weapon)) ? ARCHER_TRAVEL_TIME : 0;
+  const attackerTravelTime = isArcher(attacker) ? ARCHER_TRAVEL_TIME : 0;
   const effectiveDuration = duration - attackerTravelTime;
   if (effectiveDuration < firstHitSpeed) return 0;
   const additionalHits = Math.floor((effectiveDuration - firstHitSpeed) / attackSpeed);
@@ -1115,26 +1125,25 @@ export function computeVersus(
   const isMeleeB_approach = getMaxRange(B) < 1;
   let approachShotsForRanged = 0;
   if (isMeleeA_approach !== isMeleeB_approach && startDistance > 0) {
-    const meleeEnt          = isMeleeA_approach ? A : B;
-    const rangedEnt         = isMeleeA_approach ? B : A;
+    const meleeEnt = isMeleeA_approach ? A : B;
+    const rangedEnt = isMeleeA_approach ? B : A;
     const chargeBonusRanged = isMeleeA_approach ? chargeBonusB : chargeBonusA;
-    const prelimMetrics     = computeMetrics(rangedEnt, meleeEnt, chargeBonusRanged, 1, 1, false);
-    const rangedRange       = getMaxRange(rangedEnt);
-    const T_free            = Math.min(startDistance, rangedRange) / Math.max(0.1, meleeEnt.moveSpeed);
-    const asRanged          = (rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
-    const wRanged           = rangedEnt.weapons[0]?.durations?.windup ?? 0;
+    const prelimMetrics = computeMetrics(rangedEnt, meleeEnt, chargeBonusRanged, 1, 1, false);
+    const rangedRange = getMaxRange(rangedEnt);
+    const T_free = Math.min(startDistance, rangedRange) / Math.max(0.1, meleeEnt.moveSpeed);
+    const asRanged = (rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
+    const wRanged = rangedEnt.weapons[0]?.durations?.windup ?? 0;
     // Subtract projectile travel time: only shots whose projectile lands ≤ T_free count as
     // approach damage. Mirrors the ARCHER_TRAVEL_TIME subtraction in computeDamageInTime.
-    const rangedW0          = rangedEnt.weapons[0];
-    const approachTravelTime = (rangedW0?.type === 'ranged' && !isGunpowder(rangedEnt, rangedW0)) ? ARCHER_TRAVEL_TIME : 0;
-    const shotsDeadline     = T_free - approachTravelTime;
-    const shots             = asRanged > 0 && shotsDeadline >= wRanged
+    const approachTravelTime = isArcher(rangedEnt) ? ARCHER_TRAVEL_TIME : 0;
+    const shotsDeadline = T_free - approachTravelTime;
+    const shots = asRanged > 0 && shotsDeadline >= wRanged
       ? Math.floor((shotsDeadline - wRanged) / asRanged) + 1
       : 0;
     if (shots > 0 && prelimMetrics.effectiveDamagePerHit !== null) {
-      const approachDmg  = shots * prelimMetrics.effectiveDamagePerHit;
-      const currentHp    = meleeEnt.hitpoints * (meleeEnt.hpStartFraction ?? 1);
-      const newFraction  = Math.max(1 / meleeEnt.hitpoints, (currentHp - approachDmg) / meleeEnt.hitpoints);
+      const approachDmg = shots * prelimMetrics.effectiveDamagePerHit;
+      const currentHp = meleeEnt.hitpoints * (meleeEnt.hpStartFraction ?? 1);
+      const newFraction = Math.max(1 / meleeEnt.hitpoints, (currentHp - approachDmg) / meleeEnt.hitpoints);
       if (isMeleeA_approach) A = { ...A, hpStartFraction: newFraction };
       else B = { ...B, hpStartFraction: newFraction };
       approachShotsForRanged = shots;
@@ -1274,7 +1283,7 @@ export function computeVersusAtEqualCost(
   if (metricsA.cannotAttackUnits || metricsB.cannotAttackUnits) {
     const winner: "draw" | "attacker" | "defender" =
       metricsA.cannotAttackUnits && metricsB.cannotAttackUnits ? "draw" :
-      metricsA.cannotAttackUnits ? "defender" : "attacker";
+        metricsA.cannotAttackUnits ? "defender" : "attacker";
     return { attacker: metricsA, defender: metricsB, winner, multipliers };
   }
 
@@ -1297,28 +1306,27 @@ export function computeVersusAtEqualCost(
   const isMeleeB_approach = getMaxRange(B) < 1;
 
   if (isMeleeA_approach !== isMeleeB_approach && startDistance > 0) {
-    const meleeEnt   = isMeleeA_approach ? A : B;
-    const rangedEnt  = isMeleeA_approach ? B : A;
-    const metRanged  = isMeleeA_approach ? metricsB : metricsA;
-    const multMelee  = isMeleeA_approach ? multipliers.multA : multipliers.multB;
+    const meleeEnt = isMeleeA_approach ? A : B;
+    const rangedEnt = isMeleeA_approach ? B : A;
+    const metRanged = isMeleeA_approach ? metricsB : metricsA;
+    const multMelee = isMeleeA_approach ? multipliers.multA : multipliers.multB;
     const multRanged = isMeleeA_approach ? multipliers.multB : multipliers.multA;
 
-    const rangedRange  = getMaxRange(rangedEnt);
-    const T_free       = Math.min(startDistance, rangedRange) / Math.max(0.1, meleeEnt.moveSpeed ?? 1.5);
-    const asRanged     = (rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
-    const wRanged      = rangedEnt.weapons[0]?.durations?.windup ?? 0;
-    const rangedW0ec   = rangedEnt.weapons[0];
-    const approachTravelTimeEc = (rangedW0ec?.type === 'ranged' && !isGunpowder(rangedEnt, rangedW0ec)) ? ARCHER_TRAVEL_TIME : 0;
+    const rangedRange = getMaxRange(rangedEnt);
+    const T_free = Math.min(startDistance, rangedRange) / Math.max(0.1, meleeEnt.moveSpeed ?? 1.5);
+    const asRanged = (rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
+    const wRanged = rangedEnt.weapons[0]?.durations?.windup ?? 0;
+    const approachTravelTimeEc = isArcher(rangedEnt) ? ARCHER_TRAVEL_TIME : 0;
     const shotsDeadlineEc = T_free - approachTravelTimeEc;
-    const shots        = asRanged > 0 && shotsDeadlineEc >= wRanged
+    const shots = asRanged > 0 && shotsDeadlineEc >= wRanged
       ? Math.floor((shotsDeadlineEc - wRanged) / asRanged) + 1
       : 0;
 
     if (shots > 0) {
       const totalApproachDmg = multRanged * shots * metRanged.effectiveDamagePerHit;
-      const dmgPerMelee      = totalApproachDmg / multMelee;
-      const currentHp        = meleeEnt.hitpoints * (meleeEnt.hpStartFraction ?? 1);
-      const newFraction      = Math.max(1 / meleeEnt.hitpoints, (currentHp - dmgPerMelee) / meleeEnt.hitpoints);
+      const dmgPerMelee = totalApproachDmg / multMelee;
+      const currentHp = meleeEnt.hitpoints * (meleeEnt.hpStartFraction ?? 1);
+      const newFraction = Math.max(1 / meleeEnt.hitpoints, (currentHp - dmgPerMelee) / meleeEnt.hitpoints);
 
       if (isMeleeA_approach) resolveA = { ...A, hpStartFraction: newFraction };
       else resolveB = { ...B, hpStartFraction: newFraction };
@@ -1351,8 +1359,8 @@ export const focusFireModel: MultiUnitModel = {
     // Travel time: ranged projectiles keep flying even if the shooter dies.
     // When A fires alone and kills B, if B's next shot falls within A's travel time window,
     // B's projectile was already committed (in-flight) and still lands.
-    const travelTimeA = A.weapons[0]?.type === 'ranged' ? ARCHER_TRAVEL_TIME : 0;
-    const travelTimeB = B.weapons[0]?.type === 'ranged' ? ARCHER_TRAVEL_TIME : 0;
+    const travelTimeA = isArcher(A) ? ARCHER_TRAVEL_TIME : 0;
+    const travelTimeB = isArcher(B) ? ARCHER_TRAVEL_TIME : 0;
 
     // Windup offset: damage lands at cycle_start + windup, not at cycle_start.
     // Two units with different windups can have their attacks land simultaneously even when
@@ -1374,6 +1382,15 @@ export const focusFireModel: MultiUnitModel = {
     let kA = 0, kB = 0;
     let tA = 0, tB = 0;
 
+    // Track when each side's last unit was killed (for tiebreak when both reach 0)
+    let tKillOfLastB = Infinity; // time A killed B's last unit
+    let tKillOfLastA = Infinity; // time B killed A's last unit
+    // HP of the winner's current target (pre-travel-shot) at the decisive kill moment
+    let hpWinnerAtKillOfLastB = 0;
+    let hpWinnerAtKillOfLastA = 0;
+    let remAAtKillOfLastB = 0; // remA (pre-decrement) when B's last unit died
+    let remBAtKillOfLastA = 0; // remB (pre-decrement snapshot) when A's last unit died
+
     // Upper bound: at most (multA + multB) kills, each requiring at most ~200 shots
     const MAX_ITER = (multA + multB) * 200 + 500;
     for (let iter = 0; iter < MAX_ITER; iter++) {
@@ -1388,6 +1405,11 @@ export const focusFireModel: MultiUnitModel = {
       if (fireA) hpTargetB -= remA * (kA === 0 ? firstDmgA : dmgA);
       if (fireB) hpTargetA -= remB * (kB === 0 ? firstDmgB : dmgB);
 
+      // Snapshot HP after direct hits, before any in-flight projectile modifies them.
+      // Used to recover the winner's HP at the decisive kill moment.
+      const hpA_pre = hpTargetA;
+      const hpB_pre = hpTargetB;
+
       // Last projectile in flight: when A fires alone and kills B's target, B's projectile
       // was already committed if B's next shot falls within A's travel time window.
       if (fireA && !fireB && hpTargetB <= 0 && remB > 0 && travelTimeA > 0 && (tB - tA) <= travelTimeA) {
@@ -1400,16 +1422,30 @@ export const focusFireModel: MultiUnitModel = {
       if (fireA) { kA++; tA = kA * asA; }
       if (fireB) { kB++; tB = kB * asB; }
 
+      // Snapshot rem before deaths are resolved so both blocks see the pre-decrement values.
+      const remA_snap = remA;
+      const remB_snap = remB;
+
       // Resolve deaths (simultaneous kills handled correctly — both decrement)
       if (hpTargetB <= 0) {
         deadB++;
         remB = multB - deadB;
         hpTargetB = remB > 0 ? startHpB : 0;
+        if (remB === 0) {
+          tKillOfLastB = tA_adj;
+          hpWinnerAtKillOfLastB = hpA_pre;
+          remAAtKillOfLastB = remA_snap;
+        }
       }
       if (hpTargetA <= 0) {
         deadA++;
         remA = multA - deadA;
         hpTargetA = remA > 0 ? startHpA : 0;
+        if (remA === 0) {
+          tKillOfLastA = tB_adj;
+          hpWinnerAtKillOfLastA = hpB_pre;
+          remBAtKillOfLastA = remB_snap;
+        }
       }
     }
 
@@ -1431,7 +1467,23 @@ export const focusFireModel: MultiUnitModel = {
       winnerHpRemaining = totalHpB;
       winnerUnitsRemaining = remB;
       resourceDifference = remB * (totalCostB / multB);
+    } else if (remA === 0 && remB === 0) {
+      // Both sides died: winner is whoever killed the opponent's last unit first.
+      // HP remaining = winner's HP at the decisive kill moment (before in-flight shot landed).
+      if (tKillOfLastB < tKillOfLastA) {
+        winner = "attacker";
+        winnerHpRemaining = (remAAtKillOfLastB - 1) * startHpA + Math.max(0, hpWinnerAtKillOfLastB);
+        winnerUnitsRemaining = remAAtKillOfLastB;
+        resourceDifference = remAAtKillOfLastB * (totalCostA / multA);
+      } else if (tKillOfLastA < tKillOfLastB) {
+        winner = "defender";
+        winnerHpRemaining = (remBAtKillOfLastA - 1) * startHpB + Math.max(0, hpWinnerAtKillOfLastA);
+        winnerUnitsRemaining = remBAtKillOfLastA;
+        resourceDifference = remBAtKillOfLastA * (totalCostB / multB);
+      }
+      // else: genuinely simultaneous (tA_adj === tB_adj) → draw
     } else if (totalHpA > totalHpB) {
+      // MAX_ITER edge case: same units remaining (>0), HP tiebreak
       winner = "attacker";
       winnerHpRemaining = totalHpA;
       winnerUnitsRemaining = 0;
@@ -1645,87 +1697,6 @@ function simulateAsymmetricFF(
   return { hpConc, hpDist };
 }
 
-// Focus-fire batches: applies space-constraint batching only where physically relevant.
-// Melee vs Melee   → symmetric batch model (phase redistribution).
-// Ranged vs Ranged → standard focus-fire (no batch needed).
-// Ranged vs Melee  → ranged concentrates all fire on one melee at a time;
-//                    each melee unit independently attacks a different ranged target.
-export const focusFireBatchesModel: MultiUnitModel = {
-  resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB }) {
-    const dmgA = metricsA.effectiveDamagePerHit;
-    const dmgB = metricsB.effectiveDamagePerHit;
-    const asA = (A.weapons[0]?.speed ?? 0) * (1 + (B.opponentAttackSpeedDebuff ?? 0));
-    const asB = (B.weapons[0]?.speed ?? 0) * (1 + (A.opponentAttackSpeedDebuff ?? 0));
-
-    if (!dmgA || !dmgB || dmgA <= 0 || dmgB <= 0 || asA <= 0 || asB <= 0)
-      return aggregatedDPSModel.resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB });
-
-    const isMeleeA = getMaxRange(A) < 1;
-    const isMeleeB = getMaxRange(B) < 1;
-
-    // Both ranged: no space constraint → standard focus-fire
-    if (!isMeleeA && !isMeleeB)
-      return focusFireModel.resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB });
-
-    const fDmgA = metricsA.firstHitDamage ?? dmgA;
-    const fDmgB = metricsB.firstHitDamage ?? dmgB;
-    const wA = A.weapons[0]?.durations?.windup ?? 0;
-    const wB = B.weapons[0]?.durations?.windup ?? 0;
-    const startHpA = A.hitpoints * (A.hpStartFraction ?? 1);
-    const startHpB = B.hitpoints * (B.hpStartFraction ?? 1);
-
-    // Asymmetric: one ranged (concentrates), one melee (distributes across targets)
-    if (!isMeleeA || !isMeleeB) {
-      const concIsA = !isMeleeA;
-      const { hpConc, hpDist } = simulateAsymmetricFF(
-        concIsA ? multA  : multB,  concIsA ? startHpA : startHpB,
-        concIsA ? dmgA   : dmgB,   concIsA ? fDmgA    : fDmgB,
-        concIsA ? asA    : asB,    concIsA ? wA       : wB,
-        concIsA ? multB  : multA,  concIsA ? startHpB : startHpA,
-        concIsA ? dmgB   : dmgA,   concIsA ? fDmgB    : fDmgA,
-        concIsA ? asB    : asA,    concIsA ? wB       : wA,
-      );
-      const rC = hpConc.filter(h => h > 0).length;
-      const rD = hpDist.filter(h => h > 0).length;
-      const tC = hpConc.reduce((s, h) => s + Math.max(0, h), 0);
-      const tD = hpDist.reduce((s, h) => s + Math.max(0, h), 0);
-      return buildBatchResult(
-        concIsA ? rC : rD, concIsA ? rD : rC,
-        concIsA ? tC : tD, concIsA ? tD : tC,
-        multA, multB, totalCostA, totalCostB,
-      );
-    }
-
-    // Both melee: phase-based symmetric batch model
-    let hpA: number[] = Array(multA).fill(startHpA);
-    let hpB: number[] = Array(multB).fill(startHpB);
-    const MAX_PHASES = (multA + multB) * 3 + 50;
-
-    for (let phase = 0; phase < MAX_PHASES; phase++) {
-      if (!hpA.length || !hpB.length) break;
-      const cFA = phase === 0 ? fDmgA : dmgA;
-      const cFB = phase === 0 ? fDmgB : dmgB;
-      const batches = createBatchesFF(hpA, hpB);
-      const T = Math.min(...batches.map(b =>
-        batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, wA, wB)
-      ));
-      if (!isFinite(T)) break;
-      const nHA: number[] = [], nHB: number[] = [];
-      for (const b of batches) {
-        const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, wA, wB);
-        nHA.push(...r.hpA); nHB.push(...r.hpB);
-      }
-      hpA = nHA.filter(h => h > 0);
-      hpB = nHB.filter(h => h > 0);
-    }
-
-    return buildBatchResult(
-      hpA.length, hpB.length,
-      hpA.reduce((s, h) => s + h, 0), hpB.reduce((s, h) => s + h, 0),
-      multA, multB, totalCostA, totalCostB,
-    );
-  },
-};
 
 function computeMCWinnerStats(
   results: Array<Pick<VersusResult, 'winner' | 'winnerHpRemaining' | 'winnerUnitsRemaining' | 'resourceDifference'>>,
@@ -1770,8 +1741,6 @@ export const focusFireBatchesMCModel: MultiUnitModel = {
 
     const fDmgA = metricsA.firstHitDamage ?? dmgA;
     const fDmgB = metricsB.firstHitDamage ?? dmgB;
-    const wA = A.weapons[0]?.durations?.windup ?? 0;
-    const wB = B.weapons[0]?.durations?.windup ?? 0;
     const startHpA = A.hitpoints * (A.hpStartFraction ?? 1);
     const startHpB = B.hitpoints * (B.hpStartFraction ?? 1);
 
@@ -1787,12 +1756,12 @@ export const focusFireBatchesMCModel: MultiUnitModel = {
         const cFB = phase === 0 ? fDmgB : dmgB;
         const batches = createBatchesFF(hpA, hpB);
         const T = Math.min(...batches.map(b =>
-          batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, wA, wB)
+          batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, 0, 0)
         ));
         if (!isFinite(T)) break;
         const nHA: number[] = [], nHB: number[] = [];
         for (const b of batches) {
-          const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, wA, wB);
+          const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, 0, 0);
           nHA.push(...r.hpA); nHB.push(...r.hpB);
         }
         hpA = nHA.filter(h => h > 0);
@@ -1804,14 +1773,16 @@ export const focusFireBatchesMCModel: MultiUnitModel = {
         multA, multB, totalCostA, totalCostB,
       );
       const single = [det];
-      return { ...det, mcDistribution: {
-        winRateA: det.winner === 'attacker' ? 1 : 0,
-        winRateB: det.winner === 'defender' ? 1 : 0,
-        drawRate: det.winner === 'draw' ? 1 : 0,
-        iterations: 1,
-        whenAWins: computeMCWinnerStats(single, 'attacker'),
-        whenBWins: computeMCWinnerStats(single, 'defender'),
-      } };
+      return {
+        ...det, mcDistribution: {
+          winRateA: det.winner === 'attacker' ? 1 : 0,
+          winRateB: det.winner === 'defender' ? 1 : 0,
+          drawRate: det.winner === 'draw' ? 1 : 0,
+          iterations: 1,
+          whenAWins: computeMCWinnerStats(single, 'attacker'),
+          whenBWins: computeMCWinnerStats(single, 'defender'),
+        }
+      };
     }
 
     // Event-driven MC: batches run in parallel; when one batch finishes, its survivors
@@ -1838,7 +1809,7 @@ export const focusFireBatchesMCModel: MultiUnitModel = {
         const T = Math.min(...active.map(b => {
           const cFA = b.firstShotUsed ? dmgA : fDmgA;
           const cFB = b.firstShotUsed ? dmgB : fDmgB;
-          return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, wA, wB);
+          return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, 0, 0);
         }));
         if (!isFinite(T)) break;
         timeElapsed += T;
@@ -1848,7 +1819,7 @@ export const focusFireBatchesMCModel: MultiUnitModel = {
         for (const b of active) {
           const cFA = b.firstShotUsed ? dmgA : fDmgA;
           const cFB = b.firstShotUsed ? dmgB : fDmgB;
-          const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, wA, wB);
+          const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, 0, 0);
           const nA = r.hpA.filter(h => h > 0);
           const nB = r.hpB.filter(h => h > 0);
 
@@ -1920,7 +1891,7 @@ export const focusFireBatchesMCModel: MultiUnitModel = {
     // Representative result: median of the modal outcome (by units then HP remaining)
     const modeWinner = nWinA >= nWinB && nWinA >= nDraw ? 'attacker'
       : nWinB > nWinA && nWinB >= nDraw ? 'defender'
-      : 'draw';
+        : 'draw';
     const modeResults = results.filter(r => r.winner === modeWinner);
     modeResults.sort((a, b) =>
       (b.winnerUnitsRemaining ?? 0) - (a.winnerUnitsRemaining ?? 0) ||
@@ -1955,8 +1926,6 @@ export const focusFireBatchesMCAsymmetricModel: MultiUnitModel = {
 
     const fDmgA = metricsA.firstHitDamage ?? dmgA;
     const fDmgB = metricsB.firstHitDamage ?? dmgB;
-    const wA = A.weapons[0]?.durations?.windup ?? 0;
-    const wB = B.weapons[0]?.durations?.windup ?? 0;
     const startHpA = A.hitpoints * (A.hpStartFraction ?? 1);
     const startHpB = B.hitpoints * (B.hpStartFraction ?? 1);
 
@@ -1989,7 +1958,7 @@ export const focusFireBatchesMCAsymmetricModel: MultiUnitModel = {
         const T = Math.min(...active.map(b => {
           const cFA = b.firstShotUsed ? dmgA : fDmgA;
           const cFB = b.firstShotUsed ? dmgB : fDmgB;
-          return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, wA, wB);
+          return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, 0, 0);
         }));
         if (!isFinite(T)) break;
         timeElapsed += T;
@@ -1998,7 +1967,7 @@ export const focusFireBatchesMCAsymmetricModel: MultiUnitModel = {
         for (const b of active) {
           const cFA = b.firstShotUsed ? dmgA : fDmgA;
           const cFB = b.firstShotUsed ? dmgB : fDmgB;
-          const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, wA, wB);
+          const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, 0, 0);
           const nA = r.hpA.filter(h => h > 0);
           const nB = r.hpB.filter(h => h > 0);
           if (nA.length > 0 && nB.length > 0) {
@@ -2016,7 +1985,7 @@ export const focusFireBatchesMCAsymmetricModel: MultiUnitModel = {
         }
 
         if (nextActive.length === 0 && pendingA.length > 0 && pendingB.length > 0) {
-          const newBatches = createBatchesFFRandom(pendingA, pendingB);
+          const newBatches = createBatchesGrouped(pendingA, pendingB);
           pendingA.length = 0; pendingB.length = 0;
           for (const b of newBatches) {
             if (b.hpA.length > 0 && b.hpB.length > 0)
@@ -2100,12 +2069,12 @@ export const focusFireAsymmetricModel: MultiUnitModel = {
 
     const concIsA = !isMeleeA;
     const { hpConc, hpDist } = simulateAsymmetricFF(
-      concIsA ? multA  : multB,  concIsA ? startHpA : startHpB,
-      concIsA ? dmgA   : dmgB,   concIsA ? fDmgA    : fDmgB,
-      concIsA ? asA    : asB,    concIsA ? wA       : wB,
-      concIsA ? multB  : multA,  concIsA ? startHpB : startHpA,
-      concIsA ? dmgB   : dmgA,   concIsA ? fDmgB    : fDmgA,
-      concIsA ? asB    : asA,    concIsA ? wB       : wA,
+      concIsA ? multA : multB, concIsA ? startHpA : startHpB,
+      concIsA ? dmgA : dmgB, concIsA ? fDmgA : fDmgB,
+      concIsA ? asA : asB, concIsA ? wA : wB,
+      concIsA ? multB : multA, concIsA ? startHpB : startHpA,
+      concIsA ? dmgB : dmgA, concIsA ? fDmgB : fDmgA,
+      concIsA ? asB : asA, concIsA ? wB : wA,
     );
     const rC = hpConc.filter(h => h > 0).length;
     const rD = hpDist.filter(h => h > 0).length;
@@ -2119,80 +2088,637 @@ export const focusFireAsymmetricModel: MultiUnitModel = {
   },
 };
 
-// Same as focusFireBatchesModel but without the "both ranged → fall back to focusFireModel" shortcut.
-// Ranged units are treated like melee for space-constraint purposes (each attacks a different target).
-export const focusFireBatchesPureModel: MultiUnitModel = {
-  resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB }) {
-    const dmgA = metricsA.effectiveDamagePerHit;
-    const dmgB = metricsB.effectiveDamagePerHit;
-    const asA = (A.weapons[0]?.speed ?? 0) * (1 + (B.opponentAttackSpeedDebuff ?? 0));
-    const asB = (B.weapons[0]?.speed ?? 0) * (1 + (A.opponentAttackSpeedDebuff ?? 0));
+// ─────────────────────────────────────────────────────────────────────────────
+// KITING FOCUS-FIRE MODELS
+// ─────────────────────────────────────────────────────────────────────────────
 
-    if (!dmgA || !dmgB || dmgA <= 0 || dmgB <= 0 || asA <= 0 || asB <= 0)
-      return aggregatedDPSModel.resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB });
+// Simulates ranged focus fire during the approach phase.
+// Ranged fires `totalShots` shots of `dmgPerShot` at melee units sequentially (focus fire).
+// Returns: how many melee survive and the HP of the last-targeted unit (partial damage).
+function computeApproachFocusFirePhase(
+  nMelee: number,
+  meleeHpPerUnit: number,
+  totalShots: number,
+  dmgPerShot: number,
+): { survivingMelee: number; lastTargetHp: number } {
+  if (dmgPerShot <= 0 || totalShots <= 0 || meleeHpPerUnit <= 0) {
+    return { survivingMelee: nMelee, lastTargetHp: meleeHpPerUnit };
+  }
+  const totalDamage = totalShots * dmgPerShot;
+  const killed = Math.min(nMelee, Math.floor(totalDamage / meleeHpPerUnit));
+  if (killed >= nMelee) return { survivingMelee: 0, lastTargetHp: 0 };
+  const lastTargetHp = meleeHpPerUnit - (totalDamage - killed * meleeHpPerUnit);
+  return { survivingMelee: nMelee - killed, lastTargetHp };
+}
 
-    const fDmgA = metricsA.firstHitDamage ?? dmgA;
-    const fDmgB = metricsB.firstHitDamage ?? dmgB;
-    const wA = A.weapons[0]?.durations?.windup ?? 0;
-    const wB = B.weapons[0]?.durations?.windup ?? 0;
-    const startHpA = A.hitpoints * (A.hpStartFraction ?? 1);
-    const startHpB = B.hitpoints * (B.hpStartFraction ?? 1);
+// Asymmetric focus fire accepting pre-built HP arrays (for mixed-HP approach survivors).
+// Ranged (conc) concentrates fire on one melee target at a time; melee (dist) distributes.
+// Identical to simulateAsymmetricFF but takes HP arrays instead of (n, startHp) pairs.
+function simulateAsymmetricFFMixed(
+  hpConcArr: number[],
+  dmgConc: number, fDmgConc: number, asConc: number, wConc: number,
+  hpDistArr: number[],
+  dmgDist: number, fDmgDist: number, asDist: number, wDist: number,
+): { hpConc: number[]; hpDist: number[] } {
+  const nConc = hpConcArr.length;
+  const nDist = hpDistArr.length;
+  const hpConc = [...hpConcArr];
+  const hpDist = [...hpDistArr];
+  const aliveConc: boolean[] = Array(nConc).fill(true);
+  const aliveDist: boolean[] = Array(nDist).fill(true);
+  const distTargets: number[] = Array.from({ length: nDist }, (_, i) => i % nConc);
 
-    const isMeleeA = getMaxRange(A) < 1;
-    const isMeleeB = getMaxRange(B) < 1;
+  let concFocus = 0;
+  let remConc = nConc, remDist = nDist;
+  let tConc = wConc, tDist = wDist;
+  let kConc = 0, kDist = 0;
 
-    // Asymmetric: one ranged (concentrates), one melee (distributes across targets)
-    if (!isMeleeA || !isMeleeB) {
-      const concIsA = !isMeleeA;
-      const { hpConc, hpDist } = simulateAsymmetricFF(
-        concIsA ? multA  : multB,  concIsA ? startHpA : startHpB,
-        concIsA ? dmgA   : dmgB,   concIsA ? fDmgA    : fDmgB,
-        concIsA ? asA    : asB,    concIsA ? wA       : wB,
-        concIsA ? multB  : multA,  concIsA ? startHpB : startHpA,
-        concIsA ? dmgB   : dmgA,   concIsA ? fDmgB    : fDmgA,
-        concIsA ? asB    : asA,    concIsA ? wB       : wA,
-      );
-      const rC = hpConc.filter(h => h > 0).length;
-      const rD = hpDist.filter(h => h > 0).length;
-      const tC = hpConc.reduce((s, h) => s + Math.max(0, h), 0);
-      const tD = hpDist.reduce((s, h) => s + Math.max(0, h), 0);
-      return buildBatchResult(
-        concIsA ? rC : rD, concIsA ? rD : rC,
-        concIsA ? tC : tD, concIsA ? tD : tC,
-        multA, multB, totalCostA, totalCostB,
-      );
+  function nextAliveConc(fromIdx: number): number {
+    for (let c = 1; c <= nConc; c++) {
+      const idx = (fromIdx + c) % nConc;
+      if (aliveConc[idx]) return idx;
     }
+    return -1;
+  }
 
-    // Both melee (or both ranged treated as melee): phase-based symmetric batch model
-    let hpA: number[] = Array(multA).fill(startHpA);
-    let hpB: number[] = Array(multB).fill(startHpB);
-    const MAX_PHASES = (multA + multB) * 3 + 50;
+  while (concFocus < nDist && !aliveDist[concFocus]) concFocus++;
 
-    for (let phase = 0; phase < MAX_PHASES; phase++) {
-      if (!hpA.length || !hpB.length) break;
-      const cFA = phase === 0 ? fDmgA : dmgA;
-      const cFB = phase === 0 ? fDmgB : dmgB;
-      const batches = createBatchesFF(hpA, hpB);
-      const T = Math.min(...batches.map(b =>
-        batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, wA, wB)
-      ));
-      if (!isFinite(T)) break;
-      const nHA: number[] = [], nHB: number[] = [];
-      for (const b of batches) {
-        const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, wA, wB);
-        nHA.push(...r.hpA); nHB.push(...r.hpB);
+  const MAX_ITER = (nConc + nDist) * 300 + 100;
+  for (let iter = 0; iter < MAX_ITER; iter++) {
+    if (concFocus >= nDist || remConc <= 0) break;
+
+    const fireConc = tConc <= tDist;
+    const fireDist = tDist <= tConc;
+
+    if (fireConc) {
+      hpDist[concFocus] -= remConc * (kConc === 0 ? fDmgConc : dmgConc);
+      kConc++; tConc = wConc + kConc * asConc;
+    }
+    if (fireDist) {
+      const dmg = kDist === 0 ? fDmgDist : dmgDist;
+      for (let i = 0; i < nDist; i++) {
+        if (!aliveDist[i]) continue;
+        const t = distTargets[i];
+        if (t >= 0 && aliveConc[t]) hpConc[t] -= dmg;
       }
-      hpA = nHA.filter(h => h > 0);
-      hpB = nHB.filter(h => h > 0);
+      kDist++; tDist = wDist + kDist * asDist;
     }
 
-    return buildBatchResult(
-      hpA.length, hpB.length,
-      hpA.reduce((s, h) => s + h, 0), hpB.reduce((s, h) => s + h, 0),
-      multA, multB, totalCostA, totalCostB,
+    if (aliveDist[concFocus] && hpDist[concFocus] <= 0) {
+      aliveDist[concFocus] = false; remDist--;
+      concFocus++;
+      while (concFocus < nDist && !aliveDist[concFocus]) concFocus++;
+    }
+    for (let i = 0; i < nConc; i++) {
+      if (aliveConc[i] && hpConc[i] <= 0) {
+        aliveConc[i] = false; remConc--;
+        const next = nextAliveConc(i);
+        for (let j = 0; j < nDist; j++) {
+          if (distTargets[j] === i) distTargets[j] = next;
+        }
+      }
+    }
+  }
+  return { hpConc, hpDist };
+}
+
+// 1v1 kiting with focus-fire approach phase.
+// Approach: ranged fires free shots (focus fire). If melee dies → ranged wins immediately.
+// Contact: focusFireAsymmetricModel (symmetric cases fall back to focusFireModel).
+export function computeVersusKitingFocusFire(
+  a: AoE4Unit | UnifiedVariation,
+  b: AoE4Unit | UnifiedVariation,
+  activeAbilitiesA?: string[],
+  activeAbilitiesB?: string[],
+  chargeBonusA: number = 0,
+  chargeBonusB: number = 0,
+  startDistance: number = START_DISTANCE,
+): VersusResult {
+  const A = toCombatEntity(a, activeAbilitiesA);
+  const B = toCombatEntity(b, activeAbilitiesB);
+
+  const isMeleeA = getMaxRange(A) < 1;
+  const isMeleeB = getMaxRange(B) < 1;
+  const costA = totalCost(A);
+  const costB = totalCost(B);
+  const mults = { multA: 1, multB: 1, totalCostA: costA, totalCostB: costB };
+
+  // Symmetric or no distance: no approach phase
+  if (isMeleeA === isMeleeB || startDistance <= 0) {
+    const metricsA = computeMetrics(A, B, chargeBonusA, 1, 1, true);
+    const metricsB = computeMetrics(B, A, chargeBonusB, 1, 1, true);
+    const model = isMeleeA === isMeleeB ? focusFireModel : focusFireAsymmetricModel;
+    return { attacker: metricsA, defender: metricsB, ...model.resolve(A, B, metricsA, metricsB, mults) };
+  }
+
+  const meleeIsA = isMeleeA;
+  const meleeEnt = meleeIsA ? A : B;
+  const rangedEnt = meleeIsA ? B : A;
+  const chargeBonusRanged = meleeIsA ? chargeBonusB : chargeBonusA;
+
+  if (canPermanentlyKite(rangedEnt, meleeEnt)) {
+    const metricsA = computeMetrics(A, B, chargeBonusA, 1, 1, true);
+    const metricsB = computeMetrics(B, A, chargeBonusB, 1, 1, true);
+    const winner: "attacker" | "defender" = meleeIsA ? "defender" : "attacker";
+    return { attacker: metricsA, defender: metricsB, winner, winnerHpRemaining: rangedEnt.hitpoints * (rangedEnt.hpStartFraction ?? 1) };
+  }
+
+  // Full kiting model: approach + kiting cycles (mirrors applyKitingToMetrics)
+  const prelimMetrics = computeMetrics(rangedEnt, meleeEnt, chargeBonusRanged, 1, 1, false);
+  const rangedRange = getMaxRange(rangedEnt);
+  const asRanged = (rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
+  const hasMeleeCharge = meleeEnt.activeAbilities?.includes('charge-attack') ?? false;
+  const effectiveMeleeSpeed = hasMeleeCharge ? meleeEnt.moveSpeed * 1.2 : meleeEnt.moveSpeed;
+  const d_approach = Math.max(0, startDistance - rangedRange);
+  const t_approach = effectiveMeleeSpeed > 0 ? d_approach / effectiveMeleeSpeed : 0;
+  const freeHits = asRanged > 0 ? Math.floor(t_approach / asRanged) : 0;
+  const d_kite_start = Math.min(startDistance, rangedRange);
+  const retreatTime = getRetreatTime(rangedEnt);
+  const absDelta = Math.abs(rangedEnt.moveSpeed * retreatTime - effectiveMeleeSpeed * asRanged);
+  const n_kite = asRanged > 0 && absDelta > 0 ? Math.ceil(d_kite_start / absDelta) : 0;
+  const t_kite = n_kite * asRanged;
+  const contactTimeFull = t_approach + t_kite;
+  const preContactShots = freeHits + n_kite;
+
+  const meleeHpFull = meleeEnt.hitpoints;
+  const meleeHpStart = meleeHpFull * (meleeEnt.hpStartFraction ?? 1);
+
+  let contactMeleeEnt = meleeEnt;
+  let effectiveShots = 0;
+
+  if (preContactShots > 0 && prelimMetrics.effectiveDamagePerHit !== null && prelimMetrics.effectiveDamagePerHit > 0) {
+    const { survivingMelee, lastTargetHp } = computeApproachFocusFirePhase(
+      1, meleeHpStart, preContactShots, prelimMetrics.effectiveDamagePerHit,
     );
-  },
-};
+    if (survivingMelee === 0) {
+      const kitingNote = `approach ${round(t_approach, 1)}s (+${freeHits} free hits) · kiting ${round(t_kite, 1)}s (+${n_kite} hits) · contact t=${round(contactTimeFull, 1)}s`;
+      let metricsA = computeMetrics(A, B, chargeBonusA, 1, 1, true);
+      let metricsB = computeMetrics(B, A, chargeBonusB, 1, 1, true);
+      if (meleeIsA) {
+        metricsA = { ...metricsA, formula: metricsA.formula + ` [Dies before contact]` };
+        metricsB = { ...metricsB, formula: metricsB.formula + ` [Kiting: ${kitingNote}]` };
+      } else {
+        metricsA = { ...metricsA, formula: metricsA.formula + ` [Kiting: ${kitingNote}]` };
+        metricsB = { ...metricsB, formula: metricsB.formula + ` [Dies before contact]` };
+      }
+      const winner: "attacker" | "defender" = meleeIsA ? "defender" : "attacker";
+      return { attacker: metricsA, defender: metricsB, winner, winnerHpRemaining: rangedEnt.hitpoints * (rangedEnt.hpStartFraction ?? 1) };
+    }
+    contactMeleeEnt = { ...meleeEnt, hpStartFraction: Math.max(1 / meleeHpFull, lastTargetHp / meleeHpFull) };
+    effectiveShots = preContactShots;
+  }
+
+  const contactA = meleeIsA ? contactMeleeEnt : rangedEnt;
+  const contactB = meleeIsA ? rangedEnt : contactMeleeEnt;
+  let metricsA = computeMetrics(contactA, contactB, chargeBonusA, 1, 1, true);
+  let metricsB = computeMetrics(contactB, contactA, chargeBonusB, 1, 1, true);
+  if (effectiveShots > 0) {
+    const kitingNote = `approach ${round(t_approach, 1)}s (+${freeHits} free hits) · kiting ${round(t_kite, 1)}s (+${n_kite} hits) · contact t=${round(contactTimeFull, 1)}s`;
+    if (meleeIsA) {
+      metricsA = { ...metricsA, formula: metricsA.formula + ` [contact at t=${round(contactTimeFull, 1)}s]` };
+      metricsB = { ...metricsB, approachShots: effectiveShots, formula: metricsB.formula + ` [Kiting: ${kitingNote}]` };
+    } else {
+      metricsA = { ...metricsA, approachShots: effectiveShots, formula: metricsA.formula + ` [Kiting: ${kitingNote}]` };
+      metricsB = { ...metricsB, formula: metricsB.formula + ` [contact at t=${round(contactTimeFull, 1)}s]` };
+    }
+  }
+
+  return { attacker: metricsA, defender: metricsB, ...focusFireAsymmetricModel.resolve(contactA, contactB, metricsA, metricsB, mults) };
+}
+
+// Equal-cost kiting with focus-fire approach phase.
+// Approach: ranged focus-fires melee units sequentially; killed units are removed.
+// The last-targeted survivor enters contact first (partial HP), others remain at full HP.
+// Contact: asymmetric focus fire (simulateAsymmetricFFMixed) with mixed-HP melee array.
+export function computeVersusAtEqualCostKitingFocusFire(
+  a: AoE4Unit | UnifiedVariation,
+  b: AoE4Unit | UnifiedVariation,
+  activeAbilitiesA?: string[],
+  activeAbilitiesB?: string[],
+  chargeBonusA: number = 0,
+  chargeBonusB: number = 0,
+  startDistance: number = START_DISTANCE,
+): VersusResult & { multipliers: { multA: number; multB: number; totalCostA: number; totalCostB: number } } {
+  const A = toCombatEntity(a, activeAbilitiesA);
+  const B = toCombatEntity(b, activeAbilitiesB);
+
+  const costA = totalCost(A);
+  const costB = totalCost(B);
+  const multipliers = calculateEqualCostMultipliers(costA, costB);
+
+  const isMeleeA = getMaxRange(A) < 1;
+  const isMeleeB = getMaxRange(B) < 1;
+
+  const metricsA = computeMetrics(A, B, chargeBonusA, multipliers.multA, multipliers.multB);
+  const metricsB = computeMetrics(B, A, chargeBonusB, multipliers.multB, multipliers.multA);
+
+  // Symmetric or no distance: no approach phase
+  if (isMeleeA === isMeleeB || startDistance <= 0) {
+    const model = isMeleeA === isMeleeB ? focusFireModel : focusFireAsymmetricModel;
+    return { attacker: metricsA, defender: metricsB, multipliers, ...model.resolve(A, B, metricsA, metricsB, multipliers) };
+  }
+
+  const meleeIsA = isMeleeA;
+  const meleeEnt = meleeIsA ? A : B;
+  const rangedEnt = meleeIsA ? B : A;
+  const multMelee = meleeIsA ? multipliers.multA : multipliers.multB;
+  const multRanged = meleeIsA ? multipliers.multB : multipliers.multA;
+  const metRanged = meleeIsA ? metricsB : metricsA;
+
+  if (canPermanentlyKite(rangedEnt, meleeEnt)) {
+    const rangedHpStart = rangedEnt.hitpoints * (rangedEnt.hpStartFraction ?? 1);
+    const winner: "attacker" | "defender" = meleeIsA ? "defender" : "attacker";
+    return {
+      attacker: metricsA, defender: metricsB, multipliers, winner,
+      winnerHpRemaining: multRanged * rangedHpStart,
+      winnerUnitsRemaining: multRanged,
+      resourceDifference: multRanged * (meleeIsA ? costB : costA),
+    };
+  }
+
+  // Approach shots
+  const rangedRange = getMaxRange(rangedEnt);
+  const T_free = Math.min(startDistance, rangedRange) / Math.max(0.1, meleeEnt.moveSpeed);
+  const asRanged = (rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
+  const wRanged = rangedEnt.weapons[0]?.durations?.windup ?? 0;
+  const shotsDeadline = T_free - (isArcher(rangedEnt) ? ARCHER_TRAVEL_TIME : 0);
+  const shots = asRanged > 0 && shotsDeadline >= wRanged
+    ? Math.floor((shotsDeadline - wRanged) / asRanged) + 1
+    : 0;
+
+  const meleeHpFull = meleeEnt.hitpoints;
+  const meleeHpStart = meleeHpFull * (meleeEnt.hpStartFraction ?? 1);
+  const rangedHpStart = rangedEnt.hitpoints * (rangedEnt.hpStartFraction ?? 1);
+
+  const dmgPerShot = metRanged.effectiveDamagePerHit;
+  if (shots <= 0 || dmgPerShot === null || dmgPerShot <= 0) {
+    return { attacker: metricsA, defender: metricsB, multipliers, ...focusFireAsymmetricModel.resolve(A, B, metricsA, metricsB, multipliers) };
+  }
+
+  const { survivingMelee, lastTargetHp } = computeApproachFocusFirePhase(
+    multMelee, meleeHpStart, multRanged * shots, dmgPerShot,
+  );
+
+  if (survivingMelee === 0) {
+    const winner: "attacker" | "defender" = meleeIsA ? "defender" : "attacker";
+    return {
+      attacker: metricsA, defender: metricsB, multipliers, winner,
+      winnerHpRemaining: multRanged * rangedHpStart,
+      winnerUnitsRemaining: multRanged,
+      resourceDifference: multRanged * (meleeIsA ? costB : costA),
+    };
+  }
+
+  // Mixed HP array: partial-HP unit first (ranged will continue focus-firing it), then full-HP survivors
+  const meleeHpArr = [lastTargetHp, ...Array(survivingMelee - 1).fill(meleeHpStart)];
+  const rangedHpArr = Array(multRanged).fill(rangedHpStart);
+
+  const concIsA = !meleeIsA; // ranged = conc (concentrates fire)
+  const dmgConc = concIsA ? (metricsA.effectiveDamagePerHit ?? 0) : (metricsB.effectiveDamagePerHit ?? 0);
+  const dmgDist = concIsA ? (metricsB.effectiveDamagePerHit ?? 0) : (metricsA.effectiveDamagePerHit ?? 0);
+  const fDmgConc = concIsA ? (metricsA.firstHitDamage ?? dmgConc) : (metricsB.firstHitDamage ?? dmgConc);
+  const fDmgDist = concIsA ? (metricsB.firstHitDamage ?? dmgDist) : (metricsA.firstHitDamage ?? dmgDist);
+  const asConc = concIsA
+    ? (A.weapons[0]?.speed ?? 0) * (1 + (B.opponentAttackSpeedDebuff ?? 0))
+    : (B.weapons[0]?.speed ?? 0) * (1 + (A.opponentAttackSpeedDebuff ?? 0));
+  const asDist = concIsA
+    ? (B.weapons[0]?.speed ?? 0) * (1 + (A.opponentAttackSpeedDebuff ?? 0))
+    : (A.weapons[0]?.speed ?? 0) * (1 + (B.opponentAttackSpeedDebuff ?? 0));
+  const wConc = concIsA ? (A.weapons[0]?.durations?.windup ?? 0) : (B.weapons[0]?.durations?.windup ?? 0);
+  const wDist = concIsA ? (B.weapons[0]?.durations?.windup ?? 0) : (A.weapons[0]?.durations?.windup ?? 0);
+
+  const { hpConc, hpDist } = simulateAsymmetricFFMixed(
+    concIsA ? rangedHpArr : meleeHpArr, dmgConc, fDmgConc, asConc, wConc,
+    concIsA ? meleeHpArr : rangedHpArr, dmgDist, fDmgDist, asDist, wDist,
+  );
+
+  const rC = hpConc.filter(h => h > 0).length;
+  const rD = hpDist.filter(h => h > 0).length;
+  const tC = hpConc.reduce((s, h) => s + Math.max(0, h), 0);
+  const tD = hpDist.reduce((s, h) => s + Math.max(0, h), 0);
+  const rA = concIsA ? rC : rD;
+  const rB = concIsA ? rD : rC;
+  const tA = concIsA ? tC : tD;
+  const tB = concIsA ? tD : tC;
+
+  // Per-unit cost unchanged; adjust counts for resource calculation
+  const adjMultA = meleeIsA ? survivingMelee : multRanged;
+  const adjMultB = meleeIsA ? multRanged : survivingMelee;
+  const resolved = buildBatchResult(rA, rB, tA, tB, adjMultA, adjMultB, adjMultA * costA, adjMultB * costB);
+
+  return { attacker: metricsA, defender: metricsB, multipliers, ...resolved };
+}
+
+// 1v1 kiting + Attack Move: approach phase (ranged focus-fires melee), contact via focusFireAsymmetricModel (same as focusFireKiting — 1v1 MC adds no variance).
+export function computeVersusKitingBatchesMC(
+  a: AoE4Unit | UnifiedVariation,
+  b: AoE4Unit | UnifiedVariation,
+  activeAbilitiesA?: string[],
+  activeAbilitiesB?: string[],
+  chargeBonusA: number = 0,
+  chargeBonusB: number = 0,
+  startDistance: number = START_DISTANCE,
+): VersusResult {
+  const A = toCombatEntity(a, activeAbilitiesA);
+  const B = toCombatEntity(b, activeAbilitiesB);
+
+  const isMeleeA = getMaxRange(A) < 1;
+  const isMeleeB = getMaxRange(B) < 1;
+  const costA = totalCost(A);
+  const costB = totalCost(B);
+  const mults = { multA: 1, multB: 1, totalCostA: costA, totalCostB: costB };
+
+  if (isMeleeA === isMeleeB || startDistance <= 0) {
+    const metricsA = computeMetrics(A, B, chargeBonusA, 1, 1, true);
+    const metricsB = computeMetrics(B, A, chargeBonusB, 1, 1, true);
+    const model = isMeleeA === isMeleeB ? focusFireModel : focusFireAsymmetricModel;
+    return { attacker: metricsA, defender: metricsB, ...model.resolve(A, B, metricsA, metricsB, mults) };
+  }
+
+  const meleeIsA = isMeleeA;
+  const meleeEnt = meleeIsA ? A : B;
+  const rangedEnt = meleeIsA ? B : A;
+  const chargeBonusRanged = meleeIsA ? chargeBonusB : chargeBonusA;
+
+  if (canPermanentlyKite(rangedEnt, meleeEnt)) {
+    const metricsA = computeMetrics(A, B, chargeBonusA, 1, 1, true);
+    const metricsB = computeMetrics(B, A, chargeBonusB, 1, 1, true);
+    const winner: "attacker" | "defender" = meleeIsA ? "defender" : "attacker";
+    return { attacker: metricsA, defender: metricsB, winner, winnerHpRemaining: rangedEnt.hitpoints * (rangedEnt.hpStartFraction ?? 1) };
+  }
+
+  // Full kiting model: approach + kiting cycles (mirrors applyKitingToMetrics)
+  const prelimMetrics = computeMetrics(rangedEnt, meleeEnt, chargeBonusRanged, 1, 1, false);
+  const rangedRange = getMaxRange(rangedEnt);
+  const asRanged = (rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
+  const hasMeleeCharge = meleeEnt.activeAbilities?.includes('charge-attack') ?? false;
+  const effectiveMeleeSpeed = hasMeleeCharge ? meleeEnt.moveSpeed * 1.2 : meleeEnt.moveSpeed;
+  const d_approach = Math.max(0, startDistance - rangedRange);
+  const t_approach = effectiveMeleeSpeed > 0 ? d_approach / effectiveMeleeSpeed : 0;
+  const freeHits = asRanged > 0 ? Math.floor(t_approach / asRanged) : 0;
+  const d_kite_start = Math.min(startDistance, rangedRange);
+  const retreatTime = getRetreatTime(rangedEnt);
+  const absDelta = Math.abs(rangedEnt.moveSpeed * retreatTime - effectiveMeleeSpeed * asRanged);
+  const n_kite = asRanged > 0 && absDelta > 0 ? Math.ceil(d_kite_start / absDelta) : 0;
+  const t_kite = n_kite * asRanged;
+  const contactTimeFull = t_approach + t_kite;
+  const preContactShots = freeHits + n_kite;
+
+  const meleeHpFull = meleeEnt.hitpoints;
+  const meleeHpStart = meleeHpFull * (meleeEnt.hpStartFraction ?? 1);
+
+  let contactMeleeEnt = meleeEnt;
+  let effectiveShots = 0;
+
+  if (preContactShots > 0 && prelimMetrics.effectiveDamagePerHit !== null && prelimMetrics.effectiveDamagePerHit > 0) {
+    const { survivingMelee, lastTargetHp } = computeApproachFocusFirePhase(
+      1, meleeHpStart, preContactShots, prelimMetrics.effectiveDamagePerHit,
+    );
+    if (survivingMelee === 0) {
+      const kitingNote = `approach ${round(t_approach, 1)}s (+${freeHits} free hits) · kiting ${round(t_kite, 1)}s (+${n_kite} hits) · contact t=${round(contactTimeFull, 1)}s`;
+      let metricsA = computeMetrics(A, B, chargeBonusA, 1, 1, true);
+      let metricsB = computeMetrics(B, A, chargeBonusB, 1, 1, true);
+      if (meleeIsA) {
+        metricsA = { ...metricsA, formula: metricsA.formula + ` [Dies before contact]` };
+        metricsB = { ...metricsB, formula: metricsB.formula + ` [Kiting: ${kitingNote}]` };
+      } else {
+        metricsA = { ...metricsA, formula: metricsA.formula + ` [Kiting: ${kitingNote}]` };
+        metricsB = { ...metricsB, formula: metricsB.formula + ` [Dies before contact]` };
+      }
+      const winner: "attacker" | "defender" = meleeIsA ? "defender" : "attacker";
+      return { attacker: metricsA, defender: metricsB, winner, winnerHpRemaining: rangedEnt.hitpoints * (rangedEnt.hpStartFraction ?? 1) };
+    }
+    contactMeleeEnt = { ...meleeEnt, hpStartFraction: Math.max(1 / meleeHpFull, lastTargetHp / meleeHpFull) };
+    effectiveShots = preContactShots;
+  }
+
+  const contactA = meleeIsA ? contactMeleeEnt : rangedEnt;
+  const contactB = meleeIsA ? rangedEnt : contactMeleeEnt;
+  let metricsA = computeMetrics(contactA, contactB, chargeBonusA, 1, 1, true);
+  let metricsB = computeMetrics(contactB, contactA, chargeBonusB, 1, 1, true);
+  if (effectiveShots > 0) {
+    const kitingNote = `approach ${round(t_approach, 1)}s (+${freeHits} free hits) · kiting ${round(t_kite, 1)}s (+${n_kite} hits) · contact t=${round(contactTimeFull, 1)}s`;
+    if (meleeIsA) {
+      metricsA = { ...metricsA, formula: metricsA.formula + ` [contact at t=${round(contactTimeFull, 1)}s]` };
+      metricsB = { ...metricsB, approachShots: effectiveShots, formula: metricsB.formula + ` [Kiting: ${kitingNote}]` };
+    } else {
+      metricsA = { ...metricsA, approachShots: effectiveShots, formula: metricsA.formula + ` [Kiting: ${kitingNote}]` };
+      metricsB = { ...metricsB, formula: metricsB.formula + ` [contact at t=${round(contactTimeFull, 1)}s]` };
+    }
+  }
+
+  return { attacker: metricsA, defender: metricsB, ...focusFireAsymmetricModel.resolve(contactA, contactB, metricsA, metricsB, mults) };
+}
+
+// Equal-cost kiting + Attack Move: approach phase (ranged focus-fires melee), contact via Batches MC
+// with mixed-HP melee array (last-targeted unit enters at partial HP).
+export function computeVersusAtEqualCostKitingBatchesMC(
+  a: AoE4Unit | UnifiedVariation,
+  b: AoE4Unit | UnifiedVariation,
+  activeAbilitiesA?: string[],
+  activeAbilitiesB?: string[],
+  chargeBonusA: number = 0,
+  chargeBonusB: number = 0,
+  startDistance: number = START_DISTANCE,
+): VersusResult & { multipliers: { multA: number; multB: number; totalCostA: number; totalCostB: number } } {
+  const A = toCombatEntity(a, activeAbilitiesA);
+  const B = toCombatEntity(b, activeAbilitiesB);
+
+  const costA = totalCost(A);
+  const costB = totalCost(B);
+  const multipliers = calculateEqualCostMultipliers(costA, costB);
+
+  const isMeleeA = getMaxRange(A) < 1;
+  const isMeleeB = getMaxRange(B) < 1;
+
+  const metricsA = computeMetrics(A, B, chargeBonusA, multipliers.multA, multipliers.multB);
+  const metricsB = computeMetrics(B, A, chargeBonusB, multipliers.multB, multipliers.multA);
+
+  if (isMeleeA === isMeleeB || startDistance <= 0) {
+    const model = isMeleeA === isMeleeB ? focusFireBatchesMCModel : focusFireBatchesMCAsymmetricModel;
+    return { attacker: metricsA, defender: metricsB, multipliers, ...model.resolve(A, B, metricsA, metricsB, multipliers) };
+  }
+
+  const meleeIsA = isMeleeA;
+  const meleeEnt = meleeIsA ? A : B;
+  const rangedEnt = meleeIsA ? B : A;
+  const multMelee = meleeIsA ? multipliers.multA : multipliers.multB;
+  const multRanged = meleeIsA ? multipliers.multB : multipliers.multA;
+  const metRanged = meleeIsA ? metricsB : metricsA;
+
+  if (canPermanentlyKite(rangedEnt, meleeEnt)) {
+    const rangedHpStart = rangedEnt.hitpoints * (rangedEnt.hpStartFraction ?? 1);
+    const winner: "attacker" | "defender" = meleeIsA ? "defender" : "attacker";
+    return {
+      attacker: metricsA, defender: metricsB, multipliers, winner,
+      winnerHpRemaining: multRanged * rangedHpStart,
+      winnerUnitsRemaining: multRanged,
+      resourceDifference: multRanged * (meleeIsA ? costB : costA),
+    };
+  }
+
+  const rangedRange = getMaxRange(rangedEnt);
+  const T_free = Math.min(startDistance, rangedRange) / Math.max(0.1, meleeEnt.moveSpeed);
+  const asRangedApproach = (rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
+  const wRangedApproach = rangedEnt.weapons[0]?.durations?.windup ?? 0;
+  const shotsDeadline = T_free - (isArcher(rangedEnt) ? ARCHER_TRAVEL_TIME : 0);
+  const shots = asRangedApproach > 0 && shotsDeadline >= wRangedApproach
+    ? Math.floor((shotsDeadline - wRangedApproach) / asRangedApproach) + 1
+    : 0;
+
+  const meleeHpFull = meleeEnt.hitpoints;
+  const meleeHpStart = meleeHpFull * (meleeEnt.hpStartFraction ?? 1);
+  const rangedHpStart = rangedEnt.hitpoints * (rangedEnt.hpStartFraction ?? 1);
+
+  const dmgPerShot = metRanged.effectiveDamagePerHit;
+  if (shots <= 0 || dmgPerShot === null || dmgPerShot <= 0) {
+    return { attacker: metricsA, defender: metricsB, multipliers, ...focusFireBatchesMCAsymmetricModel.resolve(A, B, metricsA, metricsB, multipliers) };
+  }
+
+  const { survivingMelee, lastTargetHp } = computeApproachFocusFirePhase(
+    multMelee, meleeHpStart, multRanged * shots, dmgPerShot,
+  );
+
+  if (survivingMelee === 0) {
+    const winner: "attacker" | "defender" = meleeIsA ? "defender" : "attacker";
+    return {
+      attacker: metricsA, defender: metricsB, multipliers, winner,
+      winnerHpRemaining: multRanged * rangedHpStart,
+      winnerUnitsRemaining: multRanged,
+      resourceDifference: multRanged * (meleeIsA ? costB : costA),
+    };
+  }
+
+  // Mixed HP: partial-HP unit first (ranged continues focus-firing it), then full-HP survivors
+  const meleeHpArr = [lastTargetHp, ...Array(survivingMelee - 1).fill(meleeHpStart)];
+  const rangedHpArr = Array(multRanged).fill(rangedHpStart);
+
+  const adjMultA = meleeIsA ? survivingMelee : multRanged;
+  const adjMultB = meleeIsA ? multRanged : survivingMelee;
+
+  // Contact phase: MC batch loop with mixed-HP melee array
+  const dmgA = metricsA.effectiveDamagePerHit;
+  const dmgB = metricsB.effectiveDamagePerHit;
+  const asA = (A.weapons[0]?.speed ?? 0) * (1 + (B.opponentAttackSpeedDebuff ?? 0));
+  const asB = (B.weapons[0]?.speed ?? 0) * (1 + (A.opponentAttackSpeedDebuff ?? 0));
+
+  if (!dmgA || !dmgB || dmgA <= 0 || dmgB <= 0 || asA <= 0 || asB <= 0) {
+    const resolved = buildBatchResult(0, 0, 0, 0, adjMultA, adjMultB, adjMultA * costA, adjMultB * costB);
+    return { attacker: metricsA, defender: metricsB, multipliers, ...resolved };
+  }
+
+  const fDmgA = metricsA.firstHitDamage ?? dmgA;
+  const fDmgB = metricsB.firstHitDamage ?? dmgB;
+
+  type ActiveBatch = { hpA: number[]; hpB: number[]; firstShotUsed: boolean };
+  type IterResult = ReturnType<typeof buildBatchResult>;
+  const results: IterResult[] = [];
+  const durations: number[] = [];
+  const MAX_STEPS = (adjMultA + adjMultB) * 2 + 10;
+  seedRng(MC_SEED);
+
+  for (let iter = 0; iter < MC_ITERATIONS; iter++) {
+    let timeElapsed = 0;
+    // Preserve meleeHpArr order (partial-HP unit first) — archer continues targeting same unit as during approach
+    const active: ActiveBatch[] = [{
+      hpA: meleeIsA ? meleeHpArr.slice() : rangedHpArr.slice(),
+      hpB: meleeIsA ? rangedHpArr.slice() : meleeHpArr.slice(),
+      firstShotUsed: false,
+    }];
+
+    const pendingA: number[] = [];
+    const pendingB: number[] = [];
+
+    for (let step = 0; step < MAX_STEPS && active.length > 0; step++) {
+      const T = Math.min(...active.map(b => {
+        const cFA = b.firstShotUsed ? dmgA : fDmgA;
+        const cFB = b.firstShotUsed ? dmgB : fDmgB;
+        return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, 0, 0);
+      }));
+      if (!isFinite(T)) break;
+      timeElapsed += T;
+
+      const nextActive: ActiveBatch[] = [];
+      for (const b of active) {
+        const cFA = b.firstShotUsed ? dmgA : fDmgA;
+        const cFB = b.firstShotUsed ? dmgB : fDmgB;
+        const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, 0, 0);
+        const nA = r.hpA.filter(h => h > 0);
+        const nB = r.hpB.filter(h => h > 0);
+        if (nA.length > 0 && nB.length > 0) {
+          nextActive.push({ hpA: nA, hpB: nB, firstShotUsed: true });
+        } else {
+          for (const hp of nA) {
+            if (nextActive.length > 0) nextActive[Math.floor(rng() * nextActive.length)].hpA.push(hp);
+            else pendingA.push(hp);
+          }
+          for (const hp of nB) {
+            if (nextActive.length > 0) nextActive[Math.floor(rng() * nextActive.length)].hpB.push(hp);
+            else pendingB.push(hp);
+          }
+        }
+      }
+
+      if (nextActive.length === 0 && pendingA.length > 0 && pendingB.length > 0) {
+        const newBatches = createBatchesGrouped(pendingA, pendingB);
+        pendingA.length = 0; pendingB.length = 0;
+        for (const b of newBatches) {
+          if (b.hpA.length > 0 && b.hpB.length > 0)
+            nextActive.push({ hpA: b.hpA.slice(), hpB: b.hpB.slice(), firstShotUsed: false });
+          else { pendingA.push(...b.hpA); pendingB.push(...b.hpB); }
+        }
+      }
+      for (const hp of pendingA.splice(0)) {
+        if (nextActive.length > 0) nextActive[Math.floor(rng() * nextActive.length)].hpA.push(hp);
+        else pendingA.push(hp);
+      }
+      for (const hp of pendingB.splice(0)) {
+        if (nextActive.length > 0) nextActive[Math.floor(rng() * nextActive.length)].hpB.push(hp);
+        else pendingB.push(hp);
+      }
+      active.length = 0;
+      active.push(...nextActive);
+    }
+
+    const finalA = [...pendingA, ...active.flatMap(b => b.hpA)].filter(h => h > 0);
+    const finalB = [...pendingB, ...active.flatMap(b => b.hpB)].filter(h => h > 0);
+    results.push(buildBatchResult(
+      finalA.length, finalB.length,
+      finalA.reduce((s, h) => s + h, 0), finalB.reduce((s, h) => s + h, 0),
+      adjMultA, adjMultB, adjMultA * costA, adjMultB * costB,
+    ));
+    if (timeElapsed > 0) durations.push(timeElapsed);
+  }
+
+  const nWinA = results.filter(r => r.winner === 'attacker').length;
+  const nWinB = results.filter(r => r.winner === 'defender').length;
+  const nDraw = results.filter(r => r.winner === 'draw').length;
+  const n = results.length;
+  const mcDistribution: MCDistribution = {
+    winRateA: nWinA / n,
+    winRateB: nWinB / n,
+    drawRate: nDraw / n,
+    iterations: n,
+    durationMin: durations.length ? Math.min(...durations) : undefined,
+    durationMax: durations.length ? Math.max(...durations) : undefined,
+    whenAWins: computeMCWinnerStats(results, 'attacker'),
+    whenBWins: computeMCWinnerStats(results, 'defender'),
+  };
+
+  const modeWinner = nWinA >= nWinB && nWinA >= nDraw ? 'attacker'
+    : nWinB > nWinA && nWinB >= nDraw ? 'defender'
+      : 'draw';
+  const modeResults = results.filter(r => r.winner === modeWinner);
+  modeResults.sort((a, b) =>
+    (b.winnerUnitsRemaining ?? 0) - (a.winnerUnitsRemaining ?? 0) ||
+    (b.winnerHpRemaining ?? 0) - (a.winnerHpRemaining ?? 0)
+  );
+  const median = modeResults[Math.floor(modeResults.length / 2)];
+
+  return { attacker: metricsA, defender: metricsB, multipliers, ...median, mcDistribution };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Find the minimum number of loser units needed to beat 1 winner unit, using focus-fire simulation.
 // Uses focusFireAsymmetricModel for ranged-vs-melee fights, focusFireModel otherwise.

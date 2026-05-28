@@ -3,7 +3,7 @@ import { aoe4Units, AoE4Unit, getAvailableAges, getPrimaryWeapon, getTotalCost }
 import type { UnifiedVariation } from "@/data/unified-units";
 import { CIVILIZATIONS } from "@/data/civilizations";
 import { UnitCard } from "@/components/UnitCard";
-import { computeVersus, computeVersusAtEqualCost, getVersusDebuffMultiplier, aggregatedDPSModel, focusFireModel, focusFireBatchesModel, focusFireBatchesPureModel, focusFireBatchesMCModel, focusFireBatchesMCAsymmetricModel, focusFireAsymmetricModel, calculateEqualCostMultipliers, computeLoserUnitsToWin } from "@/lib/combat";
+import { computeVersus, computeVersusAtEqualCost, computeVersusKitingFocusFire, computeVersusAtEqualCostKitingFocusFire, computeVersusKitingBatchesMC, computeVersusAtEqualCostKitingBatchesMC, getVersusDebuffMultiplier, aggregatedDPSModel, focusFireModel, focusFireBatchesMCModel, focusFireBatchesMCAsymmetricModel, focusFireAsymmetricModel, computeLoserUnitsToWin } from "@/lib/combat";
 import type { MultiUnitModel } from "@/lib/combat";
 import { AgeSelector } from "@/components/AgeSelector";
 import { TechnologySelector } from "@/components/TechnologySelector";
@@ -273,9 +273,9 @@ const getChargeBonusBurst = (unitData: AoE4Unit | UnifiedVariation | undefined, 
 const Sandbox = () => {
   const [isVersus, setIsVersus] = useState<boolean>(false);
   const [atEqualCost, setAtEqualCost] = useState<boolean>(false);
-  const [multiUnitModelKey, setMultiUnitModelKey] = useState<'aggregated' | 'focusFire' | 'mixed' | 'focusFireBatches' | 'focusFireBatchesPure' | 'focusFireBatchesMC'>('focusFireBatches');
+  const [multiUnitModelKey, setMultiUnitModelKey] = useState<'aggregated' | 'focusFire' | 'focusFireBatchesMC'>('focusFire');
   const [allowKiting, setAllowKiting] = useState<boolean>(false);
-  const [startDistancePreset, setStartDistancePreset] = useState<string>("medium");
+  const [startDistancePreset, setStartDistancePreset] = useState<string>("max");
   const [customDistance, setCustomDistance] = useState<number>(5);
 
   const civ1 = useUnitSlot();
@@ -342,11 +342,8 @@ const Sandbox = () => {
   } = civ2;
 
   const maxRangeDistance = Math.max(modifiedStats1.maxRange || 0, modifiedStats2.maxRange || 0);
-  const startDistance = startDistancePreset === "melee" ? 0
-    : startDistancePreset === "medium" ? 5
-      : startDistancePreset === "long" ? 9
-        : startDistancePreset === "max" ? maxRangeDistance
-          : Math.max(0, Math.min(30, customDistance));
+  const startDistance = startDistancePreset === "max" ? maxRangeDistance
+    : Math.max(0, Math.min(30, customDistance));
 
   // Filter bonusDamage entries by weapon type — prevents ranged bonuses (e.g. Howdahs) from
   // applying to melee weapons (e.g. Tusks) and vice-versa.
@@ -1054,45 +1051,16 @@ const Sandbox = () => {
             </div>
             {isVersus && (
               <div className="inline-flex items-center gap-3">
-                {(() => {
-                  const effectiveCost1 = modifiedVariation1 ? getTotalCost(modifiedVariation1) : (stats1?.cost ?? 0);
-                  const effectiveCost2 = modifiedVariation2 ? getTotalCost(modifiedVariation2) : (stats2?.cost ?? 0);
-                  const sameCost = unit1 && unit2 && effectiveCost1 > 0 && effectiveCost2 > 0 && effectiveCost1 === effectiveCost2;
-                  const zeroCost = (!!unit1 && effectiveCost1 === 0) || (!!unit2 && effectiveCost2 === 0);
-                  const isEqualCostDisabled = !!sameCost || zeroCost;
-                  const disabledTitle = sameCost ? 'Units have the same cost' : zeroCost ? 'A unit has no cost' : undefined;
-                  return (
-                    <div
-                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card ${isEqualCostDisabled ? 'opacity-50' : ''}`}
-                      title={disabledTitle}
-                    >
-                      <input
-                        type="checkbox"
-                        id="atEqualCost"
-                        checked={atEqualCost}
-                        onChange={(e) => { if (!isEqualCostDisabled) { setAtEqualCost(e.target.checked); if (e.target.checked) setAllowKiting(false); } }}
-                        disabled={isEqualCostDisabled}
-                        className="w-4 h-4 rounded border-border disabled:cursor-not-allowed"
-                      />
-                      <label htmlFor="atEqualCost" className={`text-sm font-medium ${isEqualCostDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-                        At Equal Cost
-                      </label>
-                    </div>
-                  );
-                })()}
-                {atEqualCost && (
+                {(atEqualCost || allowKiting) && (
                   <div className="inline-flex items-center rounded-md border border-border overflow-hidden bg-card">
                     <span className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-r border-border">
                       Model
                     </span>
                     {([
                       { key: 'aggregated', label: 'Aggregated DPS', title: 'All units deal and take damage simultaneously as one pool', devOnly: true },
-                      { key: 'focusFire', label: 'Focus Fire', title: 'Each side concentrates fire on one target at a time. Ranged vs Melee: auto-switches to Asymmetric (ranged concentrates on one melee target; melee distributes in batches round-robin).', devOnly: false },
-                      { key: 'focusFireBatches', label: 'FF Batches', title: 'Units fight in parallel lanes (nBatches = min(nA, nB)); the larger side is split evenly. Survivors are redistributed after each death. Both-ranged falls back to plain Focus Fire.', devOnly: true },
-                      { key: 'focusFireBatchesPure', label: 'FF Batches (pur)', title: 'Identique à FF Batches mais sans le fallback Focus Fire pour les unitées range — les archers se distribuent aussi sur des cibles différentes.', devOnly: true },
+                      { key: 'focusFire', label: 'Target Focus', title: 'Each side concentrates fire on one target at a time. Ranged vs Melee: auto-switches to Asymmetric (ranged concentrates on one melee target; melee distributes in batches round-robin).', devOnly: false },
                       { key: 'focusFireBatchesMC', label: 'Attack move', title: `Batches Monte Carlo: ${200} simulations with random batch assignment per iteration. Both-melee/both-ranged: random batch redistribution. Ranged vs Melee: auto-switches to Batches MC Asymmetric.`, devOnly: false },
-                      { key: 'mixed', label: 'Mixed', title: 'Focus Fire for ranged units or groups of 3 or fewer, Aggregated DPS otherwise', devOnly: true },
-                    ] as { key: 'aggregated' | 'focusFire' | 'mixed' | 'focusFireBatches' | 'focusFireBatchesPure' | 'focusFireBatchesMC'; label: string; title: string; devOnly: boolean }[])
+                    ] as { key: 'aggregated' | 'focusFire' | 'focusFireBatchesMC'; label: string; title: string; devOnly: boolean }[])
                     .filter(opt => import.meta.env.DEV || !opt.devOnly)
                     .map((opt, i) => (
                       <React.Fragment key={opt.key}>
@@ -1109,12 +1077,38 @@ const Sandbox = () => {
                     ))}
                   </div>
                 )}
+                {(() => {
+                  const effectiveCost1 = modifiedVariation1 ? getTotalCost(modifiedVariation1) : (stats1?.cost ?? 0);
+                  const effectiveCost2 = modifiedVariation2 ? getTotalCost(modifiedVariation2) : (stats2?.cost ?? 0);
+                  const sameCost = unit1 && unit2 && effectiveCost1 > 0 && effectiveCost2 > 0 && effectiveCost1 === effectiveCost2;
+                  const zeroCost = (!!unit1 && effectiveCost1 === 0) || (!!unit2 && effectiveCost2 === 0);
+                  const isEqualCostDisabled = !!sameCost || zeroCost;
+                  const disabledTitle = sameCost ? 'Units have the same cost' : zeroCost ? 'A unit has no cost' : undefined;
+                  return (
+                    <div
+                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card ${isEqualCostDisabled ? 'opacity-50' : ''}`}
+                      title={disabledTitle}
+                    >
+                      <input
+                        type="checkbox"
+                        id="atEqualCost"
+                        checked={atEqualCost}
+                        onChange={(e) => { if (!isEqualCostDisabled) { setAtEqualCost(e.target.checked); } }}
+                        disabled={isEqualCostDisabled}
+                        className="w-4 h-4 rounded border-border disabled:cursor-not-allowed"
+                      />
+                      <label htmlFor="atEqualCost" className={`text-sm font-medium ${isEqualCostDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                        At Equal Cost
+                      </label>
+                    </div>
+                  );
+                })()}
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card">
                   <input
                     type="checkbox"
                     id="allowKiting"
                     checked={allowKiting}
-                    onChange={(e) => { setAllowKiting(e.target.checked); if (e.target.checked) setAtEqualCost(false); }}
+                    onChange={(e) => { setAllowKiting(e.target.checked); }}
                     className="w-4 h-4 rounded border-border"
                   />
                   <label htmlFor="allowKiting" className="text-sm font-medium cursor-pointer">
@@ -1128,8 +1122,6 @@ const Sandbox = () => {
                     </span>
                     {([
                       { value: "max", label: "Max", desc: maxRangeDistance > 0 ? String(maxRangeDistance) : null },
-                      { value: "medium", label: "Medium", desc: "5" },
-                      { value: "long", label: "Long", desc: "9" },
                       { value: "custom", label: "Custom", desc: null },
                     ] as { value: string; label: string; desc: string | null }[]).map((opt, i) => (
                       <React.Fragment key={opt.value}>
@@ -1653,47 +1645,71 @@ const Sandbox = () => {
               const cost2 = modifiedVariation2 ? getTotalCost(modifiedVariation2) : (stats2?.cost ?? 0);
 
               if (atEqualCost && cost1 > 0 && cost2 > 0) {
-                const preMultipliers = calculateEqualCostMultipliers(cost1, cost2);
                 const unit1 = modifiedVariation1 || modifiedUnit1!;
                 const unit2 = modifiedVariation2 || modifiedUnit2!;
-                const isRanged1 = getPrimaryWeapon(unit1)?.type === 'ranged';
-                const isRanged2 = getPrimaryWeapon(unit2)?.type === 'ranged';
-                const focusFireValid = (isRanged1 || preMultipliers.multA <= 3) && (isRanged2 || preMultipliers.multB <= 3);
-                const multiUnitModel: MultiUnitModel =
-                  multiUnitModelKey === 'focusFire' ? (isRanged1 !== isRanged2 ? focusFireAsymmetricModel : focusFireModel) :
-                    multiUnitModelKey === 'focusFireBatches' ? focusFireBatchesModel :
-                      multiUnitModelKey === 'focusFireBatchesPure' ? focusFireBatchesPureModel :
-                        multiUnitModelKey === 'focusFireBatchesMC' ? (isRanged1 !== isRanged2 ? focusFireBatchesMCAsymmetricModel : focusFireBatchesMCModel) :
-                          multiUnitModelKey === 'mixed' && focusFireValid ? focusFireModel :
-                          aggregatedDPSModel;
-                const result = computeVersusAtEqualCost(
-                  modifiedVariation1 || modifiedUnit1!,
-                  modifiedVariation2 || modifiedUnit2!,
-                  abilitiesArray1,
-                  abilitiesArray2,
-                  charge1,
-                  charge2,
-                  allowKiting,
-                  startDistance,
-                  multiUnitModel,
-                );
-                versusData = result;
-                multipliers = result.multipliers;
+                if (allowKiting && multiUnitModelKey === 'focusFire') {
+                  const result = computeVersusAtEqualCostKitingFocusFire(
+                    unit1, unit2, abilitiesArray1, abilitiesArray2, charge1, charge2, startDistance,
+                  );
+                  versusData = result;
+                  multipliers = result.multipliers;
+                } else if (allowKiting && multiUnitModelKey === 'focusFireBatchesMC') {
+                  const result = computeVersusAtEqualCostKitingBatchesMC(
+                    unit1, unit2, abilitiesArray1, abilitiesArray2, charge1, charge2, startDistance,
+                  );
+                  versusData = result;
+                  multipliers = result.multipliers;
+                } else {
+                  const isRanged1 = getPrimaryWeapon(unit1)?.type === 'ranged';
+                  const isRanged2 = getPrimaryWeapon(unit2)?.type === 'ranged';
+                  const multiUnitModel: MultiUnitModel =
+                    multiUnitModelKey === 'focusFire' ? (isRanged1 !== isRanged2 ? focusFireAsymmetricModel : focusFireModel) :
+                      multiUnitModelKey === 'focusFireBatchesMC' ? (isRanged1 !== isRanged2 ? focusFireBatchesMCAsymmetricModel : focusFireBatchesMCModel) :
+                        aggregatedDPSModel;
+                  const result = computeVersusAtEqualCost(
+                    unit1, unit2, abilitiesArray1, abilitiesArray2, charge1, charge2,
+                    allowKiting, startDistance, multiUnitModel,
+                  );
+                  versusData = result;
+                  multipliers = result.multipliers;
+                }
               } else {
-                versusData = computeVersus(
-                  modifiedVariation1 || modifiedUnit1!,
-                  modifiedVariation2 || modifiedUnit2!,
-                  abilitiesArray1,
-                  abilitiesArray2,
-                  charge1,
-                  charge2,
-                  allowKiting,
-                  startDistance,
-                  noTimerData1,
-                  noTimerData2,
-                  timedDuration1,
-                  timedDuration2,
-                );
+                if (allowKiting && multiUnitModelKey === 'focusFire') {
+                  versusData = computeVersusKitingFocusFire(
+                    modifiedVariation1 || modifiedUnit1!,
+                    modifiedVariation2 || modifiedUnit2!,
+                    abilitiesArray1,
+                    abilitiesArray2,
+                    charge1,
+                    charge2,
+                    startDistance,
+                  );
+                } else if (allowKiting && multiUnitModelKey === 'focusFireBatchesMC') {
+                  versusData = computeVersusKitingBatchesMC(
+                    modifiedVariation1 || modifiedUnit1!,
+                    modifiedVariation2 || modifiedUnit2!,
+                    abilitiesArray1,
+                    abilitiesArray2,
+                    charge1,
+                    charge2,
+                    startDistance,
+                  );
+                } else {
+                  versusData = computeVersus(
+                    modifiedVariation1 || modifiedUnit1!,
+                    modifiedVariation2 || modifiedUnit2!,
+                    abilitiesArray1,
+                    abilitiesArray2,
+                    charge1,
+                    charge2,
+                    allowKiting,
+                    startDistance,
+                    noTimerData1,
+                    noTimerData2,
+                    timedDuration1,
+                    timedDuration2,
+                  );
+                }
               }
 
               // For delta display: also compute without duration correction when a timed ability is active
