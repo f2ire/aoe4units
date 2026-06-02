@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGr
 import { motion } from "framer-motion";
 import { useUnitSlot } from "@/hooks/useUnitSlot";
 import { JeanneFormSelector, isJeanneUnit } from "@/components/JeanneFormSelector";
+import { GuidedTour } from "@/components/GuidedTour";
 
 
 const categoryNames: Record<string, string> = {
@@ -502,7 +503,7 @@ const Sandbox = () => {
       chargeModifiers: (variation2.baseId === 'donso' && activeAbilities2.has('javelin-throw'))
         ? [{ target: { class: [['cavalry']] }, value: selectedAge2 >= 4 ? 10 : selectedAge2 === 3 ? 8 : selectedAge2 === 2 ? 7 : 5 }]
         : (variation2.baseId === 'naginata-samurai' && activeTechnologies2.has('samurai-bow'))
-          ? [{ target: { class: [['light', 'melee', 'infantry']] }, value: selectedAge2 >= 4 ? 7 : selectedAge2 >= 3 ? 6 : 5 }]
+          ? [{ target: { class: [['light', 'melee', 'infantry']] }, value: selectedAge2 >= 4 ? 7 : selectedAge2 >= 3 ? 6 : selectedAge2 >= 2 ? 5 : 4 }]
           : undefined,
       secondaryWeapons: (() => {
         const primaryWeapon2 = getPrimaryWeapon(variation2);
@@ -587,7 +588,7 @@ const Sandbox = () => {
       chargeModifiers: (unit1.id === 'donso' && activeAbilities1.has('javelin-throw'))
         ? [{ target: { class: [['cavalry']] }, value: selectedAge1 >= 4 ? 10 : selectedAge1 === 3 ? 8 : selectedAge1 === 2 ? 7 : 5 }]
         : (unit1.id === 'naginata-samurai' && activeTechnologies1.has('samurai-bow'))
-          ? [{ target: { class: [['light', 'melee', 'infantry']] }, value: selectedAge1 >= 4 ? 7 : selectedAge1 >= 3 ? 6 : 5 }]
+          ? [{ target: { class: [['light', 'melee', 'infantry']] }, value: selectedAge1 >= 4 ? 7 : selectedAge1 >= 3 ? 6 : selectedAge1 >= 2 ? 5 : 4 }]
           : undefined,
       secondaryWeapons: (() => {
         const primaryWeaponU1 = getPrimaryWeapon(unit1);
@@ -668,7 +669,7 @@ const Sandbox = () => {
       chargeModifiers: (unit2.id === 'donso' && activeAbilities2.has('javelin-throw'))
         ? [{ target: { class: [['cavalry']] }, value: selectedAge2 >= 4 ? 10 : selectedAge2 === 3 ? 8 : selectedAge2 === 2 ? 7 : 5 }]
         : (unit2.id === 'naginata-samurai' && activeTechnologies2.has('samurai-bow'))
-          ? [{ target: { class: [['light', 'melee', 'infantry']] }, value: selectedAge2 >= 4 ? 7 : selectedAge2 >= 3 ? 6 : 5 }]
+          ? [{ target: { class: [['light', 'melee', 'infantry']] }, value: selectedAge2 >= 4 ? 7 : selectedAge2 >= 3 ? 6 : selectedAge2 >= 2 ? 5 : 4 }]
           : undefined,
       secondaryWeapons: (() => {
         const primaryWeaponU2 = getPrimaryWeapon(unit2);
@@ -710,7 +711,7 @@ const Sandbox = () => {
         speed: s.attackSpeed,
         range: w.range ? { ...w.range, max: s.maxRange || w.range.max } : undefined,
         modifiers: filterBonusForWeapon(s.bonusDamage || [], w.type),
-        burst: s.burst ? { count: s.burst } : w.burst,
+        burst: s.burst ? { count: s.burst, decay: s.burstDecay ?? w.burst?.decay } : w.burst,
       })),
       armor: [{ type: 'melee', value: s.meleeArmor }, { type: 'ranged', value: s.rangedArmor }],
       resistance: [
@@ -740,7 +741,7 @@ const Sandbox = () => {
         speed: s.attackSpeed,
         range: w.range ? { ...w.range, max: s.maxRange || w.range.max } : undefined,
         modifiers: filterBonusForWeapon(s.bonusDamage || [], w.type),
-        burst: s.burst ? { count: s.burst } : w.burst,
+        burst: s.burst ? { count: s.burst, decay: s.burstDecay ?? w.burst?.decay } : w.burst,
       })),
       armor: [{ type: 'melee', value: s.meleeArmor }, { type: 'ranged', value: s.rangedArmor }],
       resistance: [
@@ -770,7 +771,7 @@ const Sandbox = () => {
         speed: s.attackSpeed,
         range: w.range ? { ...w.range, max: s.maxRange || w.range.max } : undefined,
         modifiers: filterBonusForWeapon(s.bonusDamage || [], w.type),
-        burst: s.burst ? { count: s.burst } : w.burst,
+        burst: s.burst ? { count: s.burst, decay: s.burstDecay ?? w.burst?.decay } : w.burst,
       })),
       armor: [{ type: 'melee', value: s.meleeArmor }, { type: 'ranged', value: s.rangedArmor }],
       resistance: [
@@ -800,7 +801,7 @@ const Sandbox = () => {
         speed: s.attackSpeed,
         range: w.range ? { ...w.range, max: s.maxRange || w.range.max } : undefined,
         modifiers: filterBonusForWeapon(s.bonusDamage || [], w.type),
-        burst: s.burst ? { count: s.burst } : w.burst,
+        burst: s.burst ? { count: s.burst, decay: s.burstDecay ?? w.burst?.decay } : w.burst,
       })),
       armor: [{ type: 'melee', value: s.meleeArmor }, { type: 'ranged', value: s.rangedArmor }],
       resistance: [
@@ -1021,16 +1022,24 @@ const Sandbox = () => {
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="min-w-[1080px] max-w-6xl mx-auto"
+        className="min-w-[1080px] max-w-6xl mx-auto relative"
       >
-        <div className="text-center mb-8 space-y-4">
+        <div className="relative text-center mb-8 space-y-4">
+          <GuidedTour
+            setSelectedCiv1={setSelectedCiv1} setUnit1={setUnit1}
+            setSelectedAge1={setSelectedAge1} applyFullUpgrade1={applyFullUpgrade1} toggleAbility1={toggleAbility1}
+            setSelectedCiv2={setSelectedCiv2} setUnit2={setUnit2}
+            setSelectedAge2={setSelectedAge2} applyFullUpgrade2={applyFullUpgrade2} toggleAbility2={toggleAbility2}
+            setIsVersus={setIsVersus} setAtEqualCost={setAtEqualCost} setAllowKiting={setAllowKiting}
+            setMultiUnitModelKey={setMultiUnitModelKey}
+          />
           <div>
             <h1 className="text-4xl font-serif font-bold text-primary mb-2">Sandbox Mode</h1>
             <p className="text-muted-foreground text-lg">Compare any two units from any civilizations!</p>
           </div>
           {/* Mode Toggle */}
           <div className="flex items-center justify-center gap-4">
-            <div className="inline-flex rounded-md border border-border overflow-hidden">
+            <div id="tour-mode-toggle" className="inline-flex rounded-md border border-border overflow-hidden">
               <button
                 type="button"
                 onClick={() => setIsVersus(false)}
@@ -1050,9 +1059,9 @@ const Sandbox = () => {
               </button>
             </div>
             {isVersus && (
-              <div className="inline-flex items-center gap-3">
+              <div id="tour-versus-options" className="inline-flex items-center gap-3">
                 {(atEqualCost || allowKiting) && (
-                  <div className="inline-flex items-center rounded-md border border-border overflow-hidden bg-card">
+                  <div id="tour-model" className="inline-flex items-center rounded-md border border-border overflow-hidden bg-card">
                     <span className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-r border-border">
                       Model
                     </span>
@@ -1086,6 +1095,7 @@ const Sandbox = () => {
                   const disabledTitle = sameCost ? 'Units have the same cost' : zeroCost ? 'A unit has no cost' : undefined;
                   return (
                     <div
+                      id="tour-atEqualCost"
                       className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card ${isEqualCostDisabled ? 'opacity-50' : ''}`}
                       title={disabledTitle}
                     >
@@ -1103,7 +1113,7 @@ const Sandbox = () => {
                     </div>
                   );
                 })()}
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card">
+                <div id="tour-kiting" className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card">
                   <input
                     type="checkbox"
                     id="allowKiting"
@@ -1167,6 +1177,7 @@ const Sandbox = () => {
           {/* Civ 1 Column */}
           <div className="space-y-4 flex flex-col items-end">
             <label className="text-sm font-medium text-foreground">Civ 1: <span className="text-xs text-muted-foreground font-normal">({filteredUnits1.length} units)</span></label>
+            <div id="tour-civ1" className="w-full">
             <Select value={selectedCiv1} onValueChange={setSelectedCiv1}>
               <SelectTrigger className="bg-secondary border-border h-14">
                 <SelectValue>
@@ -1193,7 +1204,9 @@ const Sandbox = () => {
                 ))}
               </SelectContent>
             </Select>
+            </div>
 
+            <div id="tour-unit1" className="w-full">
             <Select
               value={isJeanneUnit(unit1) ? 'jeanne-darc-peasant' : unit1?.id === 'desert-raider' && activeAbilities1.has('ability-desert-raider-blade') ? 'desert-raider_cavalry' : (unit1?.id || "")}
               onValueChange={(value) => {
@@ -1301,6 +1314,7 @@ const Sandbox = () => {
                 })}
               </SelectContent>
             </Select>
+            </div>
             {isJeanneUnit(unit1) && (
               <JeanneFormSelector
                 mode="panel"
@@ -1314,6 +1328,7 @@ const Sandbox = () => {
           {/* Civ 2 Column */}
           <div className="space-y-4 flex flex-col items-start">
             <label className="text-sm font-medium text-foreground">Civ 2: <span className="text-xs text-muted-foreground font-normal">({filteredUnits2.length} units)</span></label>
+            <div id="tour-civ2" className="w-full">
             <Select value={selectedCiv2} onValueChange={setSelectedCiv2}>
               <SelectTrigger className="bg-secondary border-border h-14">
                 <SelectValue>
@@ -1340,7 +1355,9 @@ const Sandbox = () => {
                 ))}
               </SelectContent>
             </Select>
+            </div>
 
+            <div id="tour-unit2" className="w-full">
             <Select
               value={isJeanneUnit(unit2) ? 'jeanne-darc-peasant' : unit2?.id === 'desert-raider' && activeAbilities2.has('ability-desert-raider-blade') ? 'desert-raider_cavalry' : (unit2?.id || "")}
               onValueChange={(value) => {
@@ -1448,6 +1465,7 @@ const Sandbox = () => {
                 })}
               </SelectContent>
             </Select>
+            </div>
             {isJeanneUnit(unit2) && (
               <JeanneFormSelector
                 mode="panel"
@@ -1472,12 +1490,15 @@ const Sandbox = () => {
               {unit1 && (
                 <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 w-full">
                   <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0">
+                    <div id="tour-age1">
                     <AgeSelector
                       availableAges={getAvailableAges(unit1.id, selectedCiv1)}
                       selectedAge={selectedAge1}
                       onAgeChange={setSelectedAge1}
                       orientation="left"
                     />
+                    </div>
+                    <div id="tour-techs1">
                     <TechnologySelector
                       technologies={techs1}
                       activeTechnologies={activeTechnologies1}
@@ -1492,6 +1513,8 @@ const Sandbox = () => {
                       unitId={variation1?.baseId ?? unit1?.id}
                       selectedAge={selectedAge1}
                     />
+                    </div>
+                    <div id="tour-abilities1">
                     <AbilitySelector
                       abilities={abilities1}
                       activeAbilities={activeAbilities1}
@@ -1505,6 +1528,7 @@ const Sandbox = () => {
                       onSetCounter={setAbilityCounter1}
                       unitId={variation1?.baseId ?? unit1?.id}
                     />
+                    </div>
                   </div>
                   <div className="flex-1 min-w-0">
                     <UnitCard
@@ -1583,12 +1607,15 @@ const Sandbox = () => {
                     />
                   </div>
                   <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
+                    <div id="tour-age2">
                     <AgeSelector
                       availableAges={getAvailableAges(unit2.id, selectedCiv2)}
                       selectedAge={selectedAge2}
                       onAgeChange={setSelectedAge2}
                       orientation="right"
                     />
+                    </div>
+                    <div id="tour-techs2">
                     <TechnologySelector
                       technologies={techs2}
                       activeTechnologies={activeTechnologies2}
@@ -1603,6 +1630,8 @@ const Sandbox = () => {
                       onApplyFullUpgrade={applyFullUpgrade2}
                       onReset={resetTechnologies2}
                     />
+                    </div>
+                    <div id="tour-abilities2">
                     <AbilitySelector
                       abilities={abilities2}
                       activeAbilities={activeAbilities2}
@@ -1616,6 +1645,7 @@ const Sandbox = () => {
                       onSetCounter={setAbilityCounter2}
                       unitId={variation2?.baseId ?? unit2?.id}
                     />
+                    </div>
                   </div>
                 </div>
               )}
@@ -1785,6 +1815,7 @@ const Sandbox = () => {
                 totalCost: multipliers?.totalCostA,
                 opponentMultiplier: multipliers?.multB,
                 opponentTotalCost: multipliers?.totalCostB,
+                opponentHp: (modifiedVariation2 || modifiedUnit2)?.hitpoints ?? unit2?.hitpoints,
                 winnerHpRemaining: versusData.mcDistribution?.whenAWins?.hpMedian ?? (leftIsWinner ? versusData.winnerHpRemaining : undefined),
                 winnerHpStd: versusData.mcDistribution?.whenAWins?.hpStd,
                 winnerUnitsRemaining: versusData.mcDistribution?.whenAWins?.unitsMedian ?? (leftIsWinner ? versusData.winnerUnitsRemaining : undefined),
@@ -1817,6 +1848,7 @@ const Sandbox = () => {
                 totalCost: multipliers?.totalCostB,
                 opponentMultiplier: multipliers?.multA,
                 opponentTotalCost: multipliers?.totalCostA,
+                opponentHp: (modifiedVariation1 || modifiedUnit1)?.hitpoints ?? unit1?.hitpoints,
                 winnerHpRemaining: versusData.mcDistribution?.whenBWins?.hpMedian ?? (rightIsWinner ? versusData.winnerHpRemaining : undefined),
                 winnerHpStd: versusData.mcDistribution?.whenBWins?.hpStd,
                 winnerUnitsRemaining: versusData.mcDistribution?.whenBWins?.unitsMedian ?? (rightIsWinner ? versusData.winnerUnitsRemaining : undefined),
@@ -1837,12 +1869,15 @@ const Sandbox = () => {
                   >
                     <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 w-full">
                       <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0">
+                        <div id="tour-age1">
                         <AgeSelector
                           availableAges={getAvailableAges(unit1.id, selectedCiv1)}
                           selectedAge={selectedAge1}
                           onAgeChange={setSelectedAge1}
                           orientation="left"
                         />
+                        </div>
+                        <div id="tour-techs1">
                         <TechnologySelector
                           technologies={techs1}
                           activeTechnologies={activeTechnologies1}
@@ -1857,6 +1892,8 @@ const Sandbox = () => {
                           onApplyFullUpgrade={applyFullUpgrade1}
                           onReset={resetTechnologies1}
                         />
+                        </div>
+                        <div id="tour-abilities1">
                         <AbilitySelector
                           abilities={abilities1}
                           activeAbilities={activeAbilities1}
@@ -1870,6 +1907,7 @@ const Sandbox = () => {
                           onSetCounter={setAbilityCounter1}
                           unitId={variation1?.baseId ?? unit1?.id}
                         />
+                        </div>
                       </div>
                       <div className="flex-1 min-w-0">
                         <UnitCard
@@ -1915,12 +1953,15 @@ const Sandbox = () => {
                         />
                       </div>
                       <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
+                        <div id="tour-age2">
                         <AgeSelector
                           availableAges={getAvailableAges(unit2.id, selectedCiv2)}
                           selectedAge={selectedAge2}
                           onAgeChange={setSelectedAge2}
                           orientation="right"
                         />
+                        </div>
+                        <div id="tour-techs2">
                         <TechnologySelector
                           technologies={techs2}
                           activeTechnologies={activeTechnologies2}
@@ -1935,6 +1976,8 @@ const Sandbox = () => {
                           onApplyFullUpgrade={applyFullUpgrade2}
                           onReset={resetTechnologies2}
                         />
+                        </div>
+                        <div id="tour-abilities2">
                         <AbilitySelector
                           abilities={abilities2}
                           activeAbilities={activeAbilities2}
@@ -1948,6 +1991,7 @@ const Sandbox = () => {
                           onSetCounter={setAbilityCounter2}
                           unitId={variation2?.baseId ?? unit2?.id}
                         />
+                        </div>
                       </div>
                     </div>
                   </motion.div>

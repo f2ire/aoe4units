@@ -27,6 +27,7 @@ interface VersusMetricsProps {
   totalCost?: number;
   opponentMultiplier?: number;
   opponentTotalCost?: number;
+  opponentHp?: number;
   winnerHpRemaining?: number;
   winnerHpStd?: number;
   winnerUnitsRemaining?: number;
@@ -226,6 +227,7 @@ export const UnitCard = ({
   opponentVersusDebuff,
   opponentBonusDamageReduction,
   opponentClasses,
+  side,
   className
 }: UnitCardProps) => {
   const [showFormula, setShowFormula] = useState(false);
@@ -634,7 +636,7 @@ export const UnitCard = ({
           const dieBeforeContact = parsed.dieBeforeContact || (isRangedSide && (parsedOpp?.dieBeforeContact ?? false));
           const meleeContactTime = parsed.meleeContactTime ?? (isRangedSide ? (parsedOpp?.meleeContactTime ?? null) : null);
 
-          const defenderTotalHp = effectiveHp * (versusMetrics.opponentMultiplier || 1);
+          const defenderTotalHp = (versusMetrics.opponentHp ?? effectiveHp) * (versusMetrics.opponentMultiplier || 1);
           const attackerTotalDmg = (versusMetrics.effectiveDamagePerHit || 0) * (versusMetrics.multiplier || 1);
           const cycleStr = primaryWeapon?.speed != null ? round2(primaryWeapon.speed) + 's' : '—';
           const approachShots = versusMetrics.approachShots ?? 0;
@@ -957,7 +959,7 @@ export const UnitCard = ({
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Total opponent HP</span>
-                          <span>{effectiveHp}×{versusMetrics.opponentMultiplier} = {defenderTotalHp}</span>
+                          <span>{versusMetrics.opponentHp ?? effectiveHp}×{versusMetrics.opponentMultiplier} = {defenderTotalHp}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Total dmg/cycle</span>
@@ -978,7 +980,14 @@ export const UnitCard = ({
                         </div>
                         <div className="flex justify-between font-medium">
                           <span>TTK{hasMovement && <span className="text-blue-400 font-normal"> (incl. mvt)</span>}{approachShots > 0 && <span className="text-blue-400 font-normal"> (contact)</span>}</span>
-                          <span>{versusMetrics.hitsToKill}×{cycleStr} = {round2(versusMetrics.timeToKill)}s</span>
+                          <span>
+                            {parsed.chargeWeapon && versusMetrics.hitsToKill !== null
+                              ? versusMetrics.hitsToKill > 1
+                                ? `${round2(parsed.chargeWeapon.speed)}s + ${versusMetrics.hitsToKill - 1}×${cycleStr}`
+                                : `${round2(parsed.chargeWeapon.speed)}s`
+                              : `${versusMetrics.hitsToKill}×${cycleStr}`
+                            } = {round2(versusMetrics.timeToKill)}s
+                          </span>
                         </div>
                       </div>
                     ) : (
@@ -989,69 +998,70 @@ export const UnitCard = ({
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">DPS</span>
-                    <span
-                      className={cn('font-medium', getComparisonColor(
-                        versusMetrics.dps ?? 0,
-                        versusMetrics.opponentDps ?? undefined,
-                        true
-                      ).color)}
-                      title={versusMetrics.formula}
-                    >
-                      {versusMetrics.dps ?? '—'}
-                    </span>
+              <div id="tour-combat-results">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">DPS</span>
+                      <span
+                        className={cn('font-medium', getComparisonColor(
+                          versusMetrics.dps ?? 0,
+                          versusMetrics.opponentDps ?? undefined,
+                          true
+                        ).color)}
+                        title={versusMetrics.formula}
+                      >
+                        {versusMetrics.dps ?? '—'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">DPS/Cost</span>
+                      <span
+                        className={cn('font-medium', getComparisonColor(
+                          versusMetrics.dpsPerCost ?? 0,
+                          versusMetrics.opponentDpsPerCost ?? undefined,
+                          true
+                        ).color)}
+                        title={versusMetrics.formula}
+                      >
+                        {versusMetrics.dpsPerCost ?? '—'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">DPS/Cost</span>
-                    <span
-                      className={cn('font-medium', getComparisonColor(
-                        versusMetrics.dpsPerCost ?? 0,
-                        versusMetrics.opponentDpsPerCost ?? undefined,
-                        true
-                      ).color)}
-                      title={versusMetrics.formula}
-                    >
-                      {versusMetrics.dpsPerCost ?? '—'}
-                    </span>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Hits to Kill</span>
+                      <span
+                        className={cn('font-medium', getComparisonColor(
+                          totalHitsToKill ?? 0,
+                          versusMetrics.opponentHitsToKill ?? undefined,
+                          false
+                        ).color)}
+                        title={versusMetrics.formula}
+                      >
+                        {totalHitsToKill ?? '—'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground" title="Time to Kill (s)">TTK (s)</span>
+                      <span
+                        className={cn('font-medium', getComparisonColor(
+                          versusMetrics.timeToKill ?? 0,
+                          versusMetrics.opponentTimeToKill ?? undefined,
+                          false
+                        ).color)}
+                        title={versusMetrics.formula}
+                      >
+                        {versusMetrics.timeToKill ?? '—'}
+                      </span>
+                    </div>
                   </div>
+                  {/* Error message removed - base stats always display */}
                 </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Hits to Kill</span>
-                    <span
-                      className={cn('font-medium', getComparisonColor(
-                        totalHitsToKill ?? 0,
-                        versusMetrics.opponentHitsToKill ?? undefined,
-                        false
-                      ).color)}
-                      title={versusMetrics.formula}
-                    >
-                      {totalHitsToKill ?? '—'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">TTK (s)</span>
-                    <span
-                      className={cn('font-medium', getComparisonColor(
-                        versusMetrics.timeToKill ?? 0,
-                        versusMetrics.opponentTimeToKill ?? undefined,
-                        false
-                      ).color)}
-                      title={versusMetrics.formula}
-                    >
-                      {versusMetrics.timeToKill ?? '—'}
-                    </span>
-                  </div>
-                </div>
-                {/* Error message removed - base stats always display */}
-              </div>
 
-              {/* Winner/loser stats — shown in both 1v1 and At Equal Cost modes */}
-              {versusMetrics.winnerHpRemaining !== undefined && (
-                <div className={`mt-3 p-2 rounded text-xs space-y-1 ${versusMetrics.isWinner ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-orange-500/10 border border-orange-500/20'}`}>
+                {/* Winner/loser stats — shown in both 1v1 and At Equal Cost modes */}
+                {versusMetrics.winnerHpRemaining !== undefined && (
+                <div id={side === 'left' ? 'tour-mc-stats' : undefined} className={`mt-3 p-2 rounded text-xs space-y-1 ${versusMetrics.isWinner ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-orange-500/10 border border-orange-500/20'}`}>
                   <div className={`font-semibold flex justify-between ${versusMetrics.isWinner ? 'text-yellow-700 dark:text-yellow-300' : 'text-orange-700 dark:text-orange-300'}`}>
                     <span>{versusMetrics.isWinner ? '🏆 Winner Stats:' : '📊 Win Scenarios:'}</span>
                     {versusMetrics.winRate !== undefined && (
@@ -1088,7 +1098,8 @@ export const UnitCard = ({
                     );
                   })()}
                 </div>
-              )}
+                )}
+              </div>
 
               {/* Loser units-to-win banner */}
               {versusMetrics.isLoser && (versusMetrics.loserUnitsToWin ?? 0) >= 2 && (() => {

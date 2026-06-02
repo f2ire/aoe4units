@@ -48,7 +48,8 @@ export interface VersusMetrics {
   dps: number | null;
   dpsPerCost: number | null;
   hitsToKill: number | null;
-  timeToKill: number | null; // seconds
+  timeToKill: number | null; // seconds, rounded for display
+  timeToKillExact?: number | null; // unrounded — used for HP-remaining calculation to avoid discrete-hit rounding artifacts
   effectiveDamagePerHit: number | null;
   firstHitDamage?: number; // per-unit first-hit damage (includes charge bonus); omitted when equal to effectiveDamagePerHit
   bugAttackSpeed: boolean;
@@ -534,11 +535,13 @@ function applyKitingToMetrics(
       adjustedA: {
         ...metricsA,
         timeToKill: metricsA.timeToKill !== null ? round(metricsA.timeToKill + t_approach, 1) : null,
+        timeToKillExact: metricsA.timeToKillExact !== null && metricsA.timeToKillExact !== undefined ? metricsA.timeToKillExact + t_approach : metricsA.timeToKillExact,
         formula: metricsA.formula + ` [Movement: ${note}]`,
       },
       adjustedB: {
         ...metricsB,
         timeToKill: metricsB.timeToKill !== null ? round(metricsB.timeToKill + t_approach, 1) : null,
+        timeToKillExact: metricsB.timeToKillExact !== null && metricsB.timeToKillExact !== undefined ? metricsB.timeToKillExact + t_approach : metricsB.timeToKillExact,
         formula: metricsB.formula + ` [Movement: ${note}]`,
       },
     };
@@ -635,7 +638,12 @@ function applyKitingToMetrics(
   } else {
     t_approach = d_approach / effectiveMeleeSpeed;
   }
-  const freeHits = Math.floor(t_approach / attackCycle);
+  const wRangedApproach = ranged.weapons[0]?.durations?.windup ?? 0;
+  const approachTravelTimeKite = isArcher(ranged) ? ARCHER_TRAVEL_TIME : 0;
+  const shotsDeadlineKite = t_approach - approachTravelTimeKite;
+  const freeHits = attackCycle > 0 && shotsDeadlineKite >= wRangedApproach
+    ? Math.floor((shotsDeadlineKite - wRangedApproach) / attackCycle) + 1
+    : 0;
   const d_kite_start = Math.min(d0, rangeMax); // distance at start of kiting
   const absDelta = Math.abs(delta);
   const n_kite = absDelta > 0 ? Math.ceil(d_kite_start / absDelta) : 0;
@@ -646,22 +654,27 @@ function applyKitingToMetrics(
   // Ranged TTK: determine which phase melee dies in
   const hitsToKill = mRanged.hitsToKill;
   let newTTKranged: number | null = mRanged.timeToKill;
+  let newTTKrangedExact: number | null = mRanged.timeToKillExact ?? mRanged.timeToKill;
   if (hitsToKill !== null && attackCycle > 0) {
     if (hitsToKill <= freeHits) {
       // Dies during approach
-      newTTKranged = round(hitsToKill * attackCycle, 1);
+      newTTKrangedExact = hitsToKill * attackCycle;
+      newTTKranged = round(newTTKrangedExact, 1);
     } else if (hitsToKill <= preContactHits) {
       // Dies during kiting
-      newTTKranged = round(t_approach + (hitsToKill - freeHits) * attackCycle, 1);
+      newTTKrangedExact = t_approach + (hitsToKill - freeHits) * attackCycle;
+      newTTKranged = round(newTTKrangedExact, 1);
     } else {
       // Dies during close combat
       // When thorns DPS is active (dpsContact > 0), it only applies from contactTime onward.
       // Remaining HP is bolt-damage-based (pre-contact had no thorns); contact phase uses full combined DPS.
       if (mRanged.dpsContact && mRanged.dps && mRanged.effectiveDamagePerHit) {
         const remainingHP = (hitsToKill - preContactHits) * mRanged.effectiveDamagePerHit;
-        newTTKranged = round(contactTime + remainingHP / mRanged.dps, 1);
+        newTTKrangedExact = contactTime + remainingHP / mRanged.dps;
+        newTTKranged = round(newTTKrangedExact, 1);
       } else {
-        newTTKranged = round(contactTime + (hitsToKill - preContactHits) * attackCycle, 1);
+        newTTKrangedExact = contactTime + (hitsToKill - preContactHits) * attackCycle;
+        newTTKranged = round(newTTKrangedExact, 1);
       }
     }
   }
@@ -671,12 +684,15 @@ function applyKitingToMetrics(
   // Melee TTK: can only deal damage after contact
   // First hit uses charge weapon speed (if any), subsequent hits use primary weapon speed
   const meleAttackCycle = melee.weapons[0]?.speed ?? 0;
-  const meleeFirstHitSpeed = meleeChargeWeapon ? (meleeChargeWeapon.speed || meleAttackCycle) : meleAttackCycle;
-  const newTTKmelee: number | null = meleeDiesBeforeContact
+  // Charging melee without a charge weapon (spearman, horseman) pre-load windup during sprint → first hit at t=0
+  const isMeleeChargingMelee = !meleeChargeWeapon && hasMeleeCharge && (melee.weapons[0]?.type === 'melee');
+  const meleeFirstHitSpeed = meleeChargeWeapon ? (meleeChargeWeapon.speed || meleAttackCycle) : isMeleeChargingMelee ? 0 : meleAttackCycle;
+  const newTTKmeleeExact: number | null = meleeDiesBeforeContact
     ? null
     : (mMelee.hitsToKill !== null && meleAttackCycle > 0
-      ? round(contactTime + meleeFirstHitSpeed + (mMelee.hitsToKill - 1) * meleAttackCycle, 1)
+      ? contactTime + meleeFirstHitSpeed + (mMelee.hitsToKill - 1) * meleAttackCycle
       : null);
+  const newTTKmelee: number | null = newTTKmeleeExact !== null ? round(newTTKmeleeExact, 1) : null;
 
   const chargeSpeedNote = hasMeleeCharge ? ` [charge ×${CHARGE_SPEED_MULTIPLIER} speed]` : '';
   const kitingNote = `approach ${round(t_approach, 1)}s (+${freeHits} free hits)${chargeSpeedNote} · kiting ${round(t_kite, 1)}s (+${n_kite} hits) · contact t=${round(contactTime, 1)}s`;
@@ -684,11 +700,13 @@ function applyKitingToMetrics(
   const newMRanged: VersusMetrics = {
     ...mRanged,
     timeToKill: newTTKranged,
+    timeToKillExact: newTTKrangedExact,
     formula: mRanged.formula + ` [Kiting: ${kitingNote}]`,
   };
   const newMMelee: VersusMetrics = {
     ...mMelee,
     timeToKill: newTTKmelee,
+    timeToKillExact: newTTKmeleeExact,
     formula: mMelee.formula + ` [${meleeDiesBeforeContact ? 'Dies before contact' : `contact at t=${round(contactTime, 1)}s`}]`,
   };
 
@@ -717,20 +735,25 @@ function computeMetrics(
   const rawSpeed = weapon?.speed || 0;
   const asDebuffFactor = 1 + (defender.opponentAttackSpeedDebuff ?? 0);
   const attackSpeed = rawSpeed * asDebuffFactor;
-  // First hit uses the charge weapon's own attack cycle (if present)
-  const firstHitSpeed = (hasChargeWeapon ? (chargeWeapon!.speed || rawSpeed) : rawSpeed) * asDebuffFactor;
+  // Charging melee units without a dedicated charge weapon pre-load their windup during the sprint,
+  // so the first hit fires at contact (t=0). Mirror the same logic as computeDamageInTime.
+  const isChargingMelee = !hasChargeWeapon && (attacker.activeAbilities?.includes('charge-attack') ?? false) && weapon?.type === 'melee';
+  // First hit uses the charge weapon's own attack cycle (if present), or 0 for isChargingMelee
+  const firstHitSpeed = (hasChargeWeapon ? (chargeWeapon!.speed || rawSpeed) : isChargingMelee ? 0 : rawSpeed) * asDebuffFactor;
   const bugAttackSpeed = rawSpeed <= 0;
   let dps: number | null = null;
   let hitsToKill: number | null = null;
   let timeToKill: number | null = null;
+  let exactTimeToKill: number | null = null;
   let dpsPerCost: number | null = null;
   let thornsDPS = 0;
 
-  // First-hit block (Deflective Armor): defender absorbs first attack completely.
-  // Charge consumed but blocked. Attacker spends firstHitSpeed, then all normal hits.
+  // First-hit block (Deflective Armor): defender absorbs first attack completely (0 damage).
+  // The charge still executes — post-charge buff activates normally from hit 2 onward.
   if (defender.firstHitBlocked && !bugAttackSpeed) {
+    const chargeBlockedNormal = normalAttackData.value;
     const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
-    const normalCycle = normalAttackData.value * attackerMultiplier;
+    const normalCycle = chargeBlockedNormal * attackerMultiplier;
     let secNormalDPS = 0;
     for (const secWeapon of (attacker.secondaryWeapons || [])) {
       if (!secWeapon.speed || secWeapon.speed <= 0) continue;
@@ -741,22 +764,46 @@ function computeMetrics(
     if (effectiveNormalCycle > 0) {
       const normalHTK = Math.ceil(totalDefHP / effectiveNormalCycle);
       hitsToKill = 1 + normalHTK;
-      timeToKill = round(firstHitSpeed + normalHTK * attackSpeed, 1);
+      exactTimeToKill = firstHitSpeed + normalHTK * attackSpeed;
+      timeToKill = round(exactTimeToKill, 1);
       dps = round(totalDefHP / timeToKill, 2);
     }
+    // Two-phase correction: attacker timed ability (e.g. ability-royal-knight-charge-damage duration:5)
+    // expires before the fight ends. Hit 1 is blocked; Phase 1 damage starts from hit 2.
+    if (attackerNoTimer && timedDurationAttacker !== undefined && exactTimeToKill !== null && exactTimeToKill > timedDurationAttacker && !attacker.selfDestructs) {
+      const noTimerData = computeEffectiveDamage(attackerNoTimer, defender, 0, false);
+      const noTimerDmgPerHit = noTimerData.value * attackerMultiplier;
+      const noTimerAS = (noTimerData.weapon?.speed ?? rawSpeed) * asDebuffFactor;
+      const normalDmgPerHit = chargeBlockedNormal * attackerMultiplier;
+      if (noTimerDmgPerHit > 0 && noTimerAS > 0 && (noTimerDmgPerHit !== normalDmgPerHit || noTimerAS !== attackSpeed)) {
+        const hitsInDuration = firstHitSpeed <= timedDurationAttacker
+          ? 1 + Math.floor((timedDurationAttacker - firstHitSpeed) / attackSpeed)
+          : 0;
+        const dmgInDuration = Math.max(0, hitsInDuration - 1) * normalDmgPerHit;
+        if (dmgInDuration < totalDefHP) {
+          const remainingHP = totalDefHP - dmgInDuration;
+          const remainingHits = Math.ceil(remainingHP / noTimerDmgPerHit);
+          hitsToKill = hitsInDuration + remainingHits;
+          exactTimeToKill = (hitsInDuration > 0 ? firstHitSpeed + (hitsInDuration - 1) * attackSpeed : 0)
+            + remainingHits * noTimerAS;
+          timeToKill = round(exactTimeToKill, 1);
+          dps = round(totalDefHP / timeToKill, 2);
+        }
+      }
+    }
     if (attacker.selfDestructs && hitsToKill !== null && hitsToKill > 1) {
-      hitsToKill = null; timeToKill = null; dps = null;
+      hitsToKill = null; timeToKill = null; exactTimeToKill = null; dps = null;
     }
     const cost = totalCost(attacker);
-    dpsPerCost = cost > 0 ? round((normalAttackData.value / attackSpeed) / cost, 2) : null;
+    dpsPerCost = cost > 0 ? round((chargeBlockedNormal / attackSpeed) / cost, 2) : null;
     const debuffTxt = normalAttackData.debuffMultiplier ? ` × ${normalAttackData.debuffMultiplier} (debuff)` : '';
     return {
       id: attacker.id, name: attacker.name,
-      dps, dpsPerCost, hitsToKill, timeToKill,
-      effectiveDamagePerHit: normalAttackData.value,
+      dps, dpsPerCost, hitsToKill, timeToKill, timeToKillExact: exactTimeToKill,
+      effectiveDamagePerHit: chargeBlockedNormal,
       firstHitDamage: 0,
       bugAttackSpeed: false, cannotAttackUnits: false,
-      formula: `Deflect + Effective = max(1, (Base(${normalAttackData.base}) + Bonus(${normalAttackData.bonus}) - Armor(${normalAttackData.armorApplied}))${debuffTxt}) = ${normalAttackData.value}; DPS = ${dps}`,
+      formula: `Deflect + Effective = max(1, (Base(${normalAttackData.base}) + Bonus(${normalAttackData.bonus}) - Armor(${normalAttackData.armorApplied}))${debuffTxt}) = ${chargeBlockedNormal}; DPS = ${dps}`,
     };
   }
 
@@ -769,11 +816,13 @@ function computeMetrics(
 
       if (firstCycleDamage >= totalDefenderHP) {
         hitsToKill = 1;
-        timeToKill = round(firstHitSpeed, 1);
+        exactTimeToKill = firstHitSpeed;
+        timeToKill = round(exactTimeToKill, 1);
       } else {
         const additionalHits = Math.ceil((totalDefenderHP - firstCycleDamage) / normalCycleDamage);
         hitsToKill = 1 + additionalHits;
-        timeToKill = round(firstHitSpeed + additionalHits * attackSpeed, 1);
+        exactTimeToKill = firstHitSpeed + additionalHits * attackSpeed;
+        timeToKill = round(exactTimeToKill, 1);
       }
       const totalDamage = firstCycleDamage + (hitsToKill - 1) * normalCycleDamage;
       const totalTime = firstHitSpeed + (hitsToKill - 1) * attackSpeed;
@@ -782,7 +831,11 @@ function computeMetrics(
       const unitDPS = round(normalAttackData.value / attackSpeed, 2);
       dps = round(unitDPS * attackerMultiplier, 2);
       hitsToKill = Math.ceil(totalDefenderHP / (normalAttackData.value * attackerMultiplier));
-      timeToKill = round(hitsToKill * attackSpeed, 1);
+      // isChargingMelee units fire their first hit at t=0 (firstHitSpeed=0), so TTK = (N-1) × AS
+      exactTimeToKill = isChargingMelee
+        ? firstHitSpeed + (hitsToKill - 1) * attackSpeed
+        : hitsToKill * attackSpeed;
+      timeToKill = round(exactTimeToKill, 1);
     }
 
     // Defender self-healing: heals healingRate HP per hit it lands
@@ -793,11 +846,12 @@ function computeMetrics(
       const netDPS = dps - healPerS;
       if (netDPS <= 0) {
         hitsToKill = null;
-        timeToKill = null;
+        timeToKill = null; exactTimeToKill = null;
       } else {
         const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
         hitsToKill = Math.ceil(totalDefHP / (netDPS * attackSpeed));
-        timeToKill = round(hitsToKill * attackSpeed, 1);
+        exactTimeToKill = firstHitSpeed + (hitsToKill - 1) * attackSpeed;
+        timeToKill = round(exactTimeToKill, 1);
       }
     }
 
@@ -821,11 +875,13 @@ function computeMetrics(
           const effectiveNormalCycle = normalAttackData.value * attackerMultiplier + secPerNormalCycle;
           if (effectiveFirstCycle >= totalDefHP) {
             hitsToKill = 1;
-            timeToKill = round(firstHitSpeed, 1);
+            exactTimeToKill = firstHitSpeed;
+            timeToKill = round(exactTimeToKill, 1);
           } else {
             const additionalHits = Math.ceil((totalDefHP - effectiveFirstCycle) / effectiveNormalCycle);
             hitsToKill = 1 + additionalHits;
-            timeToKill = round(firstHitSpeed + additionalHits * attackSpeed, 1);
+            exactTimeToKill = firstHitSpeed + additionalHits * attackSpeed;
+            timeToKill = round(exactTimeToKill, 1);
           }
           const totalDmg = effectiveFirstCycle + (hitsToKill - 1) * effectiveNormalCycle;
           const totalTime = firstHitSpeed + (hitsToKill - 1) * attackSpeed;
@@ -834,7 +890,8 @@ function computeMetrics(
           // Continuous model (equal cost): add secondary DPS then TTK = HP / combinedDPS.
           dps = round((dps ?? 0) + totalSecDPS, 2);
           if (dps > 0) {
-            timeToKill = round((defender.hitpoints * defenderMultiplier) / dps, 1);
+            exactTimeToKill = (defender.hitpoints * defenderMultiplier) / dps;
+            timeToKill = round(exactTimeToKill, 1);
             hitsToKill = Math.ceil(timeToKill / attackSpeed);
           }
         }
@@ -847,11 +904,12 @@ function computeMetrics(
       dps = round(dps + bleedDPS, 2);
       const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
       if (dps > 0) {
-        timeToKill = round(totalDefHP / dps, 1);
-        hitsToKill = attackSpeed > 0 ? Math.ceil(timeToKill / attackSpeed) : null;
+        hitsToKill = attackSpeed > 0 ? Math.ceil(totalDefHP / (dps * attackSpeed)) : null;
+        exactTimeToKill = hitsToKill !== null ? firstHitSpeed + (hitsToKill - 1) * attackSpeed : null;
+        timeToKill = exactTimeToKill !== null ? round(exactTimeToKill, 1) : null;
       } else {
         hitsToKill = null;
-        timeToKill = null;
+        timeToKill = null; exactTimeToKill = null;
       }
     }
 
@@ -866,7 +924,8 @@ function computeMetrics(
         dps = round(dps + thornsDPS, 2);
         const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
         if (dps > 0) {
-          timeToKill = round(totalDefHP / dps, 1);
+          exactTimeToKill = totalDefHP / dps;
+          timeToKill = round(exactTimeToKill, 1);
         }
       }
     }
@@ -878,10 +937,11 @@ function computeMetrics(
       const netDPS = dps - defenderHealPerSecond;
       if (netDPS <= 0) {
         hitsToKill = null;
-        timeToKill = null;
+        timeToKill = null; exactTimeToKill = null;
       } else {
-        timeToKill = round(totalDefHP / netDPS, 1);
-        hitsToKill = attackSpeed > 0 ? Math.ceil(timeToKill / attackSpeed) : null;
+        hitsToKill = attackSpeed > 0 ? Math.ceil(totalDefHP / (netDPS * attackSpeed)) : null;
+        exactTimeToKill = hitsToKill !== null ? firstHitSpeed + (hitsToKill - 1) * attackSpeed : null;
+        timeToKill = exactTimeToKill !== null ? round(exactTimeToKill, 1) : null;
       }
     }
 
@@ -893,7 +953,7 @@ function computeMetrics(
   // Special case: self-destructing unit (e.g. demolition ship) — only kills if hitsToKill === 1
   if (attacker.selfDestructs && hitsToKill !== null && hitsToKill > 1) {
     hitsToKill = null;
-    timeToKill = null;
+    timeToKill = null; exactTimeToKill = null;
     dps = null;
   }
 
@@ -907,7 +967,10 @@ function computeMetrics(
     const normalDmgPerHit = normalAttackData.value * attackerMultiplier;
     if (noTimerDmgPerHit > 0 && noTimerAttackSpeed > 0 && (noTimerDmgPerHit !== normalDmgPerHit || noTimerAttackSpeed !== attackSpeed)) {
       const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
-      const hitsInDuration = Math.floor(timedDurationAttacker / attackSpeed);
+      // Account for firstHitSpeed: first hit lands at firstHitSpeed, not attackSpeed
+      const hitsInDuration = firstHitSpeed <= timedDurationAttacker
+        ? 1 + Math.floor((timedDurationAttacker - firstHitSpeed) / attackSpeed)
+        : 0;
       const firstDmgPerHit = firstAttackData.value * attackerMultiplier;
       // Hit 1 carries the charge bonus (includes holy wrath); remaining hits are normal
       const dmgInDuration = hitsInDuration >= 1
@@ -917,7 +980,10 @@ function computeMetrics(
         const remainingHP = totalDefHP - dmgInDuration;
         const remainingHits = Math.ceil(remainingHP / noTimerDmgPerHit);
         hitsToKill = hitsInDuration + remainingHits;
-        timeToKill = round(hitsInDuration * attackSpeed + remainingHits * noTimerAttackSpeed, 1);
+        // Time = firstHitSpeed + (hitsInDuration-1) normal cycles + remainingHits noTimer cycles
+        exactTimeToKill = (hitsInDuration > 0 ? firstHitSpeed + (hitsInDuration - 1) * attackSpeed : 0)
+          + remainingHits * noTimerAttackSpeed;
+        timeToKill = round(exactTimeToKill, 1);
         dps = round((dmgInDuration + remainingHits * noTimerDmgPerHit) / timeToKill, 2);
       }
     }
@@ -932,13 +998,22 @@ function computeMetrics(
     const phase1DmgPerHit = normalAttackData.value * attackerMultiplier;
     if (noTimerDefDmgPerHit > 0 && attackSpeed > 0 && noTimerDefDmgPerHit !== phase1DmgPerHit) {
       const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
-      const hitsInDuration = Math.floor(timedDurationDefender / attackSpeed);
-      const dmgInDuration = hitsInDuration * phase1DmgPerHit;
+      // Account for firstHitSpeed: first hit lands at firstHitSpeed, not attackSpeed
+      const hitsInDuration = firstHitSpeed <= timedDurationDefender
+        ? 1 + Math.floor((timedDurationDefender - firstHitSpeed) / attackSpeed)
+        : 0;
+      const firstDmgPerHit = firstAttackData.value * attackerMultiplier;
+      const dmgInDuration = hitsInDuration >= 1
+        ? firstDmgPerHit + (hitsInDuration - 1) * phase1DmgPerHit
+        : 0;
       if (dmgInDuration < totalDefHP) {
         const remainingHP = totalDefHP - dmgInDuration;
         const remainingHits = Math.ceil(remainingHP / noTimerDefDmgPerHit);
         hitsToKill = hitsInDuration + remainingHits;
-        timeToKill = round((hitsInDuration + remainingHits) * attackSpeed, 1);
+        // Attacker speed unchanged across phases — just firstHitSpeed offset
+        exactTimeToKill = (hitsInDuration > 0 ? firstHitSpeed + (hitsInDuration - 1) * attackSpeed : 0)
+          + remainingHits * attackSpeed;
+        timeToKill = round(exactTimeToKill, 1);
         dps = round(totalDefHP / timeToKill, 2);
       }
     }
@@ -954,8 +1029,10 @@ function computeMetrics(
       const defenderAS = (defender.weapons[0]?.speed ?? 0) * (1 + (attacker.opponentAttackSpeedDebuff ?? 0));
       const rawDmgPerHit = normalAttackData.value * attackerMultiplier;
       const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
-      const hitsInDuration = Math.floor(timedDurationDefender / attackSpeed);
-      const phase1Time = hitsInDuration * attackSpeed;
+      const hitsInDuration = firstHitSpeed <= timedDurationDefender
+        ? 1 + Math.floor((timedDurationDefender - firstHitSpeed) / attackSpeed)
+        : 0;
+      const phase1Time = hitsInDuration > 0 ? firstHitSpeed + (hitsInDuration - 1) * attackSpeed : 0;
       const healPerS1 = defenderAS > 0 ? phase1HealRate / defenderAS : 0;
       const healPerS2 = defenderAS > 0 ? phase2HealRate / defenderAS : 0;
       const netDmgPhase1 = hitsInDuration * rawDmgPerHit - phase1Time * healPerS1;
@@ -965,7 +1042,8 @@ function computeMetrics(
         if (netDmgPerHitPhase2 > 0) {
           const remainingHits = Math.ceil(remainingHP / netDmgPerHitPhase2);
           hitsToKill = hitsInDuration + remainingHits;
-          timeToKill = round(phase1Time + remainingHits * attackSpeed, 1);
+          exactTimeToKill = phase1Time + remainingHits * attackSpeed;
+          timeToKill = round(exactTimeToKill, 1);
           dps = round(totalDefHP / timeToKill, 2);
         }
       }
@@ -1014,6 +1092,7 @@ function computeMetrics(
     dpsPerCost,
     hitsToKill,
     timeToKill,
+    timeToKillExact: exactTimeToKill,
     effectiveDamagePerHit: normalAttackData.value,
     ...(firstAttackData.value !== normalAttackData.value ? { firstHitDamage: firstAttackData.value } : {}),
     bugAttackSpeed,
@@ -1074,7 +1153,16 @@ export function calculateEqualCostMultipliers(costA: number, costB: number): { m
 // Returns actual damage dealt by attacker to defender over a given duration,
 // modelling hits discretely: first hit (with charge bonus) then normal hits.
 // Secondary weapons are approximated as continuous DPS.
-function computeDamageInTime(attacker: CombatEntity, defender: CombatEntity, chargeBonus: number, duration: number): number {
+// When attackerNoTimer + timedDurationAttacker are provided, applies a two-phase correction:
+// Phase 1 (0 → timedDurationAttacker): timed stats; Phase 2: noTimer stats.
+function computeDamageInTime(
+  attacker: CombatEntity,
+  defender: CombatEntity,
+  chargeBonus: number,
+  duration: number,
+  attackerNoTimer?: CombatEntity,
+  timedDurationAttacker?: number,
+): number {
   const firstData = computeEffectiveDamage(attacker, defender, chargeBonus, true);
   const normalData = computeEffectiveDamage(attacker, defender, 0, false);
   const rawSpeed = normalData.weapon?.speed ?? 0;
@@ -1090,9 +1178,40 @@ function computeDamageInTime(attacker: CombatEntity, defender: CombatEntity, cha
   const attackerTravelTime = isArcher(attacker) ? ARCHER_TRAVEL_TIME : 0;
   const effectiveDuration = duration - attackerTravelTime;
   if (effectiveDuration < firstHitSpeed) return 0;
-  const additionalHits = Math.floor((effectiveDuration - firstHitSpeed) / attackSpeed);
+  const totalAdditionalHits = Math.floor((effectiveDuration - firstHitSpeed) / attackSpeed);
   const firstHitDamage = defender.firstHitBlocked ? 0 : firstData.value;
-  let total = firstHitDamage + additionalHits * normalData.value;
+  const normalDmgPerHit = normalData.value;
+
+  // Two-phase correction: attacker's timed ability expires before the fight ends
+  if (attackerNoTimer && timedDurationAttacker !== undefined && timedDurationAttacker < duration) {
+    const noTimerNormalData = computeEffectiveDamage(attackerNoTimer, defender, 0, false);
+    const noTimerDmgPerHit = noTimerNormalData.value;
+    if (noTimerDmgPerHit !== normalDmgPerHit) {
+      const effTimedDur = timedDurationAttacker - attackerTravelTime;
+      // Hits whose shot lands at or before effTimedDur belong to Phase 1
+      const hitsP1 = effTimedDur < firstHitSpeed
+        ? 0
+        : 1 + Math.floor((effTimedDur - firstHitSpeed) / attackSpeed);
+      const hitsP2 = Math.max(0, (1 + totalAdditionalHits) - hitsP1);
+      let total: number;
+      if (hitsP1 >= 1) {
+        total = firstHitDamage + (hitsP1 - 1) * normalDmgPerHit + hitsP2 * noTimerDmgPerHit;
+      } else {
+        // Timed ability expires before first hit — all hits use noTimer stats
+        const noTimerFirstData = computeEffectiveDamage(attackerNoTimer, defender, chargeBonus, true);
+        const noTimerFirstHitDamage = defender.firstHitBlocked ? 0 : noTimerFirstData.value;
+        total = noTimerFirstHitDamage + (hitsP2 - 1) * noTimerDmgPerHit;
+      }
+      for (const secWeapon of (attacker.secondaryWeapons ?? [])) {
+        if (!secWeapon.speed || secWeapon.speed <= 0) continue;
+        const secData = computeEffectiveDamage(attacker, defender, 0, false, secWeapon);
+        total += (secData.value / secWeapon.speed) * duration;
+      }
+      return total;
+    }
+  }
+
+  let total = firstHitDamage + totalAdditionalHits * normalDmgPerHit;
   for (const secWeapon of (attacker.secondaryWeapons ?? [])) {
     if (!secWeapon.speed || secWeapon.speed <= 0) continue;
     const secData = computeEffectiveDamage(attacker, defender, 0, false, secWeapon);
@@ -1186,15 +1305,19 @@ export function computeVersus(
 
   let winnerHpRemaining: number | undefined;
   if (winner === "attacker" && metricsA.timeToKill !== null) {
+    // Use exact (unrounded) TTK to avoid giving the loser one extra discrete hit due to rounding.
+    // Pass B's noTimer + timedDuration so its damage is phase-corrected if it has a timed ability.
+    const tA = metricsA.timeToKillExact ?? metricsA.timeToKill;
     const healingA = (metricsA.hitsToKill ?? 0) * (A.healingRate ?? 0)
-      + metricsA.timeToKill * Math.max(0, A.healingRatePerSecond ?? 0);
+      + tA * Math.max(0, A.healingRatePerSecond ?? 0);
     const startHpA = A.hitpoints * (A.hpStartFraction ?? 1);
-    winnerHpRemaining = Math.min(A.hitpoints, Math.max(0, startHpA - computeDamageInTime(B, A, chargeBonusB, metricsA.timeToKill) + healingA));
+    winnerHpRemaining = Math.min(A.hitpoints, Math.max(0, startHpA - computeDamageInTime(B, A, chargeBonusB, tA, BnoTimer, timedDurationB) + healingA));
   } else if (winner === "defender" && metricsB.timeToKill !== null) {
+    const tB = metricsB.timeToKillExact ?? metricsB.timeToKill;
     const healingB = (metricsB.hitsToKill ?? 0) * (B.healingRate ?? 0)
-      + metricsB.timeToKill * Math.max(0, B.healingRatePerSecond ?? 0);
+      + tB * Math.max(0, B.healingRatePerSecond ?? 0);
     const startHpB = B.hitpoints * (B.hpStartFraction ?? 1);
-    winnerHpRemaining = Math.min(B.hitpoints, Math.max(0, startHpB - computeDamageInTime(A, B, chargeBonusA, metricsB.timeToKill) + healingB));
+    winnerHpRemaining = Math.min(B.hitpoints, Math.max(0, startHpB - computeDamageInTime(A, B, chargeBonusA, tB, AnoTimer, timedDurationA) + healingB));
   }
 
   return {
@@ -2231,7 +2354,12 @@ export function computeVersusKitingFocusFire(
   const effectiveMeleeSpeed = hasMeleeCharge ? meleeEnt.moveSpeed * 1.2 : meleeEnt.moveSpeed;
   const d_approach = Math.max(0, startDistance - rangedRange);
   const t_approach = effectiveMeleeSpeed > 0 ? d_approach / effectiveMeleeSpeed : 0;
-  const freeHits = asRanged > 0 ? Math.floor(t_approach / asRanged) : 0;
+  const wRangedFF = rangedEnt.weapons[0]?.durations?.windup ?? 0;
+  const approachTravelTimeFF = isArcher(rangedEnt) ? ARCHER_TRAVEL_TIME : 0;
+  const shotsDeadlineFF = t_approach - approachTravelTimeFF;
+  const freeHits = asRanged > 0 && shotsDeadlineFF >= wRangedFF
+    ? Math.floor((shotsDeadlineFF - wRangedFF) / asRanged) + 1
+    : 0;
   const d_kite_start = Math.min(startDistance, rangedRange);
   const retreatTime = getRetreatTime(rangedEnt);
   const absDelta = Math.abs(rangedEnt.moveSpeed * retreatTime - effectiveMeleeSpeed * asRanged);
@@ -2455,7 +2583,12 @@ export function computeVersusKitingBatchesMC(
   const effectiveMeleeSpeed = hasMeleeCharge ? meleeEnt.moveSpeed * 1.2 : meleeEnt.moveSpeed;
   const d_approach = Math.max(0, startDistance - rangedRange);
   const t_approach = effectiveMeleeSpeed > 0 ? d_approach / effectiveMeleeSpeed : 0;
-  const freeHits = asRanged > 0 ? Math.floor(t_approach / asRanged) : 0;
+  const wRangedFF = rangedEnt.weapons[0]?.durations?.windup ?? 0;
+  const approachTravelTimeFF = isArcher(rangedEnt) ? ARCHER_TRAVEL_TIME : 0;
+  const shotsDeadlineFF = t_approach - approachTravelTimeFF;
+  const freeHits = asRanged > 0 && shotsDeadlineFF >= wRangedFF
+    ? Math.floor((shotsDeadlineFF - wRangedFF) / asRanged) + 1
+    : 0;
   const d_kite_start = Math.min(startDistance, rangedRange);
   const retreatTime = getRetreatTime(rangedEnt);
   const absDelta = Math.abs(rangedEnt.moveSpeed * retreatTime - effectiveMeleeSpeed * asRanged);
