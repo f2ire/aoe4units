@@ -9,6 +9,7 @@ interface VersusMetricsProps {
   dps: number | null;
   dpsPerCost: number | null;
   hitsToKill: number | null;
+  approachShots?: number;
   timeToKill: number | null;
   effectiveDamagePerHit: number | null;
   bugAttackSpeed: boolean;
@@ -640,7 +641,7 @@ export const UnitCard = ({
           const attackerTotalDmg = (versusMetrics.effectiveDamagePerHit || 0) * (versusMetrics.multiplier || 1);
           const cycleStr = primaryWeapon?.speed != null ? round2(primaryWeapon.speed) + 's' : '—';
           const approachShots = versusMetrics.approachShots ?? 0;
-          const totalHitsToKill = versusMetrics.hitsToKill !== null ? versusMetrics.hitsToKill + approachShots : null;
+          const totalHitsToKill = (versusMetrics.hitsToKill ?? 0) + approachShots || null;
           return (
             <div className="space-y-2">
 

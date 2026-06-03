@@ -268,11 +268,11 @@ export function GuidedTour({
   return (
     <button
       onClick={startTour}
-      className="absolute top-0 right-0 w-8 h-8 rounded-full bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary transition-colors text-sm font-semibold flex items-center justify-center"
+      className="absolute top-0 right-0 h-8 px-3 rounded-full bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary transition-colors text-sm font-semibold flex items-center justify-center whitespace-nowrap"
       title="Open guided tour"
       aria-label="Open guided tour"
     >
-      ?
+      Tutorial
     </button>
   );
 }
