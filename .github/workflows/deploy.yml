@@ -1,9 +1,12 @@
 name: Build & Deploy
 
-on: 
+on:
   push:
     branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-and-deploy:
@@ -16,10 +19,10 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
-      - name: Install dependencies   # ← manquant
+      - name: Install dependencies
         run: npm ci
 
       - name: Build
@@ -29,7 +32,7 @@ jobs:
         run: echo "aoe4units.com" > dist/CNAME
 
       - name: Deploy
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
