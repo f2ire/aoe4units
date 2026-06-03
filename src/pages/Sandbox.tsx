@@ -1742,19 +1742,6 @@ const Sandbox = () => {
                 }
               }
 
-              // For delta display: also compute without duration correction when a timed ability is active
-              const hasActiveDuration = !atEqualCost && (!!timedDuration1 || !!timedDuration2);
-              const versusDataOriginal = hasActiveDuration ? computeVersus(
-                modifiedVariation1 || modifiedUnit1!,
-                modifiedVariation2 || modifiedUnit2!,
-                abilitiesArray1,
-                abilitiesArray2,
-                charge1,
-                charge2,
-                allowKiting,
-                startDistance,
-              ) : undefined;
-
               // Win/loss logic based on weapon ownership
               // A unit without a weapon always loses against a unit with a weapon
               // A draw only occurs when neither unit has a weapon
@@ -1995,28 +1982,6 @@ const Sandbox = () => {
                       </div>
                     </div>
                   </motion.div>
-                  {versusDataOriginal && (
-                    <div className="col-span-2 flex flex-wrap justify-center gap-4 mt-2 text-xs text-muted-foreground">
-                      {versusDataOriginal.attacker.timeToKill !== versusData.attacker.timeToKill && (
-                        <span className="text-orange-400">
-                          Civ 1 TTK: {versusDataOriginal.attacker.timeToKill}s → {versusData.attacker.timeToKill}s ({timedDuration1 ?? timedDuration2}s ability)
-                        </span>
-                      )}
-                      {versusDataOriginal.defender.timeToKill !== versusData.defender.timeToKill && (
-                        <span className="text-orange-400">
-                          Civ 2 TTK: {versusDataOriginal.defender.timeToKill}s → {versusData.defender.timeToKill}s ({timedDuration2 ?? timedDuration1}s ability)
-                        </span>
-                      )}
-                      {!timedDuration1 && !timedDuration2 && (
-                        <span>No timed ability active — duration correction has no effect.</span>
-                      )}
-                      {(timedDuration1 || timedDuration2) &&
-                        versusDataOriginal.attacker.timeToKill === versusData.attacker.timeToKill &&
-                        versusDataOriginal.defender.timeToKill === versusData.defender.timeToKill && (
-                          <span>Duration ({timedDuration1 ?? timedDuration2}s) covers full fight — no correction needed.</span>
-                        )}
-                    </div>
-                  )}
                 </>
               );
             })()}
