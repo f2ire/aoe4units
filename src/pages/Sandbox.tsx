@@ -14,6 +14,7 @@ import { motion } from "framer-motion";
 import { useUnitSlot } from "@/hooks/useUnitSlot";
 import { JeanneFormSelector, isJeanneUnit } from "@/components/JeanneFormSelector";
 import { GuidedTour } from "@/components/GuidedTour";
+import { unitNameMatchScore } from "@/lib/utils";
 
 
 const categoryNames: Record<string, string> = {
@@ -278,6 +279,8 @@ const Sandbox = () => {
   const [allowKiting, setAllowKiting] = useState<boolean>(false);
   const [startDistancePreset, setStartDistancePreset] = useState<string>("max");
   const [customDistance, setCustomDistance] = useState<number>(5);
+  const [unitSearch1, setUnitSearch1] = useState<string>("");
+  const [unitSearch2, setUnitSearch2] = useState<string>("");
 
   const civ1 = useUnitSlot();
   const civ2 = useUnitSlot();
@@ -1034,7 +1037,7 @@ const Sandbox = () => {
             setMultiUnitModelKey={setMultiUnitModelKey}
           />
           <div>
-            <h1 className="text-4xl font-serif font-bold text-primary mb-2">Sandbox Mode</h1>
+            <h1 className="text-4xl font-serif font-bold text-primary mb-2">AoE4 Units</h1>
             <p className="text-muted-foreground text-lg">Compare any two units from any civilizations!</p>
           </div>
           {/* Mode Toggle */}
@@ -1070,20 +1073,20 @@ const Sandbox = () => {
                       { key: 'focusFire', label: 'Target Focus', title: 'Each side concentrates fire on one target at a time. Ranged vs Melee: auto-switches to Asymmetric (ranged concentrates on one melee target; melee distributes in batches round-robin).', devOnly: false },
                       { key: 'focusFireBatchesMC', label: 'Attack move', title: `Batches Monte Carlo: ${200} simulations with random batch assignment per iteration. Both-melee/both-ranged: random batch redistribution. Ranged vs Melee: auto-switches to Batches MC Asymmetric.`, devOnly: false },
                     ] as { key: 'aggregated' | 'focusFire' | 'focusFireBatchesMC'; label: string; title: string; devOnly: boolean }[])
-                    .filter(opt => import.meta.env.DEV || !opt.devOnly)
-                    .map((opt, i) => (
-                      <React.Fragment key={opt.key}>
-                        {i > 0 && <div className="w-px bg-border self-stretch" />}
-                        <button
-                          type="button"
-                          title={opt.title}
-                          onClick={() => setMultiUnitModelKey(opt.key)}
-                          className={`px-3 py-2 text-sm font-medium transition-colors ${multiUnitModelKey === opt.key ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-foreground'}`}
-                        >
-                          {opt.label}
-                        </button>
-                      </React.Fragment>
-                    ))}
+                      .filter(opt => import.meta.env.DEV || !opt.devOnly)
+                      .map((opt, i) => (
+                        <React.Fragment key={opt.key}>
+                          {i > 0 && <div className="w-px bg-border self-stretch" />}
+                          <button
+                            type="button"
+                            title={opt.title}
+                            onClick={() => setMultiUnitModelKey(opt.key)}
+                            className={`px-3 py-2 text-sm font-medium transition-colors ${multiUnitModelKey === opt.key ? 'bg-primary text-primary-foreground' : 'hover:bg-muted text-foreground'}`}
+                          >
+                            {opt.label}
+                          </button>
+                        </React.Fragment>
+                      ))}
                   </div>
                 )}
                 {(() => {
@@ -1097,7 +1100,7 @@ const Sandbox = () => {
                     <div
                       id="tour-atEqualCost"
                       className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card ${isEqualCostDisabled ? 'opacity-50' : ''}`}
-                      title={disabledTitle}
+                      title={disabledTitle ?? 'Compares equal-cost groups. Results may be less precise due to rounding and group-size approximations.'}
                     >
                       <input
                         type="checkbox"
@@ -1178,142 +1181,202 @@ const Sandbox = () => {
           <div className="space-y-4 flex flex-col items-end">
             <label className="text-sm font-medium text-foreground">Civ 1: <span className="text-xs text-muted-foreground font-normal">({filteredUnits1.length} units)</span></label>
             <div id="tour-civ1" className="w-full">
-            <Select value={selectedCiv1} onValueChange={setSelectedCiv1}>
-              <SelectTrigger className="bg-secondary border-border h-14">
-                <SelectValue>
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={CIVILIZATIONS.find(c => c.abbr === selectedCiv1)?.flagPath}
-                      alt=""
-                      className="w-8 h-8 object-contain"
-                    />
-                    <span className="font-medium">
-                      {CIVILIZATIONS.find(c => c.abbr === selectedCiv1)?.name}
-                    </span>
-                  </div>
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent className="bg-popover border-border max-h-[400px]">
-                {CIVILIZATIONS.map((civ) => (
-                  <SelectItem key={civ.abbr} value={civ.abbr} className="data-[state=checked]:font-bold py-3 group">
+              <Select value={selectedCiv1} onValueChange={setSelectedCiv1}>
+                <SelectTrigger className="bg-secondary border-border h-14">
+                  <SelectValue>
                     <div className="flex items-center gap-3">
-                      <img src={civ.flagPath} alt={civ.name} className="w-8 h-8 object-contain" />
-                      <span className="font-medium text-white group-hover:text-black transition-colors">{civ.name}</span>
+                      <img
+                        src={CIVILIZATIONS.find(c => c.abbr === selectedCiv1)?.flagPath}
+                        alt=""
+                        className="w-8 h-8 object-contain"
+                      />
+                      <span className="font-medium">
+                        {CIVILIZATIONS.find(c => c.abbr === selectedCiv1)?.name}
+                      </span>
                     </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border max-h-[400px]">
+                  {CIVILIZATIONS.map((civ) => (
+                    <SelectItem key={civ.abbr} value={civ.abbr} className="data-[state=checked]:font-bold py-3 group">
+                      <div className="flex items-center gap-3">
+                        <img src={civ.flagPath} alt={civ.name} className="w-8 h-8 object-contain" />
+                        <span className="font-medium text-white group-hover:text-black transition-colors">{civ.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div id="tour-unit1" className="w-full">
-            <Select
-              value={isJeanneUnit(unit1) ? 'jeanne-darc-peasant' : unit1?.id === 'desert-raider' && activeAbilities1.has('ability-desert-raider-blade') ? 'desert-raider_cavalry' : (unit1?.id || "")}
-              onValueChange={(value) => {
-                if (value === 'desert-raider_cavalry') {
-                  setUnit1(filteredUnits1.find(u => u.id === 'desert-raider') || null, 'ability-desert-raider-blade');
-                } else {
-                  setUnit1(filteredUnits1.find(u => u.id === value) || null);
-                }
-              }}
-            >
-              <SelectTrigger className="bg-secondary border-border">
-                <SelectValue placeholder="Select a unit..." />
-              </SelectTrigger>
-              <SelectContent className="bg-popover border-border max-h-[500px]">
-                {categoryOrder.map(categoryKey => {
-                  const units = categorizedUnits1[categoryKey];
-                  if (!units || units.length === 0) return null;
-
-                  const isOpen = openCategories1[categoryKey];
-
-                  return (
-                    <SelectGroup key={categoryKey}>
-                      <div
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          toggleCategory1(categoryKey);
-                        }}
-                        className="cursor-pointer hover:bg-accent px-2 py-2 rounded group"
-                      >
-                        <SelectLabel className="text-primary group-hover:text-background font-semibold flex items-center gap-2 cursor-pointer">
-                          <span className="text-xs">{isOpen ? '▼' : '▶'}</span>
-                          <img
-                            src={categoryIcons[categoryKey]}
-                            alt=""
-                            className="w-5 h-5 object-contain inline-block"
-                          />
-                          <span>{categoryNames[categoryKey]} ({units.length})</span>
-                        </SelectLabel>
-                      </div>
-                      {isOpen && categoryKey === 'mercenary' ? (() => {
-                        const grouped: Record<string, typeof units> = {};
-                        for (const u of units) {
-                          const sub = getMercenarySubCategory(u);
-                          if (!grouped[sub]) grouped[sub] = [];
-                          grouped[sub].push(u);
-                        }
-                        return MERCENARY_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
-                          <React.Fragment key={sub}>
-                            <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
-                            {grouped[sub].map((unit) => (
-                              <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-10 group">
+              <Select
+                value={isJeanneUnit(unit1) ? 'jeanne-darc-peasant' : unit1?.id === 'desert-raider' && activeAbilities1.has('ability-desert-raider-blade') ? 'desert-raider_cavalry' : (unit1?.id || "")}
+                onOpenChange={(open) => { if (!open) setUnitSearch1(""); }}
+                onValueChange={(value) => {
+                  setUnitSearch1("");
+                  if (value === 'desert-raider_cavalry') {
+                    setUnit1(filteredUnits1.find(u => u.id === 'desert-raider') || null, 'ability-desert-raider-blade');
+                  } else {
+                    setUnit1(filteredUnits1.find(u => u.id === value) || null);
+                  }
+                }}
+              >
+                <SelectTrigger className="bg-secondary border-border">
+                  <SelectValue placeholder="Select a unit..." />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border max-h-[500px]">
+                  <div
+                    className="sticky top-0 z-10 bg-popover px-1 pb-1 pt-0.5"
+                    onKeyDown={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      autoFocus
+                      value={unitSearch1}
+                      onChange={(e) => setUnitSearch1(e.target.value)}
+                      placeholder="Search units..."
+                      className="w-full rounded-sm border border-border bg-secondary px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                  {unitSearch1.trim() ? (() => {
+                    const q = unitSearch1.trim().toLowerCase();
+                    const scored: { score: number; el: JSX.Element }[] = [];
+                    for (const categoryKey of categoryOrder) {
+                      const catUnits = categorizedUnits1[categoryKey];
+                      if (!catUnits || catUnits.length === 0) continue;
+                      if (categoryKey === 'jeanne') {
+                        const peasant = catUnits.find(u => u.id === 'jeanne-darc-peasant');
+                        if (!peasant) continue;
+                        const score = unitNameMatchScore("Jeanne d'Arc", q);
+                        if (score > 0) {
+                          scored.push({
+                            score, el: (
+                              <SelectItem key="jeanne-darc" value="jeanne-darc-peasant" className="data-[state=checked]:font-bold pl-8 group">
                                 <div className="flex items-center gap-2">
-                                  <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
-                                  <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
-                                  {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
+                                  <img src={peasant.icon} alt="Jeanne d'Arc" className="w-6 h-6 object-contain" />
+                                  <span className="text-white group-hover:text-black transition-colors">Jeanne d'Arc</span>
                                 </div>
                               </SelectItem>
-                            ))}
-                          </React.Fragment>
-                        ));
-                      })() : isOpen && categoryKey === 'khaganate' ? (() => {
-                        const grouped: Record<string, typeof units> = {};
-                        for (const u of units) {
-                          const sub = getKhaganateSubCategory(u);
-                          if (!grouped[sub]) grouped[sub] = [];
-                          grouped[sub].push(u);
+                            )
+                          });
                         }
-                        return KHAGANATE_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
-                          <React.Fragment key={sub}>
-                            <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
-                            {grouped[sub].map((unit) => (
-                              <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-10 group">
-                                <div className="flex items-center gap-2">
-                                  <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
-                                  <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
-                                  {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </React.Fragment>
-                        ));
-                      })() : isOpen && categoryKey === 'jeanne' ? (() => {
-                        const peasant = units.find(u => u.id === 'jeanne-darc-peasant');
-                        if (!peasant) return null;
-                        return (
-                          <SelectItem key="jeanne-darc" value="jeanne-darc-peasant" className="data-[state=checked]:font-bold pl-8 group">
+                        continue;
+                      }
+                      for (const unit of catUnits) {
+                        const score = unitNameMatchScore(unit.name, q);
+                        if (score <= 0) continue;
+                        scored.push({
+                          score, el: (
+                            <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-8 group">
+                              <div className="flex items-center gap-2">
+                                <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
+                                <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
+                                {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
+                              </div>
+                            </SelectItem>
+                          )
+                        });
+                      }
+                    }
+                    if (scored.length === 0) {
+                      return <div className="py-6 text-center text-sm text-muted-foreground">No units found</div>;
+                    }
+                    scored.sort((a, b) => b.score - a.score);
+                    return scored.map(s => s.el);
+                  })() : categoryOrder.map(categoryKey => {
+                    const units = categorizedUnits1[categoryKey];
+                    if (!units || units.length === 0) return null;
+
+                    const isOpen = openCategories1[categoryKey];
+
+                    return (
+                      <SelectGroup key={categoryKey}>
+                        <div
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleCategory1(categoryKey);
+                          }}
+                          className="cursor-pointer hover:bg-accent px-2 py-2 rounded group"
+                        >
+                          <SelectLabel className="text-primary group-hover:text-background font-semibold flex items-center gap-2 cursor-pointer">
+                            <span className="text-xs">{isOpen ? '▼' : '▶'}</span>
+                            <img
+                              src={categoryIcons[categoryKey]}
+                              alt=""
+                              className="w-5 h-5 object-contain inline-block"
+                            />
+                            <span>{categoryNames[categoryKey]} ({units.length})</span>
+                          </SelectLabel>
+                        </div>
+                        {isOpen && categoryKey === 'mercenary' ? (() => {
+                          const grouped: Record<string, typeof units> = {};
+                          for (const u of units) {
+                            const sub = getMercenarySubCategory(u);
+                            if (!grouped[sub]) grouped[sub] = [];
+                            grouped[sub].push(u);
+                          }
+                          return MERCENARY_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
+                            <React.Fragment key={sub}>
+                              <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
+                              {grouped[sub].map((unit) => (
+                                <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-10 group">
+                                  <div className="flex items-center gap-2">
+                                    <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
+                                    <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
+                                    {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </React.Fragment>
+                          ));
+                        })() : isOpen && categoryKey === 'khaganate' ? (() => {
+                          const grouped: Record<string, typeof units> = {};
+                          for (const u of units) {
+                            const sub = getKhaganateSubCategory(u);
+                            if (!grouped[sub]) grouped[sub] = [];
+                            grouped[sub].push(u);
+                          }
+                          return KHAGANATE_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
+                            <React.Fragment key={sub}>
+                              <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
+                              {grouped[sub].map((unit) => (
+                                <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-10 group">
+                                  <div className="flex items-center gap-2">
+                                    <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
+                                    <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
+                                    {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </React.Fragment>
+                          ));
+                        })() : isOpen && categoryKey === 'jeanne' ? (() => {
+                          const peasant = units.find(u => u.id === 'jeanne-darc-peasant');
+                          if (!peasant) return null;
+                          return (
+                            <SelectItem key="jeanne-darc" value="jeanne-darc-peasant" className="data-[state=checked]:font-bold pl-8 group">
+                              <div className="flex items-center gap-2">
+                                <img src={peasant.icon} alt="Jeanne d'Arc" className="w-6 h-6 object-contain" />
+                                <span className="text-white group-hover:text-black transition-colors">Jeanne d'Arc</span>
+                              </div>
+                            </SelectItem>
+                          );
+                        })() : isOpen && units.map((unit) => (
+                          <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-8 group">
                             <div className="flex items-center gap-2">
-                              <img src={peasant.icon} alt="Jeanne d'Arc" className="w-6 h-6 object-contain" />
-                              <span className="text-white group-hover:text-black transition-colors">Jeanne d'Arc</span>
+                              <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
+                              <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
+                              {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
                             </div>
                           </SelectItem>
-                        );
-                      })() : isOpen && units.map((unit) => (
-                        <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-8 group">
-                          <div className="flex items-center gap-2">
-                            <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
-                            <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
-                            {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+                        ))}
+                      </SelectGroup>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
             </div>
             {isJeanneUnit(unit1) && (
               <JeanneFormSelector
@@ -1329,142 +1392,202 @@ const Sandbox = () => {
           <div className="space-y-4 flex flex-col items-start">
             <label className="text-sm font-medium text-foreground">Civ 2: <span className="text-xs text-muted-foreground font-normal">({filteredUnits2.length} units)</span></label>
             <div id="tour-civ2" className="w-full">
-            <Select value={selectedCiv2} onValueChange={setSelectedCiv2}>
-              <SelectTrigger className="bg-secondary border-border h-14">
-                <SelectValue>
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={CIVILIZATIONS.find(c => c.abbr === selectedCiv2)?.flagPath}
-                      alt=""
-                      className="w-8 h-8 object-contain"
-                    />
-                    <span className="font-medium">
-                      {CIVILIZATIONS.find(c => c.abbr === selectedCiv2)?.name}
-                    </span>
-                  </div>
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent className="bg-popover border-border max-h-[400px]">
-                {CIVILIZATIONS.map((civ) => (
-                  <SelectItem key={civ.abbr} value={civ.abbr} className="data-[state=checked]:font-bold py-3 group">
+              <Select value={selectedCiv2} onValueChange={setSelectedCiv2}>
+                <SelectTrigger className="bg-secondary border-border h-14">
+                  <SelectValue>
                     <div className="flex items-center gap-3">
-                      <img src={civ.flagPath} alt={civ.name} className="w-8 h-8 object-contain" />
-                      <span className="font-medium text-white group-hover:text-black transition-colors">{civ.name}</span>
+                      <img
+                        src={CIVILIZATIONS.find(c => c.abbr === selectedCiv2)?.flagPath}
+                        alt=""
+                        className="w-8 h-8 object-contain"
+                      />
+                      <span className="font-medium">
+                        {CIVILIZATIONS.find(c => c.abbr === selectedCiv2)?.name}
+                      </span>
                     </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border max-h-[400px]">
+                  {CIVILIZATIONS.map((civ) => (
+                    <SelectItem key={civ.abbr} value={civ.abbr} className="data-[state=checked]:font-bold py-3 group">
+                      <div className="flex items-center gap-3">
+                        <img src={civ.flagPath} alt={civ.name} className="w-8 h-8 object-contain" />
+                        <span className="font-medium text-white group-hover:text-black transition-colors">{civ.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div id="tour-unit2" className="w-full">
-            <Select
-              value={isJeanneUnit(unit2) ? 'jeanne-darc-peasant' : unit2?.id === 'desert-raider' && activeAbilities2.has('ability-desert-raider-blade') ? 'desert-raider_cavalry' : (unit2?.id || "")}
-              onValueChange={(value) => {
-                if (value === 'desert-raider_cavalry') {
-                  setUnit2(filteredUnits2.find(u => u.id === 'desert-raider') || null, 'ability-desert-raider-blade');
-                } else {
-                  setUnit2(filteredUnits2.find(u => u.id === value) || null);
-                }
-              }}
-            >
-              <SelectTrigger className="bg-secondary border-border">
-                <SelectValue placeholder="Select a unit..." />
-              </SelectTrigger>
-              <SelectContent className="bg-popover border-border max-h-[500px]">
-                {categoryOrder.map(categoryKey => {
-                  const units = categorizedUnits2[categoryKey];
-                  if (!units || units.length === 0) return null;
-
-                  const isOpen = openCategories2[categoryKey];
-
-                  return (
-                    <SelectGroup key={categoryKey}>
-                      <div
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          toggleCategory2(categoryKey);
-                        }}
-                        className="cursor-pointer hover:bg-accent px-2 py-2 rounded group"
-                      >
-                        <SelectLabel className="text-primary group-hover:text-background font-semibold flex items-center gap-2 cursor-pointer">
-                          <span className="text-xs">{isOpen ? '▼' : '▶'}</span>
-                          <img
-                            src={categoryIcons[categoryKey]}
-                            alt=""
-                            className="w-5 h-5 object-contain inline-block"
-                          />
-                          <span>{categoryNames[categoryKey]} ({units.length})</span>
-                        </SelectLabel>
-                      </div>
-                      {isOpen && categoryKey === 'mercenary' ? (() => {
-                        const grouped: Record<string, typeof units> = {};
-                        for (const u of units) {
-                          const sub = getMercenarySubCategory(u);
-                          if (!grouped[sub]) grouped[sub] = [];
-                          grouped[sub].push(u);
-                        }
-                        return MERCENARY_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
-                          <React.Fragment key={sub}>
-                            <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
-                            {grouped[sub].map((unit) => (
-                              <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-10 group">
+              <Select
+                value={isJeanneUnit(unit2) ? 'jeanne-darc-peasant' : unit2?.id === 'desert-raider' && activeAbilities2.has('ability-desert-raider-blade') ? 'desert-raider_cavalry' : (unit2?.id || "")}
+                onOpenChange={(open) => { if (!open) setUnitSearch2(""); }}
+                onValueChange={(value) => {
+                  setUnitSearch2("");
+                  if (value === 'desert-raider_cavalry') {
+                    setUnit2(filteredUnits2.find(u => u.id === 'desert-raider') || null, 'ability-desert-raider-blade');
+                  } else {
+                    setUnit2(filteredUnits2.find(u => u.id === value) || null);
+                  }
+                }}
+              >
+                <SelectTrigger className="bg-secondary border-border">
+                  <SelectValue placeholder="Select a unit..." />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border max-h-[500px]">
+                  <div
+                    className="sticky top-0 z-10 bg-popover px-1 pb-1 pt-0.5"
+                    onKeyDown={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    <input
+                      autoFocus
+                      value={unitSearch2}
+                      onChange={(e) => setUnitSearch2(e.target.value)}
+                      placeholder="Search units..."
+                      className="w-full rounded-sm border border-border bg-secondary px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                  </div>
+                  {unitSearch2.trim() ? (() => {
+                    const q = unitSearch2.trim().toLowerCase();
+                    const scored: { score: number; el: JSX.Element }[] = [];
+                    for (const categoryKey of categoryOrder) {
+                      const catUnits = categorizedUnits2[categoryKey];
+                      if (!catUnits || catUnits.length === 0) continue;
+                      if (categoryKey === 'jeanne') {
+                        const peasant = catUnits.find(u => u.id === 'jeanne-darc-peasant');
+                        if (!peasant) continue;
+                        const score = unitNameMatchScore("Jeanne d'Arc", q);
+                        if (score > 0) {
+                          scored.push({
+                            score, el: (
+                              <SelectItem key="jeanne-darc" value="jeanne-darc-peasant" className="data-[state=checked]:font-bold pl-8 group">
                                 <div className="flex items-center gap-2">
-                                  <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
-                                  <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
-                                  {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
+                                  <img src={peasant.icon} alt="Jeanne d'Arc" className="w-6 h-6 object-contain" />
+                                  <span className="text-white group-hover:text-black transition-colors">Jeanne d'Arc</span>
                                 </div>
                               </SelectItem>
-                            ))}
-                          </React.Fragment>
-                        ));
-                      })() : isOpen && categoryKey === 'khaganate' ? (() => {
-                        const grouped: Record<string, typeof units> = {};
-                        for (const u of units) {
-                          const sub = getKhaganateSubCategory(u);
-                          if (!grouped[sub]) grouped[sub] = [];
-                          grouped[sub].push(u);
+                            )
+                          });
                         }
-                        return KHAGANATE_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
-                          <React.Fragment key={sub}>
-                            <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
-                            {grouped[sub].map((unit) => (
-                              <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-10 group">
-                                <div className="flex items-center gap-2">
-                                  <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
-                                  <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
-                                  {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </React.Fragment>
-                        ));
-                      })() : isOpen && categoryKey === 'jeanne' ? (() => {
-                        const peasant = units.find(u => u.id === 'jeanne-darc-peasant');
-                        if (!peasant) return null;
-                        return (
-                          <SelectItem key="jeanne-darc" value="jeanne-darc-peasant" className="data-[state=checked]:font-bold pl-8 group">
+                        continue;
+                      }
+                      for (const unit of catUnits) {
+                        const score = unitNameMatchScore(unit.name, q);
+                        if (score <= 0) continue;
+                        scored.push({
+                          score, el: (
+                            <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-8 group">
+                              <div className="flex items-center gap-2">
+                                <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
+                                <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
+                                {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
+                              </div>
+                            </SelectItem>
+                          )
+                        });
+                      }
+                    }
+                    if (scored.length === 0) {
+                      return <div className="py-6 text-center text-sm text-muted-foreground">No units found</div>;
+                    }
+                    scored.sort((a, b) => b.score - a.score);
+                    return scored.map(s => s.el);
+                  })() : categoryOrder.map(categoryKey => {
+                    const units = categorizedUnits2[categoryKey];
+                    if (!units || units.length === 0) return null;
+
+                    const isOpen = openCategories2[categoryKey];
+
+                    return (
+                      <SelectGroup key={categoryKey}>
+                        <div
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleCategory2(categoryKey);
+                          }}
+                          className="cursor-pointer hover:bg-accent px-2 py-2 rounded group"
+                        >
+                          <SelectLabel className="text-primary group-hover:text-background font-semibold flex items-center gap-2 cursor-pointer">
+                            <span className="text-xs">{isOpen ? '▼' : '▶'}</span>
+                            <img
+                              src={categoryIcons[categoryKey]}
+                              alt=""
+                              className="w-5 h-5 object-contain inline-block"
+                            />
+                            <span>{categoryNames[categoryKey]} ({units.length})</span>
+                          </SelectLabel>
+                        </div>
+                        {isOpen && categoryKey === 'mercenary' ? (() => {
+                          const grouped: Record<string, typeof units> = {};
+                          for (const u of units) {
+                            const sub = getMercenarySubCategory(u);
+                            if (!grouped[sub]) grouped[sub] = [];
+                            grouped[sub].push(u);
+                          }
+                          return MERCENARY_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
+                            <React.Fragment key={sub}>
+                              <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
+                              {grouped[sub].map((unit) => (
+                                <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-10 group">
+                                  <div className="flex items-center gap-2">
+                                    <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
+                                    <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
+                                    {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </React.Fragment>
+                          ));
+                        })() : isOpen && categoryKey === 'khaganate' ? (() => {
+                          const grouped: Record<string, typeof units> = {};
+                          for (const u of units) {
+                            const sub = getKhaganateSubCategory(u);
+                            if (!grouped[sub]) grouped[sub] = [];
+                            grouped[sub].push(u);
+                          }
+                          return KHAGANATE_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
+                            <React.Fragment key={sub}>
+                              <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
+                              {grouped[sub].map((unit) => (
+                                <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-10 group">
+                                  <div className="flex items-center gap-2">
+                                    <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
+                                    <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
+                                    {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </React.Fragment>
+                          ));
+                        })() : isOpen && categoryKey === 'jeanne' ? (() => {
+                          const peasant = units.find(u => u.id === 'jeanne-darc-peasant');
+                          if (!peasant) return null;
+                          return (
+                            <SelectItem key="jeanne-darc" value="jeanne-darc-peasant" className="data-[state=checked]:font-bold pl-8 group">
+                              <div className="flex items-center gap-2">
+                                <img src={peasant.icon} alt="Jeanne d'Arc" className="w-6 h-6 object-contain" />
+                                <span className="text-white group-hover:text-black transition-colors">Jeanne d'Arc</span>
+                              </div>
+                            </SelectItem>
+                          );
+                        })() : isOpen && units.map((unit) => (
+                          <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-8 group">
                             <div className="flex items-center gap-2">
-                              <img src={peasant.icon} alt="Jeanne d'Arc" className="w-6 h-6 object-contain" />
-                              <span className="text-white group-hover:text-black transition-colors">Jeanne d'Arc</span>
+                              <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
+                              <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
+                              {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
                             </div>
                           </SelectItem>
-                        );
-                      })() : isOpen && units.map((unit) => (
-                        <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-8 group">
-                          <div className="flex items-center gap-2">
-                            <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
-                            <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
-                            {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+                        ))}
+                      </SelectGroup>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
             </div>
             {isJeanneUnit(unit2) && (
               <JeanneFormSelector
@@ -1491,43 +1614,43 @@ const Sandbox = () => {
                 <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 w-full">
                   <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0">
                     <div id="tour-age1">
-                    <AgeSelector
-                      availableAges={getAvailableAges(unit1.id, selectedCiv1)}
-                      selectedAge={selectedAge1}
-                      onAgeChange={setSelectedAge1}
-                      orientation="left"
-                    />
+                      <AgeSelector
+                        availableAges={getAvailableAges(unit1.id, selectedCiv1)}
+                        selectedAge={selectedAge1}
+                        onAgeChange={setSelectedAge1}
+                        orientation="left"
+                      />
                     </div>
                     <div id="tour-techs1">
-                    <TechnologySelector
-                      technologies={techs1}
-                      activeTechnologies={activeTechnologies1}
-                      onToggle={toggleTechnology1}
-                      unitMinAge={unitMinAge1}
-                      fullUpgradeAge={fullUpgradeAge1}
-                      onApplyFullUpgrade={applyFullUpgrade1}
-                      onReset={resetTechnologies1}
-                      orientation="left"
-                      selectedCiv={selectedCiv1}
-                      lockedTechnologies={lockedTechnologies1}
-                      unitId={variation1?.baseId ?? unit1?.id}
-                      selectedAge={selectedAge1}
-                    />
+                      <TechnologySelector
+                        technologies={techs1}
+                        activeTechnologies={activeTechnologies1}
+                        onToggle={toggleTechnology1}
+                        unitMinAge={unitMinAge1}
+                        fullUpgradeAge={fullUpgradeAge1}
+                        onApplyFullUpgrade={applyFullUpgrade1}
+                        onReset={resetTechnologies1}
+                        orientation="left"
+                        selectedCiv={selectedCiv1}
+                        lockedTechnologies={lockedTechnologies1}
+                        unitId={variation1?.baseId ?? unit1?.id}
+                        selectedAge={selectedAge1}
+                      />
                     </div>
                     <div id="tour-abilities1">
-                    <AbilitySelector
-                      abilities={abilities1}
-                      activeAbilities={activeAbilities1}
-                      onToggle={toggleAbility1}
-                      orientation="left"
-                      selectedCiv={selectedCiv1}
-                      lockedAbilities={lockedAbilities1}
-                      abilityCounters={abilityCounters1}
-                      onIncrement={incrementAbility1}
-                      onDecrement={decrementAbility1}
-                      onSetCounter={setAbilityCounter1}
-                      unitId={variation1?.baseId ?? unit1?.id}
-                    />
+                      <AbilitySelector
+                        abilities={abilities1}
+                        activeAbilities={activeAbilities1}
+                        onToggle={toggleAbility1}
+                        orientation="left"
+                        selectedCiv={selectedCiv1}
+                        lockedAbilities={lockedAbilities1}
+                        abilityCounters={abilityCounters1}
+                        onIncrement={incrementAbility1}
+                        onDecrement={decrementAbility1}
+                        onSetCounter={setAbilityCounter1}
+                        unitId={variation1?.baseId ?? unit1?.id}
+                      />
                     </div>
                   </div>
                   <div className="flex-1 min-w-0">
@@ -1608,43 +1731,43 @@ const Sandbox = () => {
                   </div>
                   <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
                     <div id="tour-age2">
-                    <AgeSelector
-                      availableAges={getAvailableAges(unit2.id, selectedCiv2)}
-                      selectedAge={selectedAge2}
-                      onAgeChange={setSelectedAge2}
-                      orientation="right"
-                    />
+                      <AgeSelector
+                        availableAges={getAvailableAges(unit2.id, selectedCiv2)}
+                        selectedAge={selectedAge2}
+                        onAgeChange={setSelectedAge2}
+                        orientation="right"
+                      />
                     </div>
                     <div id="tour-techs2">
-                    <TechnologySelector
-                      technologies={techs2}
-                      activeTechnologies={activeTechnologies2}
-                      orientation="right"
-                      onToggle={toggleTechnology2}
-                      selectedCiv={selectedCiv2}
-                      lockedTechnologies={lockedTechnologies2}
-                      unitId={variation2?.baseId ?? unit2?.id}
-                      selectedAge={selectedAge2}
-                      unitMinAge={unitMinAge2}
-                      fullUpgradeAge={fullUpgradeAge2}
-                      onApplyFullUpgrade={applyFullUpgrade2}
-                      onReset={resetTechnologies2}
-                    />
+                      <TechnologySelector
+                        technologies={techs2}
+                        activeTechnologies={activeTechnologies2}
+                        orientation="right"
+                        onToggle={toggleTechnology2}
+                        selectedCiv={selectedCiv2}
+                        lockedTechnologies={lockedTechnologies2}
+                        unitId={variation2?.baseId ?? unit2?.id}
+                        selectedAge={selectedAge2}
+                        unitMinAge={unitMinAge2}
+                        fullUpgradeAge={fullUpgradeAge2}
+                        onApplyFullUpgrade={applyFullUpgrade2}
+                        onReset={resetTechnologies2}
+                      />
                     </div>
                     <div id="tour-abilities2">
-                    <AbilitySelector
-                      abilities={abilities2}
-                      activeAbilities={activeAbilities2}
-                      onToggle={toggleAbility2}
-                      orientation="right"
-                      selectedCiv={selectedCiv2}
-                      lockedAbilities={lockedAbilities2}
-                      abilityCounters={abilityCounters2}
-                      onIncrement={incrementAbility2}
-                      onDecrement={decrementAbility2}
-                      onSetCounter={setAbilityCounter2}
-                      unitId={variation2?.baseId ?? unit2?.id}
-                    />
+                      <AbilitySelector
+                        abilities={abilities2}
+                        activeAbilities={activeAbilities2}
+                        onToggle={toggleAbility2}
+                        orientation="right"
+                        selectedCiv={selectedCiv2}
+                        lockedAbilities={lockedAbilities2}
+                        abilityCounters={abilityCounters2}
+                        onIncrement={incrementAbility2}
+                        onDecrement={decrementAbility2}
+                        onSetCounter={setAbilityCounter2}
+                        unitId={variation2?.baseId ?? unit2?.id}
+                      />
                     </div>
                   </div>
                 </div>
@@ -1857,43 +1980,43 @@ const Sandbox = () => {
                     <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 w-full">
                       <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0">
                         <div id="tour-age1">
-                        <AgeSelector
-                          availableAges={getAvailableAges(unit1.id, selectedCiv1)}
-                          selectedAge={selectedAge1}
-                          onAgeChange={setSelectedAge1}
-                          orientation="left"
-                        />
+                          <AgeSelector
+                            availableAges={getAvailableAges(unit1.id, selectedCiv1)}
+                            selectedAge={selectedAge1}
+                            onAgeChange={setSelectedAge1}
+                            orientation="left"
+                          />
                         </div>
                         <div id="tour-techs1">
-                        <TechnologySelector
-                          technologies={techs1}
-                          activeTechnologies={activeTechnologies1}
-                          onToggle={toggleTechnology1}
-                          orientation="left"
-                          selectedCiv={selectedCiv1}
-                          lockedTechnologies={lockedTechnologies1}
-                          unitId={variation1?.baseId ?? unit1?.id}
-                          selectedAge={selectedAge1}
-                          unitMinAge={unitMinAge1}
-                          fullUpgradeAge={fullUpgradeAge1}
-                          onApplyFullUpgrade={applyFullUpgrade1}
-                          onReset={resetTechnologies1}
-                        />
+                          <TechnologySelector
+                            technologies={techs1}
+                            activeTechnologies={activeTechnologies1}
+                            onToggle={toggleTechnology1}
+                            orientation="left"
+                            selectedCiv={selectedCiv1}
+                            lockedTechnologies={lockedTechnologies1}
+                            unitId={variation1?.baseId ?? unit1?.id}
+                            selectedAge={selectedAge1}
+                            unitMinAge={unitMinAge1}
+                            fullUpgradeAge={fullUpgradeAge1}
+                            onApplyFullUpgrade={applyFullUpgrade1}
+                            onReset={resetTechnologies1}
+                          />
                         </div>
                         <div id="tour-abilities1">
-                        <AbilitySelector
-                          abilities={abilities1}
-                          activeAbilities={activeAbilities1}
-                          onToggle={toggleAbility1}
-                          orientation="left"
-                          selectedCiv={selectedCiv1}
-                          lockedAbilities={lockedAbilities1}
-                          abilityCounters={abilityCounters1}
-                          onIncrement={incrementAbility1}
-                          onDecrement={decrementAbility1}
-                          onSetCounter={setAbilityCounter1}
-                          unitId={variation1?.baseId ?? unit1?.id}
-                        />
+                          <AbilitySelector
+                            abilities={abilities1}
+                            activeAbilities={activeAbilities1}
+                            onToggle={toggleAbility1}
+                            orientation="left"
+                            selectedCiv={selectedCiv1}
+                            lockedAbilities={lockedAbilities1}
+                            abilityCounters={abilityCounters1}
+                            onIncrement={incrementAbility1}
+                            onDecrement={decrementAbility1}
+                            onSetCounter={setAbilityCounter1}
+                            unitId={variation1?.baseId ?? unit1?.id}
+                          />
                         </div>
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1941,43 +2064,43 @@ const Sandbox = () => {
                       </div>
                       <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
                         <div id="tour-age2">
-                        <AgeSelector
-                          availableAges={getAvailableAges(unit2.id, selectedCiv2)}
-                          selectedAge={selectedAge2}
-                          onAgeChange={setSelectedAge2}
-                          orientation="right"
-                        />
+                          <AgeSelector
+                            availableAges={getAvailableAges(unit2.id, selectedCiv2)}
+                            selectedAge={selectedAge2}
+                            onAgeChange={setSelectedAge2}
+                            orientation="right"
+                          />
                         </div>
                         <div id="tour-techs2">
-                        <TechnologySelector
-                          technologies={techs2}
-                          activeTechnologies={activeTechnologies2}
-                          onToggle={toggleTechnology2}
-                          orientation="right"
-                          selectedCiv={selectedCiv2}
-                          lockedTechnologies={lockedTechnologies2}
-                          unitId={variation2?.baseId ?? unit2?.id}
-                          selectedAge={selectedAge2}
-                          unitMinAge={unitMinAge2}
-                          fullUpgradeAge={fullUpgradeAge2}
-                          onApplyFullUpgrade={applyFullUpgrade2}
-                          onReset={resetTechnologies2}
-                        />
+                          <TechnologySelector
+                            technologies={techs2}
+                            activeTechnologies={activeTechnologies2}
+                            onToggle={toggleTechnology2}
+                            orientation="right"
+                            selectedCiv={selectedCiv2}
+                            lockedTechnologies={lockedTechnologies2}
+                            unitId={variation2?.baseId ?? unit2?.id}
+                            selectedAge={selectedAge2}
+                            unitMinAge={unitMinAge2}
+                            fullUpgradeAge={fullUpgradeAge2}
+                            onApplyFullUpgrade={applyFullUpgrade2}
+                            onReset={resetTechnologies2}
+                          />
                         </div>
                         <div id="tour-abilities2">
-                        <AbilitySelector
-                          abilities={abilities2}
-                          activeAbilities={activeAbilities2}
-                          onToggle={toggleAbility2}
-                          orientation="right"
-                          selectedCiv={selectedCiv2}
-                          lockedAbilities={lockedAbilities2}
-                          abilityCounters={abilityCounters2}
-                          onIncrement={incrementAbility2}
-                          onDecrement={decrementAbility2}
-                          onSetCounter={setAbilityCounter2}
-                          unitId={variation2?.baseId ?? unit2?.id}
-                        />
+                          <AbilitySelector
+                            abilities={abilities2}
+                            activeAbilities={activeAbilities2}
+                            onToggle={toggleAbility2}
+                            orientation="right"
+                            selectedCiv={selectedCiv2}
+                            lockedAbilities={lockedAbilities2}
+                            abilityCounters={abilityCounters2}
+                            onIncrement={incrementAbility2}
+                            onDecrement={decrementAbility2}
+                            onSetCounter={setAbilityCounter2}
+                            unitId={variation2?.baseId ?? unit2?.id}
+                          />
                         </div>
                       </div>
                     </div>

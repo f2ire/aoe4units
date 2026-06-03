@@ -55,7 +55,7 @@ export function GuidedTour({
         // ── 0 ── Welcome
         {
           popover: {
-            title: 'Welcome to Sandbox Mode',
+            title: 'Welcome to AoE4 Units',
             description:
               'This guided tour walks you through the tool step by step. Each step automatically sets up the UI — just follow along and click <b>Next</b>.',
           },

@@ -1494,5 +1494,20 @@ export function applyUnitPatches(unifiedUnits: unknown[]): unknown[] {
     return updated;
   });
 
-  return newUnits.length > 0 ? [...patched, ...newUnits] : patched;
+  const all = newUnits.length > 0 ? [...patched, ...newUnits] : patched;
+
+  // Normalize silver → oliveoil for Macedonian units (JSON uses 'silver', app uses 'oliveoil')
+  return all.map((unit) => {
+    const u = unit as Record<string, unknown>;
+    if (!Array.isArray(u.variations)) return u;
+    return {
+      ...u,
+      variations: (u.variations as Record<string, unknown>[]).map((v) => {
+        const costs = v.costs as Record<string, unknown> | undefined;
+        if (!costs || !('silver' in costs)) return v;
+        const { silver, ...rest } = costs;
+        return { ...v, costs: { ...rest, oliveoil: (rest.oliveoil as number ?? 0) + (silver as number) } };
+      }),
+    };
+  });
 }

@@ -178,7 +178,7 @@ export const aoe4Units: AoE4Unit[] = allUnits.map(unit => {
       wood: baseVariation.costs.wood,
       gold: baseVariation.costs.gold,
       stone: baseVariation.costs.stone,
-      oliveoil: baseVariation.costs.oliveoil,
+      oliveoil: baseVariation.costs.oliveoil ?? (baseVariation.costs as any).silver,
     },
     armor: baseVariation.armor || [],
     resistance: baseVariation.resistance,

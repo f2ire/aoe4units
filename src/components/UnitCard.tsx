@@ -609,12 +609,12 @@ export const UnitCard = ({
               </span>
             </div>
             <div className="space-y-1 text-xs">
-              {costs.food > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Food</span><span>{Math.round(costs.food)}</span></div>}
-              {costs.wood > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Wood</span><span>{Math.round(costs.wood)}</span></div>}
-              {costs.gold > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Gold</span><span>{Math.round(costs.gold)}</span></div>}
-              {costs.stone > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Stone</span><span>{Math.round(costs.stone)}</span></div>}
+              {costs.food > 0 && <div className="flex justify-between"><span className="text-muted-foreground flex items-center gap-1"><img src="/resources/food.png" alt="Food" className="w-3.5 h-3.5" />Food</span><span>{Math.round(costs.food)}</span></div>}
+              {costs.wood > 0 && <div className="flex justify-between"><span className="text-muted-foreground flex items-center gap-1"><img src="/resources/wood.png" alt="Wood" className="w-3.5 h-3.5" />Wood</span><span>{Math.round(costs.wood)}</span></div>}
+              {costs.gold > 0 && <div className="flex justify-between"><span className="text-muted-foreground flex items-center gap-1"><img src="/resources/gold.png" alt="Gold" className="w-3.5 h-3.5" />Gold</span><span>{Math.round(costs.gold)}</span></div>}
+              {costs.stone > 0 && <div className="flex justify-between"><span className="text-muted-foreground flex items-center gap-1"><img src="/resources/stone.png" alt="Stone" className="w-3.5 h-3.5" />Stone</span><span>{Math.round(costs.stone)}</span></div>}
               {(costs.oliveoil ?? 0) > 0 && (
-                <div className="flex justify-between"><span className="text-muted-foreground">{civs.includes('mac') ? 'Silver' : 'Olive Oil'}</span><span>{Math.round(costs.oliveoil ?? 0)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground flex items-center gap-1"><img src={civs.includes('mac') ? '/resources/silver.png' : '/resources/oliveoil.png'} alt={civs.includes('mac') ? 'Silver' : 'Olive Oil'} className="w-3.5 h-3.5" />{civs.includes('mac') ? 'Silver' : 'Olive Oil'}</span><span>{Math.round(costs.oliveoil ?? 0)}</span></div>
               )}
             </div>
           </div>

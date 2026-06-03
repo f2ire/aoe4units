@@ -1,41 +1,44 @@
-# AOE Matchup Game
+# AOE4 Matchup
+
 ![App Preview](./public/preview.png)
 
 ## 🎮 Project Overview
 
-AOE Matchup Game is an educational tool that helps Age of Empires IV players learn and understand unit matchups. Whether you're a beginner trying to learn the basics or an experienced player looking to sharpen your knowledge, this app provides an interactive way to master the rock-paper-scissors dynamics of AoE IV combat.
+AOE4 Matchup is an educational tool that helps Age of Empires IV players understand unit matchups. Its core is a **Sandbox** where you pick two units and run a detailed **combat simulation** to see who wins, why, and by how much. Whether you're learning the basics or fine-tuning advanced engagements, it makes the rock-paper-scissors dynamics of AoE IV combat explicit.
 
 ## 🎯 How to Use
 
-### Quiz Mode
-1. Navigate to the Quiz page
-2. Select the number of rounds (5, 10, or 20)
-3. For each matchup, click on the unit you think will win
-4. Review your score and learn from mistakes at the end
+The app opens directly on the **Sandbox** (route `/`).
 
-### Sandbox Mode
-1. Navigate to the Sandbox page
-2. Select two units from the dropdown menus
-3. Compare their stats side-by-side
-4. Learn the strengths and weaknesses of each unit
+1. **Pick two units** from the civilization/unit selectors.
+2. **Toggle technologies and abilities** on each side to model upgrades and buffs.
+3. **Enable Versus mode** to run the combat simulation and read the predicted winner, remaining HP, and time-to-kill.
+4. **Tune the engagement** with the combat options:
+   - **Kiting** — model ranged units retreating while shooting (focus-fire or attack-move).
+   - **Equal-cost** — normalize both sides to the same resource cost and compare groups, with selectable resolution models (aggregated DPS, focus fire, Monte-Carlo batches).
+   - **Start distance** — control the approach phase before contact.
+
+A short guided tour walks you through the interface on first use.
 
 ## 🛠️ Tech Stack
 
-- **[React](https://react.dev/)** - UI library for building interactive interfaces
-- **[TypeScript](https://www.typescriptlang.org/)** - Type-safe JavaScript
-- **[Vite](https://vitejs.dev/)** - Fast build tool and development server
-- **[TailwindCSS](https://tailwindcss.com/)** - Utility-first CSS framework
-- **[Zustand](https://zustand-demo.pmnd.rs/)** - Lightweight state management
-- **[Framer Motion](https://www.framer.com/motion/)** - Animation library for smooth transitions
-- **[Axios](https://axios-http.com/)** - HTTP client for API requests
-- **[Shadcn/ui](https://ui.shadcn.com/)** - Re-usable component library
-- **[React Router](https://reactrouter.com/)** - Client-side routing
+- **[React 18](https://react.dev/)** — UI library
+- **[TypeScript](https://www.typescriptlang.org/)** — type-safe JavaScript
+- **[Vite](https://vitejs.dev/)** — build tool and dev server
+- **[TailwindCSS](https://tailwindcss.com/)** — utility-first CSS
+- **[shadcn/ui](https://ui.shadcn.com/)** + **[Radix UI](https://www.radix-ui.com/)** — accessible component primitives
+- **[Framer Motion](https://www.framer.com/motion/)** — animations
+- **[TanStack Query](https://tanstack.com/query)** — data/state management
+- **[React Router](https://reactrouter.com/)** — client-side routing
+- **[driver.js](https://driverjs.com/)** — guided tour
+- **[lucide-react](https://lucide.dev/)** — icons
+- **[Vercel Analytics](https://vercel.com/analytics)** — usage analytics
 
-## 🚀 Setup Instructions
+## 🚀 Setup
 
 ### Prerequisites
-- Node.js 18+ or Bun runtime
-- npm, yarn, or bun package manager
+- Node.js 18+
+- npm (or yarn / bun)
 
 ### Installation
 
@@ -50,14 +53,12 @@ AOE Matchup Game is an educational tool that helps Age of Empires IV players lea
    npm install
    ```
 
-3. **Start the development server**
+3. **Start the dev server**
    ```bash
    npm run dev
    ```
 
-4. **Open your browser**
-   
-   Navigate to `http://localhost:8080` (or the port shown in your terminal)
+4. **Open your browser** at `http://localhost:8080`.
 
 ### Build for Production
 
@@ -66,47 +67,51 @@ npm run build
 npm run preview
 ```
 
-## 🌐 API Reference
+## 📊 Data
 
-This project uses the **[AOE4World API](https://aoe4world.com/)** to fetch:
-- Unit data and statistics
-- Official unit icons and images
-- Real-time game information
+Unit, ability, and technology data come from the **[AOE4World data repository](https://github.com/aoe4world/data)** and are bundled as static JSON in `src/data/` — no API call happens at runtime. Unit corrections and synthetic ability/tech rules live in `src/data/patches/`.
 
-The API provides comprehensive data about Age of Empires IV units, ensuring accuracy and up-to-date information for all matchup scenarios.
+Refresh the bundled data from upstream with the helper script:
 
-### API Endpoints Used
-- Unit statistics and attributes
-- Unit icons and visual assets
-- Civilization-specific unit data
+```bash
+npm run update-data        # download and apply if upstream changed
+npm run update-data:dry    # preview changes without writing
+npm run update-data:force  # rewrite files even if unchanged
+```
 
 ## 📁 Project Structure
 
 ```
-aoe4-matchup-game/
+aoe4-matchup-master1/
 ├── src/
-│   ├── components/      # Reusable React components
-│   ├── pages/          # Main page components (Quiz, Sandbox, Results)
-│   ├── data/           # Unit data and configurations
-│   ├── hooks/          # Custom React hooks
-│   ├── lib/            # Utility functions
-│   └── App.tsx         # Main application component
-├── public/             # Static assets
-└── package.json        # Project dependencies
+│   ├── pages/
+│   │   └── Sandbox.tsx       # Main page (route /): unit comparison + combat sim
+│   ├── components/           # UnitCard, AbilitySelector, TechnologySelector, VersusPanel, ui/
+│   ├── lib/
+│   │   └── combat.ts         # Combat simulation logic
+│   ├── hooks/
+│   │   └── useUnitSlot.ts    # Unit selection + applied techs/abilities
+│   └── data/
+│       ├── *.json            # Raw units / abilities / technologies
+│       └── patches/          # Unit corrections + synthetic ability/tech rules
+├── scripts/
+│   └── update-data.mjs       # Refresh bundled data from aoe4world/data
+├── public/                   # Static assets
+└── package.json
 ```
 
 ## 📝 License
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+Licensed under the **MIT License** — see the [LICENSE](LICENSE) file.
 
 ## 🙏 Acknowledgments
 
-- **Inspiration**: This project was inspired by the design principles of [Aegis UI](https://aoe-aegis.vercel.app/)
-- **Data Source**: Unit data and icons provided by [AOE4World](https://aoe4world.com/)
+- **Inspiration**: design principles of [Aegis UI](https://aoe-aegis.vercel.app/)
+- **Data Source**: unit data and icons from [AOE4World](https://aoe4world.com/)
 
 ## 🤝 Contributing
 
-Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/f2ire/aoe-matchup-game/issues).
+Contributions, issues, and feature requests are welcome — check the [issues page](https://github.com/f2ire/aoe-matchup-game/issues).
 
 ## 📧 Contact
 
