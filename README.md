@@ -1,7 +1,5 @@
 # AOE4 Matchup
 
-![App Preview](./public/preview.png)
-
 ## 🎮 Project Overview
 
 AOE4 Matchup is an educational tool that helps Age of Empires IV players understand unit matchups. Its core is a **Sandbox** where you pick two units and run a detailed **combat simulation** to see who wins, why, and by how much. Whether you're learning the basics or fine-tuning advanced engagements, it makes the rock-paper-scissors dynamics of AoE IV combat explicit.
