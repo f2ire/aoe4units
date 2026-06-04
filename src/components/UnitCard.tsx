@@ -314,7 +314,7 @@ export const UnitCard = ({
   return (
     <Card
       className={cn(
-        'relative flex flex-col p-4 border-2 bg-card cursor-pointer transition-all duration-300 overflow-hidden',
+        'relative flex flex-col p-2 sm:p-4 border-2 bg-card cursor-pointer transition-all duration-300 overflow-hidden',
         versusMetrics?.isWinner ? 'border-yellow-400' : 'border-border',
         className
       )}
@@ -336,20 +336,20 @@ export const UnitCard = ({
           </div>
         </>
       )}
-      <div className="relative z-20 flex flex-col gap-4">
+      <div className="relative z-20 flex flex-col gap-2.5 sm:gap-4">
         {/* Header */}
-        <div className="flex items-center gap-3 pt-5">
+        <div className="flex items-center gap-2 sm:gap-3 pt-5">
           <img
             src={displayData.icon}
             alt={displayData.name}
-            className="w-16 h-16 object-contain"
+            className="w-11 h-11 sm:w-16 sm:h-16 object-contain"
             onError={(e) => {
               e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="%23333"/><text x="50%" y="50%" fill="%23fff" text-anchor="middle" dy=".3em" font-size="24">?</text></svg>';
             }}
           />
           <div className="flex-1">
             <h3
-              className="text-lg font-serif font-semibold break-words"
+              className="text-sm sm:text-lg font-serif font-semibold break-words"
               title={displayData.name}
               aria-label={displayData.name}
             >
@@ -367,7 +367,7 @@ export const UnitCard = ({
 
         {/* Comparative Mode */}
         {mode === 'comparative' && (
-          <div className="space-y-2 text-sm">
+          <div className="space-y-1.5 text-xs sm:space-y-2 sm:text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">HP</span>
               <span className={cn('flex items-center gap-1', getComparisonColor(effectiveHp, compareHp).color)}>
@@ -1000,7 +1000,7 @@ export const UnitCard = ({
               )}
 
               <div id="tour-combat-results">
-                <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="grid grid-cols-2 gap-2 text-xs sm:gap-3 sm:text-sm">
                   <div className="space-y-2">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">DPS</span>

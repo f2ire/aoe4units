@@ -9,6 +9,7 @@ import { AgeSelector } from "@/components/AgeSelector";
 import { TechnologySelector } from "@/components/TechnologySelector";
 import { AbilitySelector } from "@/components/AbilitySelector";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { motion } from "framer-motion";
 import { useUnitSlot } from "@/hooks/useUnitSlot";
@@ -16,6 +17,9 @@ import { JeanneFormSelector, isJeanneUnit } from "@/components/JeanneFormSelecto
 import { GuidedTour } from "@/components/GuidedTour";
 import { unitNameMatchScore } from "@/lib/utils";
 
+
+// Game patch version currently modeled. Update this single line each balance patch.
+const PATCH_VERSION = "16.2.10604";
 
 const categoryNames: Record<string, string> = {
   jeanne: "Jeanne d'Arc",
@@ -277,6 +281,7 @@ const Sandbox = () => {
   const [atEqualCost, setAtEqualCost] = useState<boolean>(false);
   const [multiUnitModelKey, setMultiUnitModelKey] = useState<'aggregated' | 'focusFire' | 'focusFireBatchesMC'>('focusFire');
   const [allowKiting, setAllowKiting] = useState<boolean>(false);
+  const [mobileOptionsOpen, setMobileOptionsOpen] = useState<boolean>(false);
   const [startDistancePreset, setStartDistancePreset] = useState<string>("max");
   const [customDistance, setCustomDistance] = useState<number>(5);
   const [unitSearch1, setUnitSearch1] = useState<string>("");
@@ -1021,11 +1026,11 @@ const Sandbox = () => {
   }
 
   return (
-    <div className="h-screen overflow-auto p-6">
+    <div className="h-screen overflow-auto p-2 sm:p-6">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="min-w-[1080px] max-w-6xl mx-auto relative"
+        className="min-w-0 sm:min-w-[1080px] max-w-6xl mx-auto relative"
       >
         <div className="relative text-center mb-8 space-y-4">
           <GuidedTour
@@ -1039,14 +1044,56 @@ const Sandbox = () => {
           <div>
             <h1 className="text-4xl font-serif font-bold text-primary mb-2">AoE4 Units</h1>
             <p className="text-muted-foreground text-lg">Compare any two units from any civilizations!</p>
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <span
+                className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+                title="Game balance patch currently modeled by the simulator"
+              >
+                Patch {PATCH_VERSION}
+              </span>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Simulation assumptions"
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border bg-card text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    i
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="center" className="w-80 text-left">
+                  <p className="text-sm font-semibold text-foreground mb-2">Simulation assumptions</p>
+                  <ul className="space-y-2 text-xs text-muted-foreground leading-relaxed">
+                    <li>
+                      <span className="font-medium text-foreground">1v1 (standard):</span> deterministic.
+                      No micro — both units attack from contact range until one dies.
+                    </li>
+                    <li>
+                      <span className="font-medium text-foreground">Allow Kiting:</span> the ranged unit
+                      fires free shots while the melee unit closes the gap (approach phase), then the
+                      contact phase is resolved. Less precise — multi-unit contact is stochastic
+                      (Monte Carlo).
+                    </li>
+                    <li>
+                      <span className="font-medium text-foreground">At Equal Cost:</span> costs are
+                      normalized, then group sizes are rounded. Less precise due to rounding and
+                      group-size approximations.
+                    </li>
+                  </ul>
+                  <p className="mt-3 text-[11px] text-muted-foreground/80">
+                    Stats modeled on patch {PATCH_VERSION}.
+                  </p>
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
           {/* Mode Toggle */}
-          <div className="flex items-center justify-center gap-4">
-            <div id="tour-mode-toggle" className="inline-flex rounded-md border border-border overflow-hidden">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2 sm:gap-4">
+            <div id="tour-mode-toggle" className="flex sm:inline-flex w-full sm:w-auto rounded-md border border-border overflow-hidden">
               <button
                 type="button"
                 onClick={() => setIsVersus(false)}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${!isVersus ? 'bg-primary text-background' : 'bg-card text-muted-foreground hover:text-foreground'
+                className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium transition-colors ${!isVersus ? 'bg-primary text-background' : 'bg-card text-muted-foreground hover:text-foreground'
                   }`}
               >
                 Comparative
@@ -1055,16 +1102,29 @@ const Sandbox = () => {
               <button
                 type="button"
                 onClick={() => setIsVersus(true)}
-                className={`px-4 py-2 text-sm font-medium transition-colors ${isVersus ? 'bg-primary text-background' : 'bg-card text-muted-foreground hover:text-foreground'
+                className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium transition-colors ${isVersus ? 'bg-primary text-background' : 'bg-card text-muted-foreground hover:text-foreground'
                   }`}
               >
                 Versus
               </button>
             </div>
             {isVersus && (
-              <div id="tour-versus-options" className="inline-flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setMobileOptionsOpen((o) => !o)}
+                className="sm:hidden flex items-center justify-between gap-2 w-full px-4 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground"
+              >
+                <span>Options</span>
+                <span className={`transition-transform ${mobileOptionsOpen ? 'rotate-180' : ''}`}>▾</span>
+              </button>
+            )}
+            {isVersus && (
+              <div
+                id="tour-versus-options"
+                className={`${mobileOptionsOpen ? 'flex' : 'hidden'} sm:inline-flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto`}
+              >
                 {(atEqualCost || allowKiting) && (
-                  <div id="tour-model" className="inline-flex items-center rounded-md border border-border overflow-hidden bg-card">
+                  <div id="tour-model" className="inline-flex items-center rounded-md border border-border overflow-hidden bg-card w-full sm:w-auto">
                     <span className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-r border-border">
                       Model
                     </span>
@@ -1099,7 +1159,7 @@ const Sandbox = () => {
                   return (
                     <div
                       id="tour-atEqualCost"
-                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card ${isEqualCostDisabled ? 'opacity-50' : ''}`}
+                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card w-full sm:w-auto ${isEqualCostDisabled ? 'opacity-50' : ''}`}
                       title={disabledTitle ?? 'Compares equal-cost groups. Results may be less precise due to rounding and group-size approximations.'}
                     >
                       <input
@@ -1113,10 +1173,17 @@ const Sandbox = () => {
                       <label htmlFor="atEqualCost" className={`text-sm font-medium ${isEqualCostDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                         At Equal Cost
                       </label>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-500 border border-amber-500/40 rounded px-1 py-0.5">
+                        approx.
+                      </span>
                     </div>
                   );
                 })()}
-                <div id="tour-kiting" className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card">
+                <div
+                  id="tour-kiting"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card w-full sm:w-auto"
+                  title="Ranged units fire free shots during the approach phase, then contact is resolved. Multi-unit contact is stochastic (Monte Carlo) — results are approximate."
+                >
                   <input
                     type="checkbox"
                     id="allowKiting"
@@ -1127,9 +1194,12 @@ const Sandbox = () => {
                   <label htmlFor="allowKiting" className="text-sm font-medium cursor-pointer">
                     Allow Kiting
                   </label>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-500 border border-amber-500/40 rounded px-1 py-0.5">
+                    approx.
+                  </span>
                 </div>
                 {allowKiting && (
-                  <div className="inline-flex items-center rounded-md border border-border overflow-hidden bg-card">
+                  <div className="inline-flex items-center rounded-md border border-border overflow-hidden bg-card w-full sm:w-auto">
                     <span className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-r border-border">
                       Distance
                     </span>
@@ -1602,17 +1672,11 @@ const Sandbox = () => {
 
         {/* Comparison / versus area */}
         {!isVersus && (
-          <div className="grid grid-cols-2 gap-6 mt-8">
+          <div className="grid grid-cols-2 sm:grid-cols-[auto_1fr_1fr_auto] gap-x-2 gap-y-3 sm:gap-6 mt-8 items-start">
             {/* Civ 1 Unit */}
-            <motion.div
-              initial={{ opacity: 0, x: -50 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3 }}
-              className="flex justify-center w-full"
-            >
-              {unit1 && (
-                <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 w-full">
-                  <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0">
+            {unit1 && (
+              <>
+                <div className="order-1 sm:order-1 flex flex-col items-end sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
                     <div id="tour-age1">
                       <AgeSelector
                         availableAges={getAvailableAges(unit1.id, selectedCiv1)}
@@ -1652,8 +1716,13 @@ const Sandbox = () => {
                         unitId={variation1?.baseId ?? unit1?.id}
                       />
                     </div>
-                  </div>
-                  <div className="flex-1 min-w-0">
+                </div>
+                <motion.div
+                  initial={{ opacity: 0, x: -50 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="order-3 sm:order-2 min-w-0 w-full"
+                >
                     <UnitCard
                       className="w-full"
                       variation={modifiedVariation1!}
@@ -1684,20 +1753,18 @@ const Sandbox = () => {
                       opponentBonusDamageReduction={modifiedStats2.bonusDamageReduction ?? 0}
                       opponentClasses={variation2?.classes || unit2?.classes || []}
                     />
-                  </div>
-                </div>
-              )}
-            </motion.div>
+                </motion.div>
+              </>
+            )}
             {/* Civ 2 Unit */}
-            <motion.div
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.3 }}
-              className="flex justify-center w-full"
-            >
-              {unit2 && (
-                <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 w-full">
-                  <div className="flex-1 min-w-0 order-2 sm:order-1">
+            {unit2 && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0, x: 50 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="order-4 sm:order-3 min-w-0 w-full"
+                >
                     <UnitCard
                       className="w-full"
                       variation={modifiedVariation2!}
@@ -1728,8 +1795,8 @@ const Sandbox = () => {
                       opponentBonusDamageReduction={modifiedStats1.bonusDamageReduction ?? 0}
                       opponentClasses={variation1?.classes || unit1?.classes || []}
                     />
-                  </div>
-                  <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
+                </motion.div>
+                <div className="order-2 sm:order-4 flex flex-col items-start sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
                     <div id="tour-age2">
                       <AgeSelector
                         availableAges={getAvailableAges(unit2.id, selectedCiv2)}
@@ -1769,14 +1836,13 @@ const Sandbox = () => {
                         unitId={variation2?.baseId ?? unit2?.id}
                       />
                     </div>
-                  </div>
                 </div>
-              )}
-            </motion.div>
+              </>
+            )}
           </div>
         )}
         {isVersus && (
-          <div className="grid grid-cols-2 gap-6 mt-8">
+          <div className="grid grid-cols-2 sm:grid-cols-[auto_1fr_1fr_auto] gap-x-2 gap-y-3 sm:gap-6 mt-8 items-start">
             {(() => {
               if (!unit1 || !unit2) return null;
 
@@ -1971,14 +2037,7 @@ const Sandbox = () => {
               };
               return (
                 <>
-                  <motion.div
-                    initial={{ opacity: 0, x: -50 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="flex justify-center w-full"
-                  >
-                    <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 w-full">
-                      <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0">
+                  <div className="order-1 sm:order-1 flex flex-col items-end sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
                         <div id="tour-age1">
                           <AgeSelector
                             availableAges={getAvailableAges(unit1.id, selectedCiv1)}
@@ -2018,8 +2077,13 @@ const Sandbox = () => {
                             unitId={variation1?.baseId ?? unit1?.id}
                           />
                         </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
+                  </div>
+                  <motion.div
+                    initial={{ opacity: 0, x: -50 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="order-3 sm:order-2 min-w-0 w-full"
+                  >
                         <UnitCard
                           className="w-full"
                           variation={modifiedVariation1!}
@@ -2035,17 +2099,13 @@ const Sandbox = () => {
                           opponentBonusDamageReduction={modifiedStats2.bonusDamageReduction ?? 0}
                           opponentClasses={modifiedVariation2?.classes || unit2?.classes || []}
                         />
-                      </div>
-                    </div>
                   </motion.div>
                   <motion.div
                     initial={{ opacity: 0, x: 50 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3 }}
-                    className="flex justify-center w-full"
+                    className="order-4 sm:order-3 min-w-0 w-full"
                   >
-                    <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 w-full">
-                      <div className="flex-1 min-w-0 order-2 sm:order-1">
                         <UnitCard
                           className="w-full"
                           variation={modifiedVariation2!}
@@ -2061,8 +2121,8 @@ const Sandbox = () => {
                           opponentBonusDamageReduction={modifiedStats1.bonusDamageReduction ?? 0}
                           opponentClasses={modifiedVariation1?.classes || unit1?.classes || []}
                         />
-                      </div>
-                      <div className="flex flex-row flex-wrap sm:flex-col gap-2 sm:gap-3 sm:flex-shrink-0 order-1 sm:order-2">
+                  </motion.div>
+                  <div className="order-2 sm:order-4 flex flex-col items-start sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
                         <div id="tour-age2">
                           <AgeSelector
                             availableAges={getAvailableAges(unit2.id, selectedCiv2)}
@@ -2102,9 +2162,7 @@ const Sandbox = () => {
                             unitId={variation2?.baseId ?? unit2?.id}
                           />
                         </div>
-                      </div>
-                    </div>
-                  </motion.div>
+                  </div>
                 </>
               );
             })()}
