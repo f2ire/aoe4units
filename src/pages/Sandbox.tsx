@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Github } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { Github, ChevronDown } from "lucide-react";
 import { aoe4Units, AoE4Unit, getAvailableAges, getPrimaryWeapon, getTotalCost } from "@/data/unified-units";
 import type { UnifiedVariation } from "@/data/unified-units";
 import { CIVILIZATIONS } from "@/data/civilizations";
@@ -11,12 +11,11 @@ import { TechnologySelector } from "@/components/TechnologySelector";
 import { AbilitySelector } from "@/components/AbilitySelector";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { motion } from "framer-motion";
 import { useUnitSlot } from "@/hooks/useUnitSlot";
 import { JeanneFormSelector, isJeanneUnit } from "@/components/JeanneFormSelector";
 import { GuidedTour } from "@/components/GuidedTour";
-import { unitNameMatchScore } from "@/lib/utils";
+import { unitNameMatchScore, cn } from "@/lib/utils";
 
 
 // Game patch version currently modeled. Update this single line each balance patch.
@@ -73,6 +72,315 @@ function getKhaganateSubCategory(unit: { classes: string[] }): string {
 }
 
 const KHAGANATE_SUB_ORDER = ['Melee Infantry', 'Ranged Cavalry', 'Cavalry', 'Monk', 'Siege', 'Other'];
+
+// Searchable unit picker. Built on Radix Popover (not Select) on purpose: Radix
+// Select closes its content on `window.resize`, which mobile soft keyboards fire
+// when they open, and it steals focus from an embedded search input on every
+// re-render. Popover does neither, so the input keeps focus and the keyboard
+// stays open while typing.
+interface UnitPickerProps {
+  units: AoE4Unit[];
+  categorizedUnits: Record<string, AoE4Unit[]>;
+  openCategories: Record<string, boolean>;
+  toggleCategory: (key: string) => void;
+  selectedUnit: AoE4Unit | null;
+  activeAbilities: Set<string>;
+  onSelect: (value: string) => void;
+}
+
+function UnitPicker({ units, categorizedUnits, openCategories, toggleCategory, selectedUnit, activeAbilities, onSelect }: UnitPickerProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+  // Track the visual viewport so the popover stays above the mobile keyboard.
+  // The layout viewport (what Radix uses) doesn't shrink when the keyboard opens,
+  // so without this the content overflows under/over the keyboard.
+  const [viewport, setViewport] = useState<{ height: number; keyboardOpen: boolean }>({ height: 0, keyboardOpen: false });
+  useEffect(() => {
+    if (!open) return;
+    const vv = window.visualViewport;
+    const update = () => {
+      const height = vv ? vv.height : window.innerHeight;
+      setViewport({ height, keyboardOpen: window.innerHeight - height > 120 });
+    };
+    update();
+    vv?.addEventListener("resize", update);
+    vv?.addEventListener("scroll", update);
+    return () => {
+      vv?.removeEventListener("resize", update);
+      vv?.removeEventListener("scroll", update);
+    };
+  }, [open]);
+
+  const currentValue = isJeanneUnit(selectedUnit)
+    ? 'jeanne-darc-peasant'
+    : selectedUnit?.id === 'desert-raider' && activeAbilities.has('ability-desert-raider-blade')
+      ? 'desert-raider_cavalry'
+      : (selectedUnit?.id || "");
+
+  const handleSelect = (value: string) => {
+    onSelect(value);
+    setSearch("");
+    setOpen(false);
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) setSearch("");
+  };
+
+  const renderRow = (value: string, icon: string, name: string, padClass: string, unique?: boolean) => (
+    <button
+      key={value}
+      type="button"
+      onClick={() => handleSelect(value)}
+      className={cn(
+        "group flex w-full items-center gap-2 rounded-sm pr-2 py-1.5 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent",
+        padClass,
+        value === currentValue && "font-bold",
+      )}
+    >
+      <img src={icon} alt={name} className="w-6 h-6 object-contain shrink-0" />
+      <span className="text-white group-hover:text-black transition-colors">{name}</span>
+      {unique && <span className="text-xs text-primary">(Unique)</span>}
+    </button>
+  );
+
+  const renderUnits = (catUnits: AoE4Unit[], categoryKey: string) => {
+    if (categoryKey === 'mercenary' || categoryKey === 'khaganate') {
+      const subCategoryOf = categoryKey === 'mercenary' ? getMercenarySubCategory : getKhaganateSubCategory;
+      const subOrder = categoryKey === 'mercenary' ? MERCENARY_SUB_ORDER : KHAGANATE_SUB_ORDER;
+      const grouped: Record<string, AoE4Unit[]> = {};
+      for (const u of catUnits) {
+        const sub = subCategoryOf(u);
+        if (!grouped[sub]) grouped[sub] = [];
+        grouped[sub].push(u);
+      }
+      return subOrder.filter(sub => grouped[sub]?.length).map(sub => (
+        <React.Fragment key={sub}>
+          <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
+          {grouped[sub].map(unit => renderRow(unit.id, unit.icon, unit.name, "pl-10", unit.unique))}
+        </React.Fragment>
+      ));
+    }
+    if (categoryKey === 'jeanne') {
+      const peasant = catUnits.find(u => u.id === 'jeanne-darc-peasant');
+      if (!peasant) return null;
+      return renderRow('jeanne-darc-peasant', peasant.icon, "Jeanne d'Arc", "pl-8");
+    }
+    return catUnits.map(unit => renderRow(unit.id, unit.icon, unit.name, "pl-8", unit.unique));
+  };
+
+  const q = search.trim().toLowerCase();
+  const displayName = isJeanneUnit(selectedUnit) ? "Jeanne d'Arc" : selectedUnit?.name;
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex h-10 w-full items-center justify-between gap-2 rounded-md border border-border bg-secondary px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        >
+          {selectedUnit ? (
+            <span className="flex min-w-0 items-center gap-2">
+              <img src={selectedUnit.icon} alt="" className="w-6 h-6 object-contain shrink-0" />
+              <span className="truncate">{displayName}</span>
+            </span>
+          ) : (
+            <span className="text-muted-foreground">Select a unit...</span>
+          )}
+          <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side={viewport.keyboardOpen ? "top" : "bottom"}
+        avoidCollisions={!viewport.keyboardOpen}
+        collisionPadding={8}
+        className="p-0 bg-popover border-border flex flex-col"
+        style={{
+          width: 'var(--radix-popover-trigger-width)',
+          maxHeight: viewport.height
+            ? `min(var(--radix-popover-content-available-height), ${Math.max(160, viewport.height - 16)}px)`
+            : 'var(--radix-popover-content-available-height)',
+        }}
+        onOpenAutoFocus={(e) => { e.preventDefault(); searchRef.current?.focus(); }}
+      >
+        <div className="p-1 shrink-0">
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search units..."
+            className="w-full rounded-sm border border-border bg-secondary px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto px-1 pb-1">
+          {q ? (() => {
+            const scored: { score: number; el: JSX.Element }[] = [];
+            for (const categoryKey of categoryOrder) {
+              const catUnits = categorizedUnits[categoryKey];
+              if (!catUnits || catUnits.length === 0) continue;
+              if (categoryKey === 'jeanne') {
+                const peasant = catUnits.find(u => u.id === 'jeanne-darc-peasant');
+                if (!peasant) continue;
+                const score = unitNameMatchScore("Jeanne d'Arc", q);
+                if (score > 0) scored.push({ score, el: renderRow('jeanne-darc-peasant', peasant.icon, "Jeanne d'Arc", "pl-8") });
+                continue;
+              }
+              for (const unit of catUnits) {
+                const score = unitNameMatchScore(unit.name, q);
+                if (score <= 0) continue;
+                scored.push({ score, el: renderRow(unit.id, unit.icon, unit.name, "pl-8", unit.unique) });
+              }
+            }
+            if (scored.length === 0) {
+              return <div className="py-6 text-center text-sm text-muted-foreground">No units found</div>;
+            }
+            scored.sort((a, b) => b.score - a.score);
+            return scored.map(s => s.el);
+          })() : categoryOrder.map(categoryKey => {
+            const catUnits = categorizedUnits[categoryKey];
+            if (!catUnits || catUnits.length === 0) return null;
+            const isOpen = openCategories[categoryKey];
+            return (
+              <div key={categoryKey}>
+                <button
+                  type="button"
+                  onClick={() => toggleCategory(categoryKey)}
+                  className="group w-full cursor-pointer rounded px-2 py-2 text-left hover:bg-accent"
+                >
+                  <div className="flex items-center gap-2 text-sm font-semibold text-primary group-hover:text-background">
+                    <span className="text-xs">{isOpen ? '▼' : '▶'}</span>
+                    <img src={categoryIcons[categoryKey]} alt="" className="w-5 h-5 object-contain inline-block" />
+                    <span>{categoryNames[categoryKey]} ({catUnits.length})</span>
+                  </div>
+                </button>
+                {isOpen && renderUnits(catUnits, categoryKey)}
+              </div>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// Searchable civilization picker. Same Popover-based approach as UnitPicker (not
+// Select) so the mobile soft keyboard doesn't close the dropdown while typing.
+// Simpler than UnitPicker: flat list, no categories.
+interface CivPickerProps {
+  value: string;
+  onSelect: (value: string) => void;
+}
+
+function CivPicker({ value, onSelect }: CivPickerProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [viewport, setViewport] = useState<{ height: number; keyboardOpen: boolean }>({ height: 0, keyboardOpen: false });
+  useEffect(() => {
+    if (!open) return;
+    const vv = window.visualViewport;
+    const update = () => {
+      const height = vv ? vv.height : window.innerHeight;
+      setViewport({ height, keyboardOpen: window.innerHeight - height > 120 });
+    };
+    update();
+    vv?.addEventListener("resize", update);
+    vv?.addEventListener("scroll", update);
+    return () => {
+      vv?.removeEventListener("resize", update);
+      vv?.removeEventListener("scroll", update);
+    };
+  }, [open]);
+
+  const selected = CIVILIZATIONS.find(c => c.abbr === value);
+
+  const handleSelect = (abbr: string) => {
+    onSelect(abbr);
+    setSearch("");
+    setOpen(false);
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) setSearch("");
+  };
+
+  const q = search.trim().toLowerCase();
+  const visibleCivs = q
+    ? CIVILIZATIONS.map(civ => ({ civ, score: unitNameMatchScore(civ.name, q) }))
+        .filter(c => c.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(c => c.civ)
+    : CIVILIZATIONS;
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex h-14 w-full items-center justify-between gap-2 rounded-md border border-border bg-secondary px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        >
+          {selected ? (
+            <span className="flex min-w-0 items-center gap-3">
+              <img src={selected.flagPath} alt="" className="w-8 h-8 object-contain shrink-0" />
+              <span className="font-medium truncate">{selected.name}</span>
+            </span>
+          ) : (
+            <span className="text-muted-foreground">Select a civilization...</span>
+          )}
+          <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side={viewport.keyboardOpen ? "top" : "bottom"}
+        avoidCollisions={!viewport.keyboardOpen}
+        collisionPadding={8}
+        className="p-0 bg-popover border-border flex flex-col"
+        style={{
+          width: 'var(--radix-popover-trigger-width)',
+          maxHeight: viewport.height
+            ? `min(var(--radix-popover-content-available-height), ${Math.max(160, viewport.height - 16)}px)`
+            : 'var(--radix-popover-content-available-height)',
+        }}
+        onOpenAutoFocus={(e) => { e.preventDefault(); searchRef.current?.focus(); }}
+      >
+        <div className="p-1 shrink-0">
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search civilizations..."
+            className="w-full rounded-sm border border-border bg-secondary px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+        <div className="flex-1 min-h-0 overflow-y-auto px-1 pb-1">
+          {visibleCivs.length === 0 ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">No civilizations found</div>
+          ) : (
+            visibleCivs.map(civ => (
+              <button
+                key={civ.abbr}
+                type="button"
+                onClick={() => handleSelect(civ.abbr)}
+                className={cn(
+                  "group flex w-full items-center gap-3 rounded-sm px-2 py-3 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent",
+                  civ.abbr === value && "font-bold",
+                )}
+              >
+                <img src={civ.flagPath} alt={civ.name} className="w-8 h-8 object-contain shrink-0" />
+                <span className="font-medium text-white group-hover:text-black transition-colors">{civ.name}</span>
+              </button>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 // Function to calculate the charge bonus for a unit
 const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activeAbilities: Set<string>, age: number, activeTechnologies: Set<string> = new Set(), chargeMultiplier?: number, modifiedMeleeAttack?: number, abilityCounters?: Map<string, number>, modifiedRangedAttack?: number, chargeChange?: number): number => {
@@ -285,8 +593,6 @@ const Sandbox = () => {
   const [mobileOptionsOpen, setMobileOptionsOpen] = useState<boolean>(false);
   const [startDistancePreset, setStartDistancePreset] = useState<string>("max");
   const [customDistance, setCustomDistance] = useState<number>(5);
-  const [unitSearch1, setUnitSearch1] = useState<string>("");
-  const [unitSearch2, setUnitSearch2] = useState<string>("");
 
   const civ1 = useUnitSlot();
   const civ2 = useUnitSlot();
@@ -1252,202 +1558,25 @@ const Sandbox = () => {
           <div className="space-y-4 flex flex-col items-end">
             <label className="text-sm font-medium text-foreground">Civ 1: <span className="text-xs text-muted-foreground font-normal">({filteredUnits1.length} units)</span></label>
             <div id="tour-civ1" className="w-full">
-              <Select value={selectedCiv1} onValueChange={setSelectedCiv1}>
-                <SelectTrigger className="bg-secondary border-border h-14">
-                  <SelectValue>
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={CIVILIZATIONS.find(c => c.abbr === selectedCiv1)?.flagPath}
-                        alt=""
-                        className="w-8 h-8 object-contain"
-                      />
-                      <span className="font-medium">
-                        {CIVILIZATIONS.find(c => c.abbr === selectedCiv1)?.name}
-                      </span>
-                    </div>
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent className="bg-popover border-border max-h-[400px]">
-                  {CIVILIZATIONS.map((civ) => (
-                    <SelectItem key={civ.abbr} value={civ.abbr} className="data-[state=checked]:font-bold py-3 group">
-                      <div className="flex items-center gap-3">
-                        <img src={civ.flagPath} alt={civ.name} className="w-8 h-8 object-contain" />
-                        <span className="font-medium text-white group-hover:text-black transition-colors">{civ.name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <CivPicker value={selectedCiv1} onSelect={setSelectedCiv1} />
             </div>
 
             <div id="tour-unit1" className="w-full">
-              <Select
-                value={isJeanneUnit(unit1) ? 'jeanne-darc-peasant' : unit1?.id === 'desert-raider' && activeAbilities1.has('ability-desert-raider-blade') ? 'desert-raider_cavalry' : (unit1?.id || "")}
-                onOpenChange={(open) => { if (!open) setUnitSearch1(""); }}
-                onValueChange={(value) => {
-                  setUnitSearch1("");
+              <UnitPicker
+                units={filteredUnits1}
+                categorizedUnits={categorizedUnits1}
+                openCategories={openCategories1}
+                toggleCategory={toggleCategory1}
+                selectedUnit={unit1}
+                activeAbilities={activeAbilities1}
+                onSelect={(value) => {
                   if (value === 'desert-raider_cavalry') {
                     setUnit1(filteredUnits1.find(u => u.id === 'desert-raider') || null, 'ability-desert-raider-blade');
                   } else {
                     setUnit1(filteredUnits1.find(u => u.id === value) || null);
                   }
                 }}
-              >
-                <SelectTrigger className="bg-secondary border-border">
-                  <SelectValue placeholder="Select a unit..." />
-                </SelectTrigger>
-                <SelectContent className="bg-popover border-border max-h-[500px]">
-                  <div
-                    className="sticky top-0 z-10 bg-popover px-1 pb-1 pt-0.5"
-                    onKeyDown={(e) => e.stopPropagation()}
-                    onPointerDown={(e) => e.stopPropagation()}
-                  >
-                    <input
-                      autoFocus
-                      value={unitSearch1}
-                      onChange={(e) => setUnitSearch1(e.target.value)}
-                      placeholder="Search units..."
-                      className="w-full rounded-sm border border-border bg-secondary px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                    />
-                  </div>
-                  {unitSearch1.trim() ? (() => {
-                    const q = unitSearch1.trim().toLowerCase();
-                    const scored: { score: number; el: JSX.Element }[] = [];
-                    for (const categoryKey of categoryOrder) {
-                      const catUnits = categorizedUnits1[categoryKey];
-                      if (!catUnits || catUnits.length === 0) continue;
-                      if (categoryKey === 'jeanne') {
-                        const peasant = catUnits.find(u => u.id === 'jeanne-darc-peasant');
-                        if (!peasant) continue;
-                        const score = unitNameMatchScore("Jeanne d'Arc", q);
-                        if (score > 0) {
-                          scored.push({
-                            score, el: (
-                              <SelectItem key="jeanne-darc" value="jeanne-darc-peasant" className="data-[state=checked]:font-bold pl-8 group">
-                                <div className="flex items-center gap-2">
-                                  <img src={peasant.icon} alt="Jeanne d'Arc" className="w-6 h-6 object-contain" />
-                                  <span className="text-white group-hover:text-black transition-colors">Jeanne d'Arc</span>
-                                </div>
-                              </SelectItem>
-                            )
-                          });
-                        }
-                        continue;
-                      }
-                      for (const unit of catUnits) {
-                        const score = unitNameMatchScore(unit.name, q);
-                        if (score <= 0) continue;
-                        scored.push({
-                          score, el: (
-                            <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-8 group">
-                              <div className="flex items-center gap-2">
-                                <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
-                                <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
-                                {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
-                              </div>
-                            </SelectItem>
-                          )
-                        });
-                      }
-                    }
-                    if (scored.length === 0) {
-                      return <div className="py-6 text-center text-sm text-muted-foreground">No units found</div>;
-                    }
-                    scored.sort((a, b) => b.score - a.score);
-                    return scored.map(s => s.el);
-                  })() : categoryOrder.map(categoryKey => {
-                    const units = categorizedUnits1[categoryKey];
-                    if (!units || units.length === 0) return null;
-
-                    const isOpen = openCategories1[categoryKey];
-
-                    return (
-                      <SelectGroup key={categoryKey}>
-                        <div
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            toggleCategory1(categoryKey);
-                          }}
-                          className="cursor-pointer hover:bg-accent px-2 py-2 rounded group"
-                        >
-                          <SelectLabel className="text-primary group-hover:text-background font-semibold flex items-center gap-2 cursor-pointer">
-                            <span className="text-xs">{isOpen ? '▼' : '▶'}</span>
-                            <img
-                              src={categoryIcons[categoryKey]}
-                              alt=""
-                              className="w-5 h-5 object-contain inline-block"
-                            />
-                            <span>{categoryNames[categoryKey]} ({units.length})</span>
-                          </SelectLabel>
-                        </div>
-                        {isOpen && categoryKey === 'mercenary' ? (() => {
-                          const grouped: Record<string, typeof units> = {};
-                          for (const u of units) {
-                            const sub = getMercenarySubCategory(u);
-                            if (!grouped[sub]) grouped[sub] = [];
-                            grouped[sub].push(u);
-                          }
-                          return MERCENARY_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
-                            <React.Fragment key={sub}>
-                              <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
-                              {grouped[sub].map((unit) => (
-                                <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-10 group">
-                                  <div className="flex items-center gap-2">
-                                    <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
-                                    <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
-                                    {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </React.Fragment>
-                          ));
-                        })() : isOpen && categoryKey === 'khaganate' ? (() => {
-                          const grouped: Record<string, typeof units> = {};
-                          for (const u of units) {
-                            const sub = getKhaganateSubCategory(u);
-                            if (!grouped[sub]) grouped[sub] = [];
-                            grouped[sub].push(u);
-                          }
-                          return KHAGANATE_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
-                            <React.Fragment key={sub}>
-                              <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
-                              {grouped[sub].map((unit) => (
-                                <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-10 group">
-                                  <div className="flex items-center gap-2">
-                                    <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
-                                    <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
-                                    {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </React.Fragment>
-                          ));
-                        })() : isOpen && categoryKey === 'jeanne' ? (() => {
-                          const peasant = units.find(u => u.id === 'jeanne-darc-peasant');
-                          if (!peasant) return null;
-                          return (
-                            <SelectItem key="jeanne-darc" value="jeanne-darc-peasant" className="data-[state=checked]:font-bold pl-8 group">
-                              <div className="flex items-center gap-2">
-                                <img src={peasant.icon} alt="Jeanne d'Arc" className="w-6 h-6 object-contain" />
-                                <span className="text-white group-hover:text-black transition-colors">Jeanne d'Arc</span>
-                              </div>
-                            </SelectItem>
-                          );
-                        })() : isOpen && units.map((unit) => (
-                          <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-8 group">
-                            <div className="flex items-center gap-2">
-                              <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
-                              <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
-                              {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              />
             </div>
             {isJeanneUnit(unit1) && (
               <JeanneFormSelector
@@ -1463,202 +1592,25 @@ const Sandbox = () => {
           <div className="space-y-4 flex flex-col items-start">
             <label className="text-sm font-medium text-foreground">Civ 2: <span className="text-xs text-muted-foreground font-normal">({filteredUnits2.length} units)</span></label>
             <div id="tour-civ2" className="w-full">
-              <Select value={selectedCiv2} onValueChange={setSelectedCiv2}>
-                <SelectTrigger className="bg-secondary border-border h-14">
-                  <SelectValue>
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={CIVILIZATIONS.find(c => c.abbr === selectedCiv2)?.flagPath}
-                        alt=""
-                        className="w-8 h-8 object-contain"
-                      />
-                      <span className="font-medium">
-                        {CIVILIZATIONS.find(c => c.abbr === selectedCiv2)?.name}
-                      </span>
-                    </div>
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent className="bg-popover border-border max-h-[400px]">
-                  {CIVILIZATIONS.map((civ) => (
-                    <SelectItem key={civ.abbr} value={civ.abbr} className="data-[state=checked]:font-bold py-3 group">
-                      <div className="flex items-center gap-3">
-                        <img src={civ.flagPath} alt={civ.name} className="w-8 h-8 object-contain" />
-                        <span className="font-medium text-white group-hover:text-black transition-colors">{civ.name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <CivPicker value={selectedCiv2} onSelect={setSelectedCiv2} />
             </div>
 
             <div id="tour-unit2" className="w-full">
-              <Select
-                value={isJeanneUnit(unit2) ? 'jeanne-darc-peasant' : unit2?.id === 'desert-raider' && activeAbilities2.has('ability-desert-raider-blade') ? 'desert-raider_cavalry' : (unit2?.id || "")}
-                onOpenChange={(open) => { if (!open) setUnitSearch2(""); }}
-                onValueChange={(value) => {
-                  setUnitSearch2("");
+              <UnitPicker
+                units={filteredUnits2}
+                categorizedUnits={categorizedUnits2}
+                openCategories={openCategories2}
+                toggleCategory={toggleCategory2}
+                selectedUnit={unit2}
+                activeAbilities={activeAbilities2}
+                onSelect={(value) => {
                   if (value === 'desert-raider_cavalry') {
                     setUnit2(filteredUnits2.find(u => u.id === 'desert-raider') || null, 'ability-desert-raider-blade');
                   } else {
                     setUnit2(filteredUnits2.find(u => u.id === value) || null);
                   }
                 }}
-              >
-                <SelectTrigger className="bg-secondary border-border">
-                  <SelectValue placeholder="Select a unit..." />
-                </SelectTrigger>
-                <SelectContent className="bg-popover border-border max-h-[500px]">
-                  <div
-                    className="sticky top-0 z-10 bg-popover px-1 pb-1 pt-0.5"
-                    onKeyDown={(e) => e.stopPropagation()}
-                    onPointerDown={(e) => e.stopPropagation()}
-                  >
-                    <input
-                      autoFocus
-                      value={unitSearch2}
-                      onChange={(e) => setUnitSearch2(e.target.value)}
-                      placeholder="Search units..."
-                      className="w-full rounded-sm border border-border bg-secondary px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                    />
-                  </div>
-                  {unitSearch2.trim() ? (() => {
-                    const q = unitSearch2.trim().toLowerCase();
-                    const scored: { score: number; el: JSX.Element }[] = [];
-                    for (const categoryKey of categoryOrder) {
-                      const catUnits = categorizedUnits2[categoryKey];
-                      if (!catUnits || catUnits.length === 0) continue;
-                      if (categoryKey === 'jeanne') {
-                        const peasant = catUnits.find(u => u.id === 'jeanne-darc-peasant');
-                        if (!peasant) continue;
-                        const score = unitNameMatchScore("Jeanne d'Arc", q);
-                        if (score > 0) {
-                          scored.push({
-                            score, el: (
-                              <SelectItem key="jeanne-darc" value="jeanne-darc-peasant" className="data-[state=checked]:font-bold pl-8 group">
-                                <div className="flex items-center gap-2">
-                                  <img src={peasant.icon} alt="Jeanne d'Arc" className="w-6 h-6 object-contain" />
-                                  <span className="text-white group-hover:text-black transition-colors">Jeanne d'Arc</span>
-                                </div>
-                              </SelectItem>
-                            )
-                          });
-                        }
-                        continue;
-                      }
-                      for (const unit of catUnits) {
-                        const score = unitNameMatchScore(unit.name, q);
-                        if (score <= 0) continue;
-                        scored.push({
-                          score, el: (
-                            <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-8 group">
-                              <div className="flex items-center gap-2">
-                                <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
-                                <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
-                                {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
-                              </div>
-                            </SelectItem>
-                          )
-                        });
-                      }
-                    }
-                    if (scored.length === 0) {
-                      return <div className="py-6 text-center text-sm text-muted-foreground">No units found</div>;
-                    }
-                    scored.sort((a, b) => b.score - a.score);
-                    return scored.map(s => s.el);
-                  })() : categoryOrder.map(categoryKey => {
-                    const units = categorizedUnits2[categoryKey];
-                    if (!units || units.length === 0) return null;
-
-                    const isOpen = openCategories2[categoryKey];
-
-                    return (
-                      <SelectGroup key={categoryKey}>
-                        <div
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            toggleCategory2(categoryKey);
-                          }}
-                          className="cursor-pointer hover:bg-accent px-2 py-2 rounded group"
-                        >
-                          <SelectLabel className="text-primary group-hover:text-background font-semibold flex items-center gap-2 cursor-pointer">
-                            <span className="text-xs">{isOpen ? '▼' : '▶'}</span>
-                            <img
-                              src={categoryIcons[categoryKey]}
-                              alt=""
-                              className="w-5 h-5 object-contain inline-block"
-                            />
-                            <span>{categoryNames[categoryKey]} ({units.length})</span>
-                          </SelectLabel>
-                        </div>
-                        {isOpen && categoryKey === 'mercenary' ? (() => {
-                          const grouped: Record<string, typeof units> = {};
-                          for (const u of units) {
-                            const sub = getMercenarySubCategory(u);
-                            if (!grouped[sub]) grouped[sub] = [];
-                            grouped[sub].push(u);
-                          }
-                          return MERCENARY_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
-                            <React.Fragment key={sub}>
-                              <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
-                              {grouped[sub].map((unit) => (
-                                <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-10 group">
-                                  <div className="flex items-center gap-2">
-                                    <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
-                                    <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
-                                    {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </React.Fragment>
-                          ));
-                        })() : isOpen && categoryKey === 'khaganate' ? (() => {
-                          const grouped: Record<string, typeof units> = {};
-                          for (const u of units) {
-                            const sub = getKhaganateSubCategory(u);
-                            if (!grouped[sub]) grouped[sub] = [];
-                            grouped[sub].push(u);
-                          }
-                          return KHAGANATE_SUB_ORDER.filter(sub => grouped[sub]?.length).map(sub => (
-                            <React.Fragment key={sub}>
-                              <div className="pl-8 py-0.5 text-xs text-muted-foreground italic">{sub}</div>
-                              {grouped[sub].map((unit) => (
-                                <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-10 group">
-                                  <div className="flex items-center gap-2">
-                                    <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
-                                    <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
-                                    {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </React.Fragment>
-                          ));
-                        })() : isOpen && categoryKey === 'jeanne' ? (() => {
-                          const peasant = units.find(u => u.id === 'jeanne-darc-peasant');
-                          if (!peasant) return null;
-                          return (
-                            <SelectItem key="jeanne-darc" value="jeanne-darc-peasant" className="data-[state=checked]:font-bold pl-8 group">
-                              <div className="flex items-center gap-2">
-                                <img src={peasant.icon} alt="Jeanne d'Arc" className="w-6 h-6 object-contain" />
-                                <span className="text-white group-hover:text-black transition-colors">Jeanne d'Arc</span>
-                              </div>
-                            </SelectItem>
-                          );
-                        })() : isOpen && units.map((unit) => (
-                          <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-8 group">
-                            <div className="flex items-center gap-2">
-                              <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
-                              <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
-                              {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              />
             </div>
             {isJeanneUnit(unit2) && (
               <JeanneFormSelector
@@ -1677,7 +1629,8 @@ const Sandbox = () => {
             {/* Civ 1 Unit */}
             {unit1 && (
               <>
-                <div className="order-1 sm:order-1 flex flex-col items-end sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
+                <div className="order-1 sm:order-1 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
+                  <div className="flex flex-col items-end gap-2 w-max ml-auto sm:w-auto sm:ml-0 sm:items-stretch sm:gap-3">
                     <div id="tour-age1">
                       <AgeSelector
                         availableAges={getAvailableAges(unit1.id, selectedCiv1)}
@@ -1717,6 +1670,7 @@ const Sandbox = () => {
                         unitId={variation1?.baseId ?? unit1?.id}
                       />
                     </div>
+                  </div>
                 </div>
                 <motion.div
                   initial={{ opacity: 0, x: -50 }}
@@ -2038,7 +1992,8 @@ const Sandbox = () => {
               };
               return (
                 <>
-                  <div className="order-1 sm:order-1 flex flex-col items-end sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
+                  <div className="order-1 sm:order-1 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
+                    <div className="flex flex-col items-end gap-2 w-max ml-auto sm:w-auto sm:ml-0 sm:items-stretch sm:gap-3">
                         <div id="tour-age1">
                           <AgeSelector
                             availableAges={getAvailableAges(unit1.id, selectedCiv1)}
@@ -2078,6 +2033,7 @@ const Sandbox = () => {
                             unitId={variation1?.baseId ?? unit1?.id}
                           />
                         </div>
+                    </div>
                   </div>
                   <motion.div
                     initial={{ opacity: 0, x: -50 }}
