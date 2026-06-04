@@ -25,4 +25,9 @@ dist-ssr
 token_data.csv
 token_stats.ipynb
 
-.claude/settings.local.json
+# Internal docs & local config — kept locally, not published
+CLAUDE.md
+REFERENCE.md
+PROGRAMMER_GUIDE.md
+TODO.txt
+.claude/
