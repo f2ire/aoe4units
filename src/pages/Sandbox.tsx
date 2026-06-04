@@ -122,7 +122,7 @@ const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activ
   }
 
 
-  if (activeAbilities.has('ability-trample') && baseId === 'cataphract') return 12;
+  if (activeAbilities.has('ability-trample') && baseId === 'cataphract') return 10;
 
   if (activeAbilities.has('ability-dagger-throw') && baseId === 'earls-guard') {
     const hasDrills = activeTechnologies.has('throwing-dagger-drills');

@@ -200,6 +200,28 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     }),
   },
 
+
+
+  {
+    id: 'ability-golden-age-tier-3',
+    reason: 'Abbasid Golden Age Tier 3: camel-rider gains +15% melee attack. Effect scoped to ab via select.id (camel-rider is an ab-only unit).',
+    after: (ability: Ability) => ({
+      ...ability,
+      minAge: 1,
+      active: 'manual',
+      description: '+15% Camel Rider damage.',
+      effects: [
+        {
+          property: 'meleeAttack',
+          select: { id: ['camel-rider'] },
+          effect: 'multiply',
+          value: 1.15,
+          type: 'ability'
+        }
+      ]
+    })
+  },
+
   //_________
   //
   // AYYUBIDS
@@ -260,7 +282,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
           property: 'hitpoints',
           select: { class: [['land_military']] },
           effect: 'multiply',
-          value: 1.2,
+          value: 1.25,
           type: 'ability'
         }
       ]
@@ -395,7 +417,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
             property: 'healingRatePerSecond',
             select: { class: [['cavalry']] },
             effect: 'change',
-            value: 2,
+            value: 2.5,
             type: 'ability',
           },
         ]
@@ -1951,6 +1973,53 @@ function createFrenchKeepInfluence(): Ability {
       age: 3,
       civs: ['fr'],
       description: 'All Archery Ranges and Stables within this influence area produce units 20% cheaper.',
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+//___________
+//
+// ABBASID DYNASTY
+//
+//___________
+
+function createGoldenAgeTier5Ab(): Ability {
+  return {
+    id: 'ability-golden-age-tier-5-ab',
+    name: 'Golden Age Tier 5',
+    type: 'ability',
+    civs: ['ab'],
+    displayClasses: [],
+    classes: [],
+    minAge: 4,
+    active: 'manual',
+    icon: 'https://data.aoe4world.com/images/abilities/ability-golden-age-tier-5.png',
+    description: '+10% Melee Infantry damage.',
+    unique: false,
+    effects: [
+      {
+        property: 'meleeAttack',
+        select: { class: [['melee', 'infantry']] },
+        effect: 'multiply',
+        value: 1.1,
+        type: 'ability',
+      },
+    ],
+    variations: [{
+      id: 'ability-golden-age-tier-5-ab-4',
+      baseId: 'ability-golden-age-tier-5-ab',
+      type: 'ability',
+      name: 'Golden Age Tier 5',
+      pbgid: 999020,
+      attribName: 'ability_golden_age_tier_5_ab',
+      age: 4,
+      civs: ['ab'],
+      description: '+10% Melee Infantry damage.',
       classes: [], displayClasses: [], unique: false,
       costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
       producedBy: [],
@@ -3970,6 +4039,7 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createTrampleTug(),
     createElephantFormations(),
     createGrasslandInfluence(),
+    createGoldenAgeTier5Ab(),
   ];
 
   return allAbilitiesMerged.map(ability => {

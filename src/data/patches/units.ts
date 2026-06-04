@@ -214,6 +214,12 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
 
   //___________
   //
+  // BYZANTINES
+  //
+  //___________
+
+  //___________
+  //
   // DELHI SULTANATE
   //
   //___________
@@ -455,23 +461,27 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
 
   {
     id: 'royal-cannon',
-    reason: 'Add mercenary_byz class so the unit appears in the Byzantine mercenary category. Scale all damage sources ×1.3 to match in-game values.',
+    reason: 'Add mercenary_byz class so the unit appears in the Byzantine mercenary category. Scale all damage sources ×1.3 to match in-game values. Gold cost reduced by 25%.',
     after: (unit: unknown) => {
       const u = unit as any;
       return {
         ...u,
         classes: [...u.classes, 'mercenary_byz'],
-        variations: u.variations.map((v: any) => ({
-          ...v,
-          weapons: v.weapons.map((w: any, wi: number) => wi === 0 ? {
-            ...w,
-            damage: Math.round(w.damage * 1.3),
-            modifiers: w.modifiers.map((m: any) => ({
-              ...m,
-              value: Math.round(m.value * 1.3),
-            })),
-          } : w),
-        })),
+        variations: u.variations.map((v: any) => {
+          const gold = Math.round(v.costs.gold * 0.75);
+          return {
+            ...v,
+            costs: { ...v.costs, gold, total: v.costs.total - v.costs.gold + gold },
+            weapons: v.weapons.map((w: any, wi: number) => wi === 0 ? {
+              ...w,
+              damage: Math.round(w.damage * 1.3),
+              modifiers: w.modifiers.map((m: any) => ({
+                ...m,
+                value: Math.round(m.value * 1.3),
+              })),
+            } : w),
+          };
+        }),
       };
     },
   },
@@ -479,13 +489,16 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
 
   {
     id: 'royal-culverin',
-    reason: 'Raw data undervalues all damage by ~30%.',
+    reason: 'Raw data undervalues all damage by ~30%. French (fr) and Jeanne d\'Arc (jd) no longer have access.',
     after: (unit: unknown) => {
       const u = unit as any;
+      const excludedCivs = ['fr', 'jd'];
       return {
         ...u,
+        civs: u.civs.filter((c: string) => !excludedCivs.includes(c)),
         variations: u.variations.map((v: any) => ({
           ...v,
+          civs: v.civs.filter((c: string) => !excludedCivs.includes(c)),
           weapons: v.weapons.map((w: any, wi: number) => wi === 0 ? {
             ...w,
             damage: Math.round(w.damage * 1.3),
@@ -498,19 +511,23 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
 
   {
     id: 'royal-ribauldequin',
-    reason: 'Raw data undervalues all damage by ~30%.',
+    reason: 'Raw data undervalues all damage by ~30%. Gold cost reduced by 25%.',
     after: (unit: unknown) => {
       const u = unit as any;
       return {
         ...u,
-        variations: u.variations.map((v: any) => ({
-          ...v,
-          weapons: v.weapons.map((w: any, wi: number) => wi === 0 ? {
-            ...w,
-            damage: Math.round(w.damage * 1.3),
-            modifiers: w.modifiers.map((m: any) => ({ ...m, value: Math.round(m.value * 1.3) })),
-          } : w),
-        })),
+        variations: u.variations.map((v: any) => {
+          const gold = Math.round(v.costs.gold * 0.75);
+          return {
+            ...v,
+            costs: { ...v.costs, gold, total: v.costs.total - v.costs.gold + gold },
+            weapons: v.weapons.map((w: any, wi: number) => wi === 0 ? {
+              ...w,
+              damage: Math.round(w.damage * 1.3),
+              modifiers: w.modifiers.map((m: any) => ({ ...m, value: Math.round(m.value * 1.3) })),
+            } : w),
+          };
+        }),
       };
     },
   },
@@ -985,7 +1002,7 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
         ...unit,
         minAge: 2,
         variations: [
-          { ...base, age: 2, id: 'hippodrome-horseman-2', healingRatePerSecond: 1 },
+          { ...base, age: 2, id: 'hippodrome-horseman-2', healingRatePerSecond: 0.6 },
           makeVariation(3, 264),
           makeVariation(4, 308),
         ],
@@ -1009,7 +1026,7 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       return {
         ...unit,
         variations: [
-          { ...base, age: 2, id: 'hippodrome-riddari-2', healingRatePerSecond: 1 },
+          { ...base, age: 2, id: 'hippodrome-riddari-2', healingRatePerSecond: 0.6 },
           makeVariation(3, 336, 4, 4),
           makeVariation(4, 392, 5, 5),
         ],
@@ -1033,7 +1050,7 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
         ...unit,
         minAge: 2,
         variations: [
-          { ...base, age: 2, id: 'hippodrome-scout-2', healingRatePerSecond: 1 },
+          { ...base, age: 2, id: 'hippodrome-scout-2', healingRatePerSecond: 0.6 },
           makeVariation(3, 264),
           makeVariation(4, 308),
         ],
@@ -1230,6 +1247,7 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
     }),
   },
 
+
   {
     id: 'zhanma-swordsman',
     reason: 'Weapon modifier type corrected to bonus — +12 bonus damage vs cavalry.',
@@ -1244,6 +1262,8 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       })),
     }),
   },
+
+
 
 ];
 //   after: (unit: unknown) => {

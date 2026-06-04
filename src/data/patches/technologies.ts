@@ -211,7 +211,6 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     id: 'incendiary-arrows',
     reason: 'Byzantine javelin-thrower excluded (not in-game). Raw data has typo tower-elepahnt → fixed. kipchak-archer added so triple-shot secondary arrows also scale with this tech.',
     excludedUnits: ['javelin-thrower', 'batu-khan'],
-    unitTooltips: { 'kipchak-archer': 'For an unknown reason, incendiary arrows first reduce attack by 1 (both normal and triple attack) after applying the 20% bonus damage.' },
     after: (tech: Technology) => ({
       ...tech,
       effects: [
@@ -225,8 +224,6 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
             ]
           } : effect.select
         })),
-        // kipchak-archer in-game loses 1 base damage before the ×1.2 is applied
-        { property: 'rangedAttack', select: { id: ['kipchak-archer'] }, effect: 'change', value: -1, type: 'passive' }
       ]
     }),
   },
@@ -540,8 +537,9 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
           property: "meleeAttack",
           select: { id: ["cataphract"] },
           effect: "multiply",
-          value: 1.15,
-          type: "passive"
+          value: 1.1,
+          type: "passive",
+          duration: 10
         }
       ]
     }
@@ -1085,12 +1083,25 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
   {
     id: 'inspired-warriors',
-    reason: 'Useless for UI. Only show the linked ability.',
-    after: (tech) => ({
-      ...tech,
-      effects: [],
-      variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
-    })
+    reason: 'Raw value 1.15 corrected to 1.1 for melee and ranged attack multipliers.',
+    update: {
+      effects: [
+        {
+          property: 'meleeAttack',
+          select: { class: [['cavalry', 'melee'], ['infantry', 'melee']] },
+          effect: 'multiply',
+          value: 1.1,
+          type: 'passive'
+        },
+        {
+          property: 'rangedAttack',
+          select: { class: [['cavalry', 'ranged'], ['infantry', 'ranged']] },
+          effect: 'multiply',
+          value: 1.1,
+          type: 'passive'
+        }
+      ]
+    }
   },
 
   {

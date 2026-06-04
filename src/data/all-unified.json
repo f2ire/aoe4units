@@ -71303,7 +71303,7 @@
             "palatine-school"
           ],
           "icon": "https://data.aoe4world.com/images/units/limitanei-2.png",
-          "hitpoints": 100,
+          "hitpoints": 105,
           "weapons": [
             {
               "name": "Spear",
@@ -78930,13 +78930,13 @@
           "unique": true,
           "costs": {
             "food": 120,
-            "wood": 40,
+            "wood": 45,
             "stone": 0,
             "gold": 0,
             "vizier": 0,
-            "total": 160,
+            "total": 165,
             "popcap": 1,
-            "time": 30
+            "time": 31
           },
           "producedBy": [
             "military-school",
@@ -79071,13 +79071,13 @@
           "unique": true,
           "costs": {
             "food": 120,
-            "wood": 40,
+            "wood": 45,
             "stone": 0,
             "gold": 0,
             "vizier": 0,
-            "total": 160,
+            "total": 165,
             "popcap": 1,
-            "time": 30
+            "time": 31
           },
           "producedBy": [
             "military-school",
@@ -79212,13 +79212,13 @@
           "unique": true,
           "costs": {
             "food": 120,
-            "wood": 40,
+            "wood": 45,
             "stone": 0,
             "gold": 0,
             "vizier": 0,
-            "total": 160,
+            "total": 165,
             "popcap": 1,
-            "time": 30
+            "time": 31
           },
           "producedBy": [
             "military-school",
@@ -98351,7 +98351,7 @@
             "golden-tent"
           ],
           "icon": "https://data.aoe4world.com/images/units/torguud-2.png",
-          "hitpoints": 220,
+          "hitpoints": 200,
           "weapons": [
             {
               "name": "Mace",
@@ -98494,7 +98494,7 @@
             "golden-tent"
           ],
           "icon": "https://data.aoe4world.com/images/units/torguud-3.png",
-          "hitpoints": 260,
+          "hitpoints": 240,
           "weapons": [
             {
               "name": "Mace",
@@ -98637,7 +98637,7 @@
             "golden-tent"
           ],
           "icon": "https://data.aoe4world.com/images/units/torguud-4.png",
-          "hitpoints": 300,
+          "hitpoints": 280,
           "weapons": [
             {
               "name": "Mace",
@@ -128953,13 +128953,13 @@
           ],
           "unique": true,
           "costs": {
-            "food": 300,
+            "food": 250,
             "wood": 0,
             "stone": 0,
             "gold": 350,
-            "total": 650,
+            "total": 600,
             "popcap": 4,
-            "time": 45
+            "time": 40
           },
           "producedBy": [
             "siege-workshop"
@@ -129079,13 +129079,13 @@
           ],
           "unique": true,
           "costs": {
-            "food": 300,
+            "food": 250,
             "wood": 0,
             "stone": 0,
             "gold": 350,
-            "total": 650,
+            "total": 600,
             "popcap": 4,
-            "time": 45
+            "time": 40
           },
           "producedBy": [
             "siege-workshop"
