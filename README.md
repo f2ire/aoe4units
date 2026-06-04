@@ -79,7 +79,7 @@ npm run update-data:force  # rewrite files even if unchanged
 ## 📁 Project Structure
 
 ```
-aoe4-matchup-master1/
+aoe4units/
 ├── src/
 │   ├── pages/
 │   │   └── Sandbox.tsx       # Main page (route /): unit comparison + combat sim
