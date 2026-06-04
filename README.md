@@ -30,7 +30,6 @@ A short guided tour walks you through the interface on first use.
 - **[React Router](https://reactrouter.com/)** — client-side routing
 - **[driver.js](https://driverjs.com/)** — guided tour
 - **[lucide-react](https://lucide.dev/)** — icons
-- **[Vercel Analytics](https://vercel.com/analytics)** — usage analytics
 
 ## 🚀 Setup
 
