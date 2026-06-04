@@ -28,6 +28,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: SPA fallback (serve index.html for all routes)
+        run: cp dist/index.html dist/404.html
+
       - name: Add CNAME
         run: echo "aoe4units.com" > dist/CNAME
 

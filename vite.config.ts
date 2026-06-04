@@ -14,4 +14,15 @@ export default defineConfig(() => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Split the large bundled JSON data into its own chunk
+          if (id.includes("/src/data/") && id.endsWith(".json")) return "data";
+          if (id.includes("node_modules")) return "vendor";
+        },
+      },
+    },
+  },
 }));
