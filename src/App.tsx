@@ -2,23 +2,18 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Sandbox from "./pages/Sandbox";
-import NotFound from "./pages/NotFound";
+import { Outlet } from "react-router-dom";
+import { ClientOnly } from "vite-react-ssg";
 
 const queryClient = new QueryClient();
 
+// Root layout: shared providers wrap every route via <Outlet/>.
+// Toasts are client-only UI with no SEO value — kept out of the SSG render.
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Sandbox />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+      <ClientOnly>{() => <><Toaster /><Sonner /></>}</ClientOnly>
+      <Outlet />
     </TooltipProvider>
   </QueryClientProvider>
 );

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { aoe4Units, AoE4Unit, getUnitVariation, getMaxAge, getAvailableAges, getPrimaryWeapon, getArmorValue, getResistanceValue } from "@/data/unified-units";
+import { aoe4Units, AoE4Unit, getUnitVariation, getMaxAge, getAvailableAges, getPrimaryWeapon, getArmorValue, getResistanceValue, EXCLUDED_UNIT_IDS } from "@/data/unified-units";
 import type { UnifiedVariation } from "@/data/unified-units";
 import { getTechnologiesForUnit, getActiveTechnologyVariationsWithTiers, applyTechnologyEffects, getAllTiersFromSameLine, allTechnologies, IMPROVED_TECH_PAIRS, IMPROVED_TECH_BASE, getTechnologyTier, getTechnologyBaseName, type UnitStats } from "@/data/unified-technologies";
 import { getAbilitiesForUnit, getActiveAbilityVariations, getAbilityVariation } from "@/data/unified-abilities";
@@ -22,6 +22,7 @@ export const ABILITY_UPGRADE_GROUPS: readonly (readonly string[])[] = [
   ['ability-dynasty-song', 'ability-dynasty-yuan', 'ability-dynasty-ming'],
   ['ability-network-of-castles', 'ability-network-of-citadels'],
   ['ability-khan-warcry-2', 'ability-khan-warcry-3', 'ability-khan-warcry-4'],
+  ['ability-daimyo-aura-2', 'ability-daimyo-aura-3', 'ability-daimyo-aura-4'],
   ['ability-maneuver-arrow', 'ability-attack-speed-arrow', 'ability-defense-arrow'],
   ['ability-attack-drums', 'ability-ranged-defense-drums', 'ability-melee-defense-drums']
 ];
@@ -60,10 +61,16 @@ const DEFAULT_OPEN_CATEGORIES: Record<string, boolean> = {
 // FEC improved techs that activate their base too, and keep it active when the improved is deactivated (e.g. biology)
 const FEC_IMPROVED_WITH_BASE = new Set(['biology-improved']);
 
-export function useUnitSlot() {
-  const [unit, setUnitInternal] = useState<AoE4Unit | null>(null);
-  const [selectedCiv, setSelectedCiv] = useState("ab");
-  const [selectedAge, setSelectedAge] = useState(4);
+export function useUnitSlot(initialUnit?: AoE4Unit | null, initialCiv?: string) {
+  // initialUnit/initialCiv pre-seed the slot so a unit page renders real,
+  // civ-specific stats during SSG (before client-side effects run).
+  // `useUnitSlot()` with no args is unchanged.
+  const seedCiv = initialCiv ?? initialUnit?.civs?.[0] ?? "ab";
+  const [unit, setUnitInternal] = useState<AoE4Unit | null>(initialUnit ?? null);
+  const [selectedCiv, setSelectedCiv] = useState(seedCiv);
+  const [selectedAge, setSelectedAge] = useState(
+    initialUnit ? getMaxAge(initialUnit.id, seedCiv) : 4,
+  );
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(DEFAULT_OPEN_CATEGORIES);
   const [variation, setVariation] = useState<UnifiedVariation | null>(null);
   const [activeTechnologies, setActiveTechnologies] = useState<Set<string>>(new Set());
@@ -166,6 +173,18 @@ export function useUnitSlot() {
         const exclusiveGroup = civGroups.find(g => g.includes(techId));
         if (exclusiveGroup) exclusiveGroup.forEach(id => next.delete(id));
         next.add(techId);
+        // sword-hunt-statue-age-up forces the Daimyo Aura to its Age IV form:
+        // upgrade an already-active Age II/III aura to Age IV.
+        if (techId === 'sword-hunt-statue-age-up') {
+          setActiveAbilities(prevAbi => {
+            if (!prevAbi.has('ability-daimyo-aura-2') && !prevAbi.has('ability-daimyo-aura-3')) return prevAbi;
+            const nextAbi = new Set(prevAbi);
+            nextAbi.delete('ability-daimyo-aura-2');
+            nextAbi.delete('ability-daimyo-aura-3');
+            nextAbi.add('ability-daimyo-aura-4');
+            return nextAbi;
+          });
+        }
       }
       return next;
     });
@@ -199,7 +218,7 @@ export function useUnitSlot() {
   const ABILITY_SUPPRESSIONS: Record<string, string> = {};
   // Tech suppressions: when the suppressor tech is active, the suppressed ability's effects are excluded
   const TECH_ABILITY_SUPPRESSIONS: Record<string, string> = {
-    'sword-hunt-statue-age-up': 'ability-daimyo-aura',
+    'sword-hunt-statue-age-up': 'ability-daimyo-aura-4',
   };
   const suppressedAbilityIds = new Set([
     ...Object.entries(ABILITY_SUPPRESSIONS)
@@ -241,6 +260,14 @@ export function useUnitSlot() {
   activeTechnologiesRef.current = activeTechnologies;
 
   const toggleAbility = useCallback((abilityId: string) => {
+    // sword-hunt-statue-age-up forces the Daimyo Aura to its Age IV form:
+    // clicking the Age II/III icons activates Age IV instead.
+    if (
+      (abilityId === 'ability-daimyo-aura-2' || abilityId === 'ability-daimyo-aura-3') &&
+      activeTechnologiesRef.current.has('sword-hunt-statue-age-up')
+    ) {
+      abilityId = 'ability-daimyo-aura-4';
+    }
     setActiveAbilities(prev => {
       const next = new Set(prev);
       const swapGroup = WEAPON_SWAP_GROUPS.find(g => g.includes(abilityId));
@@ -395,32 +422,6 @@ export function useUnitSlot() {
     }
   }, [unit, selectedCiv, selectedAge]);
 
-
-  const EXCLUDED_UNIT_IDS = new Set([
-    'clocktower-battering-ram',
-    'clocktower-bombard',
-    'clocktower-counterweight-trebuchet',
-    'clocktower-nest-of-bees',
-    'clocktower-springald',
-    'wynguard-army',
-    'wynguard-footmen',
-    'wynguard-raiders',
-    'wynguard-rangers',
-    'earls-retinue',
-    'garrison-command',
-    'gunpowder-contingent',
-    'mansa-musofadi-warrior',
-    'mansa-javelineer',
-    'khaganate-mangudai',
-    'mounted-samurai-levy',
-    'naginata-samurai-levy',
-    'spearman-levy',
-    'tanegashima-ashigaru-levy',
-    'yari-cavalry-levy',
-    'yumi-ashigaru-levy',
-    'militia',
-
-  ]);
 
   const filteredUnits = useMemo(() => {
     const base = selectedCiv === "all" ? aoe4Units : aoe4Units.filter(u => u.civs.includes(selectedCiv));

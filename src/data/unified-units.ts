@@ -196,6 +196,72 @@ export const aoe4Units: AoE4Unit[] = allUnits.map(unit => {
   };
 });
 
+/**
+ * Units globally hidden from the app's unit picker (duplicates, summon stubs,
+ * removed/levy variants). Single source of truth — also imported by useUnitSlot.
+ */
+export const EXCLUDED_UNIT_IDS = new Set([
+  "clocktower-battering-ram",
+  "clocktower-bombard",
+  "clocktower-counterweight-trebuchet",
+  "clocktower-nest-of-bees",
+  "clocktower-springald",
+  "wynguard-army",
+  "wynguard-footmen",
+  "wynguard-raiders",
+  "wynguard-rangers",
+  "earls-retinue",
+  "garrison-command",
+  "gunpowder-contingent",
+  "mansa-musofadi-warrior",
+  "mansa-javelineer",
+  "khaganate-mangudai",
+  "mounted-samurai-levy",
+  "naginata-samurai-levy",
+  "spearman-levy",
+  "tanegashima-ashigaru-levy",
+  "yari-cavalry-levy",
+  "yumi-ashigaru-levy",
+  "militia",
+]);
+
+/**
+ * Units that have real base stats and are worth a standalone SEO page.
+ * Mirrors the app's unit picker: drops globally excluded units, plus summon /
+ * placeholder units (e.g. Wynguard Army) whose reference variation has no
+ * movement speed or hitpoints — UnitCard cannot render those.
+ */
+export const seoUnits: AoE4Unit[] = aoe4Units.filter((unit) => {
+  if (EXCLUDED_UNIT_IDS.has(unit.id)) return false;
+  const maxAge = getMaxAge(unit.id, "all");
+  const v = getUnitVariation(unit.id, "all", maxAge) ?? unit.variations?.[0];
+  return !!v && v.movement?.speed != null && v.hitpoints != null;
+});
+
+/**
+ * Cross-civ equivalence groups: units that fill the same role but are named
+ * differently per civilization (e.g. French "Lancer" ≈ "Knight"). Used to link
+ * a unit page to its counterparts on other civs. Units not listed are their own
+ * group of one.
+ */
+export const UNIT_EQUIVALENCE_GROUPS: string[][] = [
+  ["knight", "lancer"],
+  // Archer ship
+  ["dhow", "galley", "hunting-canoe", "junk", "light-junk", "lodya-galley"],
+  // Springald ship
+  ["baghlah", "hulk", "lodya-attack-ship", "war-canoe", "war-cog", "war-junk"],
+  // Incendiary ship
+  ["demolition-ship", "explosive-dhow", "explosive-junk", "lodya-demolition-ship"],
+  // Warship
+  ["baochuan", "carrack", "xebec"],
+  ["handcannoneer", "handcannon-ashigaru"],
+];
+
+/** Returns the equivalence group containing `unitId` (or just `[unitId]`). */
+export function getUnitGroup(unitId: string): string[] {
+  return UNIT_EQUIVALENCE_GROUPS.find((g) => g.includes(unitId)) ?? [unitId];
+}
+
 
 /**
  * Retrieves a unit by its ID
