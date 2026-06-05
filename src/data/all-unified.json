@@ -109107,7 +109107,7 @@
             {
               "name": "Bow",
               "type": "ranged",
-              "damage": 4,
+              "damage": 5,
               "speed": 1.625,
               "range": {
                 "min": 0,
@@ -109234,7 +109234,7 @@
             {
               "name": "Bow",
               "type": "ranged",
-              "damage": 6,
+              "damage": 7,
               "speed": 1.625,
               "range": {
                 "min": 0,
@@ -109361,7 +109361,7 @@
             {
               "name": "Bow",
               "type": "ranged",
-              "damage": 7,
+              "damage": 8,
               "speed": 1.625,
               "range": {
                 "min": 0,
