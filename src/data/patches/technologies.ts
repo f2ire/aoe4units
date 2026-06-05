@@ -1083,25 +1083,8 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
   {
     id: 'inspired-warriors',
-    reason: 'Raw value 1.15 corrected to 1.1 for melee and ranged attack multipliers.',
-    update: {
-      effects: [
-        {
-          property: 'meleeAttack',
-          select: { class: [['cavalry', 'melee'], ['infantry', 'melee']] },
-          effect: 'multiply',
-          value: 1.1,
-          type: 'passive'
-        },
-        {
-          property: 'rangedAttack',
-          select: { class: [['cavalry', 'ranged'], ['infantry', 'ranged']] },
-          effect: 'multiply',
-          value: 1.1,
-          type: 'passive'
-        }
-      ]
-    }
+    reason: 'Hidden from the tech selector: clear effects at both top-level and variation level.',
+    after: (tech) => ({ ...tech, effects: [], variations: tech.variations.map(v => ({ ...v, effects: [] })) })
   },
 
   {

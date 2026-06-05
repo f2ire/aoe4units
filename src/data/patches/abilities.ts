@@ -723,8 +723,8 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         effects: [
           { property: 'meleeArmor', select: { class: [['infantry'], ['cavalry', 'melee'], ['cavalry', 'ranged'], ['siege']] }, effect: 'change', value: 1, type: 'ability', duration: 60 },
           { property: 'rangedArmor', select: { class: [['infantry'], ['cavalry', 'melee'], ['cavalry', 'ranged'], ['siege']] }, effect: 'change', value: 1, type: 'ability', duration: 60 },
-          { property: 'meleeAttack', select: { id: ['melee'] }, effect: 'multiply', value: 1.15, type: 'ability', duration: 60 },
-          { property: 'rangedAttack', select: { id: ['ranged', 'siege'] }, effect: 'multiply', value: 1.15, type: 'ability', duration: 60 },
+          { property: 'meleeAttack', select: { id: ['melee'] }, effect: 'multiply', value: 1.1, type: 'ability', duration: 60 },
+          { property: 'rangedAttack', select: { id: ['ranged', 'siege'] }, effect: 'multiply', value: 1.1, type: 'ability', duration: 60 },
           { property: 'siegeAttack', select: { id: ['siege'] }, effect: 'multiply', value: 1, type: 'ability', duration: 60 }
         ],
         active: 'manual'
