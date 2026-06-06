@@ -3523,7 +3523,10 @@ function createDeflectiveArmorSen(): Ability {
     displayClasses: [],
     classes: [],
     minAge: 2,
-    active: 'manual',
+    // Auto-active only for the Daimyo (activeForIds), which has Deflective Armor innately
+    // and bypasses the aura rank-3 gate. Other Sen units still toggle it manually.
+    active: 'always',
+    activeForIds: ['daimyo'],
     icon: 'https://data.aoe4world.com/images/abilities/ability-deflective-armor-1.png',
     description: 'Deflective Armor charge can block one melee or ranged attack. Recharges while out of combat for 15 seconds.',
     unique: false,

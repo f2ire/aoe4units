@@ -300,8 +300,8 @@ export function useUnitSlot(initialUnit?: AoE4Unit | null, initialCiv?: string) 
   };
 
   // Abilities unlocked by ability counter level (civ-specific): locked until the required ability reaches minLevel
-  const ABILITY_LEVEL_DEPENDENCIES: Record<string, { abilityIds: string[]; minLevel: number; civs?: string[] }> = {
-    'ability-deflective-armor-sen': { abilityIds: ['aura-hojo-clan-daimyo-estate', 'aura-oda-clan-daimyo-estate', 'aura-takeda-clan-daimyo-estate'], minLevel: 3 },
+  const ABILITY_LEVEL_DEPENDENCIES: Record<string, { abilityIds: string[]; minLevel: number; civs?: string[]; exceptIds?: string[] }> = {
+    'ability-deflective-armor-sen': { abilityIds: ['aura-hojo-clan-daimyo-estate', 'aura-oda-clan-daimyo-estate', 'aura-takeda-clan-daimyo-estate'], minLevel: 3, exceptIds: ['daimyo'] },
   };
 
   // Ref so toggleAbility can access current abilities/technologies without closure dependencies
@@ -619,13 +619,14 @@ export function useUnitSlot(initialUnit?: AoE4Unit | null, initialCiv?: string) 
     Object.entries(ABILITY_TECH_DEPENDENCIES).forEach(([abilityId, reqTech]) => {
       if (!activeTechnologies.has(reqTech)) locked.add(abilityId);
     });
-    Object.entries(ABILITY_LEVEL_DEPENDENCIES).forEach(([abilityId, { abilityIds, minLevel, civs }]) => {
+    Object.entries(ABILITY_LEVEL_DEPENDENCIES).forEach(([abilityId, { abilityIds, minLevel, civs, exceptIds }]) => {
       if (civs && !civs.includes(selectedCiv)) return;
+      if (exceptIds && unit && exceptIds.includes(unit.id)) return; // unit has the ability innately (e.g. Daimyo)
       const counter = Math.max(...abilityIds.map(id => abilityCounters.get(id) ?? 0));
       if (counter < minLevel) locked.add(abilityId);
     });
     return locked;
-  }, [activeAbilities, activeTechnologies, abilityCounters, selectedCiv]);
+  }, [activeAbilities, activeTechnologies, abilityCounters, selectedCiv, unit]);
 
   // Auto-activate abilities marked as 'always' active + weapon-swap unit defaults
   useEffect(() => {

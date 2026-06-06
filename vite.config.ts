@@ -40,7 +40,14 @@ function generateSitemap() {
 // https://vitejs.dev/config/
 export default defineConfig(() => ({
   ssgOptions: {
-    script: "async",
+    // NOTE: do NOT set `script: "async"`. It adds `async` to the entry module in
+    // <head>, which then races the inline scripts at the end of <body> that set
+    // `window.__staticRouterHydrationData` and `window.__VITE_REACT_SSG_HASH__`.
+    // When the module wins that race the hash is `undefined`, so vite-react-ssg
+    // fetches `static-loader-data-manifest-undefined.json`, the host's SPA
+    // fallback returns index.html, and `.json()` throws
+    // "Unexpected token '<', "<!DOCTYPE "... is not valid JSON".
+    // The default ("sync") leaves it a normal deferred module → inline scripts run first.
     formatting: "minify",
     onFinished: generateSitemap,
   },
