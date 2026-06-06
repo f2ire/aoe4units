@@ -9,6 +9,56 @@ import type { UnifiedWeapon } from "@/data/unified-units";
 import { foreignEngineeringAbilityUnitRestrictions } from "@/data/patches/abilities";
 import type { Ability, AbilityVariation } from "@/data/unified-abilities";
 
+// Resolve the dynamic value of a counter-ability effect at a given stack count.
+// Mirrors the counterStep/counterSteps/counterDirection semantics documented in CLAUDE.md.
+function resolveCounterEffectValue(effect: any, count: number, ability: Ability, unitId?: string): number { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const abilityStep = (unitId ? ability.unitCounterStep?.[unitId] : undefined) ?? ability.counterStep ?? 0.05;
+  const eStep = effect.counterStep ?? abilityStep;
+  const eDir = effect.counterDirection ?? ability.counterDirection;
+  const eStepsArr: number[] | undefined = effect.counterSteps ?? ability.counterSteps;
+  const eStepsSum = eStepsArr !== undefined ? eStepsArr.slice(0, count).reduce((a: number, b: number) => a + b, 0) : undefined;
+  const eValue = eStepsSum !== undefined
+    ? (eDir === 'additive' ? eStepsSum : 1 + eStepsSum)
+    : eDir === 'increase'
+      ? 1 + count * eStep
+      : eDir === 'additive'
+        ? count * eStep
+        : eDir === 'geometric'
+          ? Math.pow(eStep, count)
+          : 1 / (1 + count * eStep);
+  return eValue * (effect.counterStepScale ?? 1);
+}
+
+// Flat HP from counter abilities (e.g. Grassland Influence +2/horse) must be added to the
+// base BEFORE the HP multipliers (Biology, Ming Dynasty, …) so the bonus scales with them:
+// (base + flat) × multipliers — not (base × multipliers) + flat.
+// Returns baseStats with such flat-HP-change counter effects applied; everything else stays
+// in the trailing counter pass (applied after multipliers).
+function applyCounterFlatHp(
+  baseStats: UnitStats,
+  effectiveClasses: string[],
+  abilities: Ability[],
+  activeAbilities: Set<string>,
+  abilityCounters: Map<string, number>,
+  selectedCiv: string,
+  unitId: string | undefined,
+): UnitStats {
+  let result = baseStats;
+  for (const ability of abilities) {
+    if (ability.counterMax === undefined || !activeAbilities.has(ability.id)) continue;
+    const count = abilityCounters.get(ability.id) ?? 0;
+    if (count === 0) continue;
+    const counterVariation = getAbilityVariation(ability.id, selectedCiv, ability.minAge);
+    if (!counterVariation) continue;
+    const hpFlat = (counterVariation.effects || [])
+      .filter((e: any) => e.property === 'hitpoints' && e.effect === 'change') // eslint-disable-line @typescript-eslint/no-explicit-any
+      .map((e: any) => ({ ...e, value: resolveCounterEffectValue(e, count, ability, unitId) })); // eslint-disable-line @typescript-eslint/no-explicit-any
+    if (hpFlat.length === 0) continue;
+    result = applyTechnologyEffects(result, effectiveClasses, [{ ...counterVariation, effects: hpFlat }], unitId, selectedCiv);
+  }
+  return result;
+}
+
 // Upgrade groups: ordered arrays where index 0 = tier 1, index 1 = tier 2, etc.
 // Only one ability in a group can be active at a time; clicking one deactivates the others.
 // Unlike WEAPON_SWAP_GROUPS, clicking the active ability deactivates it.
@@ -750,7 +800,8 @@ export function useUnitSlot(initialUnit?: AoE4Unit | null, initialCiv?: string) 
     const baseAbilityVariations = abilityVariations.filter(v => BASE_MODIFYING_ABILITY_IDS.has(v.baseId));
     const regularAbilityVariations = abilityVariations.filter(v => !BASE_MODIFYING_ABILITY_IDS.has(v.baseId));
 
-    const withTechs = applyTechnologyEffects(baseStats, effectiveClasses, techVariations, unit?.id, selectedCiv);
+    const baseWithCounterHp = applyCounterFlatHp(baseStats, effectiveClasses, abilities, activeAbilities, abilityCounters, selectedCiv, unit?.id);
+    const withTechs = applyTechnologyEffects(baseWithCounterHp, effectiveClasses, techVariations, unit?.id, selectedCiv);
     const withAbilities = applyTechnologyEffects(withTechs, effectiveClasses, regularAbilityVariations, unit?.id, selectedCiv);
     let result = applyTechnologyEffects(withAbilities, effectiveClasses, baseAbilityVariations, unit?.id, selectedCiv);
 
@@ -823,27 +874,14 @@ export function useUnitSlot(initialUnit?: AoE4Unit | null, initialCiv?: string) 
       if (!activeAbilities.has(ability.id)) continue;
       const count = abilityCounters.get(ability.id) ?? 0;
       if (count === 0) continue;
-      const abilityStep = (unit?.id ? ability.unitCounterStep?.[unit.id] : undefined) ?? ability.counterStep ?? 0.05;
       const counterVariation = getAbilityVariation(ability.id, selectedCiv, ability.minAge);
       if (!counterVariation) continue;
       const syntheticVariation = {
         ...counterVariation,
-        effects: (counterVariation.effects || []).map((e: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-          const eStep = e.counterStep ?? abilityStep;
-          const eDir = e.counterDirection ?? ability.counterDirection;
-          const eStepsArr: number[] | undefined = e.counterSteps ?? ability.counterSteps;
-          const eStepsSum = eStepsArr !== undefined ? eStepsArr.slice(0, count).reduce((a: number, b: number) => a + b, 0) : undefined;
-          const eValue = eStepsSum !== undefined
-            ? (eDir === 'additive' ? eStepsSum : 1 + eStepsSum)
-            : eDir === 'increase'
-              ? 1 + count * eStep
-              : eDir === 'additive'
-                ? count * eStep
-                : eDir === 'geometric'
-                  ? Math.pow(eStep, count)
-                  : 1 / (1 + count * eStep);
-          return { ...e, value: eValue * (e.counterStepScale ?? 1) };
-        }),
+        // Flat HP (change) is folded into the base by applyCounterFlatHp (before multipliers); exclude here to avoid double-counting.
+        effects: (counterVariation.effects || [])
+          .filter((e: any) => !(e.property === 'hitpoints' && e.effect === 'change')) // eslint-disable-line @typescript-eslint/no-explicit-any
+          .map((e: any) => ({ ...e, value: resolveCounterEffectValue(e, count, ability, unit?.id) })), // eslint-disable-line @typescript-eslint/no-explicit-any
       };
       result = applyTechnologyEffects(result, effectiveClasses, [syntheticVariation], unit?.id, selectedCiv);
     }
@@ -919,7 +957,8 @@ export function useUnitSlot(initialUnit?: AoE4Unit | null, initialCiv?: string) 
     const BASE_MODIFYING_ABILITY_IDS = new Set(['ability-astronomical-clocktower']);
     const baseAbilityVariations = abilityVariations.filter(v => BASE_MODIFYING_ABILITY_IDS.has(v.baseId));
     const regularAbilityVariations = abilityVariations.filter(v => !BASE_MODIFYING_ABILITY_IDS.has(v.baseId));
-    const withTechs = applyTechnologyEffects(baseStats, effectiveClasses, techVariations, unit?.id, selectedCiv);
+    const baseWithCounterHp = applyCounterFlatHp(baseStats, effectiveClasses, abilities, activeAbilities, abilityCounters, selectedCiv, unit?.id);
+    const withTechs = applyTechnologyEffects(baseWithCounterHp, effectiveClasses, techVariations, unit?.id, selectedCiv);
     const withAbilities = applyTechnologyEffects(withTechs, effectiveClasses, regularAbilityVariations, unit?.id, selectedCiv);
     let result = applyTechnologyEffects(withAbilities, effectiveClasses, baseAbilityVariations, unit?.id, selectedCiv);
     for (const interaction of techAbilityInteractions) {
@@ -958,27 +997,14 @@ export function useUnitSlot(initialUnit?: AoE4Unit | null, initialCiv?: string) 
       if (ability.counterMax === undefined || !activeAbilities.has(ability.id)) continue;
       const count = abilityCounters.get(ability.id) ?? 0;
       if (count === 0) continue;
-      const abilityStep = (unit?.id ? ability.unitCounterStep?.[unit.id] : undefined) ?? ability.counterStep ?? 0.05;
       const counterVariation = getAbilityVariation(ability.id, selectedCiv, ability.minAge);
       if (!counterVariation) continue;
       const syntheticVariation = {
         ...counterVariation,
-        effects: (counterVariation.effects || []).map((e: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-          const eStep = e.counterStep ?? abilityStep;
-          const eDir = e.counterDirection ?? ability.counterDirection;
-          const eStepsArr: number[] | undefined = e.counterSteps ?? ability.counterSteps;
-          const eStepsSum = eStepsArr !== undefined ? eStepsArr.slice(0, count).reduce((a: number, b: number) => a + b, 0) : undefined;
-          const eValue = eStepsSum !== undefined
-            ? (eDir === 'additive' ? eStepsSum : 1 + eStepsSum)
-            : eDir === 'increase'
-              ? 1 + count * eStep
-              : eDir === 'additive'
-                ? count * eStep
-                : eDir === 'geometric'
-                  ? Math.pow(eStep, count)
-                  : 1 / (1 + count * eStep);
-          return { ...e, value: eValue * (e.counterStepScale ?? 1) };
-        }),
+        // Flat HP (change) is folded into the base by applyCounterFlatHp (before multipliers); exclude here to avoid double-counting.
+        effects: (counterVariation.effects || [])
+          .filter((e: any) => !(e.property === 'hitpoints' && e.effect === 'change')) // eslint-disable-line @typescript-eslint/no-explicit-any
+          .map((e: any) => ({ ...e, value: resolveCounterEffectValue(e, count, ability, unit?.id) })), // eslint-disable-line @typescript-eslint/no-explicit-any
       };
       result = applyTechnologyEffects(result, effectiveClasses, [syntheticVariation], unit?.id, selectedCiv);
     }

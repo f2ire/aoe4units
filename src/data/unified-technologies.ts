@@ -591,14 +591,12 @@ export function applyTechnologyEffects(
   }
 
   // Phase 2: Apply multiplications (multiply)
-  // For hitpoints: additive stacking (each % is calculated on the pre-Phase-2 base HP, then summed).
-  //   e.g. biology ×1.25 + biology-improved ×1.1 → HP × (1 + 0.25 + 0.10) = HP × 1.35
-  // For all other stats: multiplicative chaining (standard).
-  const hpBeforePhase2 = modifiedStats.hitpoints;
-  let hpMultiplierDelta = 0;
+  // For hitpoints (like all other stats): multiplicative chaining.
+  //   e.g. biology ×1.25 + biology-improved ×1.1 → HP × 1.25 × 1.10 = HP × 1.375
+  // Exception: improved-pair effects still stack additively within a pair (see below).
   let rangedAttackMultiplier = 1;
 
-  // Improved-pair multiply effects on non-HP stats stack additively (15% + 5% = 20%, not 20.75%).
+  // Improved-pair multiply effects stack additively (15% + 5% = 20%, not 20.75%).
   // Collect their deltas here; apply after all multiplicative effects.
   const pairMultiplierDeltas = new Map<keyof UnitStats, number>();
 
@@ -607,10 +605,7 @@ export function applyTechnologyEffects(
       // Exclude attackSpeed and bonusDamage which are not modifiable here
       if (effect.statKey === 'attackSpeed' || effect.statKey === 'bonusDamage') continue;
 
-      if (effect.statKey === 'hitpoints') {
-        // Accumulate deltas additively on base HP
-        hpMultiplierDelta += (effect.value - 1);
-      } else if (getPairBaseId(effect.sourceTechBaseId)) {
+      if (getPairBaseId(effect.sourceTechBaseId)) {
         pairMultiplierDeltas.set(effect.statKey, (pairMultiplierDeltas.get(effect.statKey) ?? 0) + (effect.value - 1));
       } else {
         (modifiedStats[effect.statKey] as number) *= effect.value;
@@ -625,11 +620,6 @@ export function applyTechnologyEffects(
   }
 
   if (rangedAttackMultiplier !== 1) modifiedStats.rangedAttackMultiplier = rangedAttackMultiplier;
-
-  // Apply accumulated HP multiplier (additive stacking on pre-Phase-2 value)
-  if (hpMultiplierDelta !== 0) {
-    modifiedStats.hitpoints = hpBeforePhase2 * (1 + hpMultiplierDelta);
-  }
 
   // Phase 3: Apply special effects (maxRange, attackSpeed, bonus damage)
 

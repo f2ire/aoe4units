@@ -168,8 +168,21 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
   {
     id: "elite-army-tactics",
-    reason: "Streltsy is a gunpowder unit — this melee infantry tech should not apply in either weapon mode.",
+    reason: "Streltsy is a gunpowder unit — this melee infantry tech should not apply in either weapon mode. Also grants +15% bonus damage to melee infantry (appended via after to preserve raw HP/attack effects).",
     excludedUnits: ['streltsy'],
+    after: (tech) => ({
+      ...tech,
+      effects: [
+        ...tech.effects,
+        {
+          property: 'bonusDamageMultiplier',
+          select: { class: [['melee', 'infantry']] },
+          effect: 'multiply',
+          value: 1.15,
+          type: 'passive',
+        },
+      ],
+    }),
   },
 
   {

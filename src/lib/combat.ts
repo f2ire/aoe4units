@@ -1465,8 +1465,48 @@ export function computeVersusAtEqualCost(
 // Both sides fire in synchronized volleys (all units of a side fire together).
 // Each side concentrates fire on one target at a time; when it dies the next one is targeted.
 // tA / tB advance by attackSpeed each shot — no fractional attacks.
+//
+// Wrapper. Both Target focus and Attack move share ONE combat engine (the batch engine:
+// batchFirstDeathTime + advanceBatchFF), differing only in how units are GROUPED. So when the
+// grouping is forced — e.g. 1v2, necessarily one batch of 1-vs-2 — both models give the exact
+// same math; they only diverge once grouping has freedom (≥2 per side).
+// - melee crowd (>5 a side): physical surround cap (max 5 per target, 8 on a lone last unit)
+//   → capped random MC batches (resolveFocusFireCappedMC).
+// - otherwise (melee ≤5, or ranged at any count — ranged has no surround cap): a single focus
+//   batch (resolveFocusFireSingleBatch), everyone concentrates on one target, deterministic.
+// computeLoserUnitsToWin still uses resolveFocusFireDeterministic (stable binary search).
 export const focusFireModel: MultiUnitModel = {
-  resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB }) {
+  resolve(A, B, metricsA, metricsB, mult) {
+    const isMeleeA = getMaxRange(A) < 1;
+    const isMeleeB = getMaxRange(B) < 1;
+    if (isMeleeA && isMeleeB && (mult.multA > 5 || mult.multB > 5))
+      return resolveFocusFireCappedMC(A, B, metricsA, metricsB, mult);
+    return resolveFocusFireSingleBatch(A, B, metricsA, metricsB, mult);
+  },
+};
+
+// Single focus batch: each side concentrates all fire on one target (focus fire), resolved
+// deterministically by the shared batch engine — windup at the initial engagement only, overkill
+// lost, both sides retarget to the next unit on death (bRetargets=true). Because it is the same
+// engine Attack move uses per batch, a forced single grouping (e.g. 1v2) yields an identical
+// result. Used for melee ≤5 and ranged at any count (ranged has no surround cap, so all units
+// can focus one target). No MC / no variance → no mcDistribution.
+function resolveFocusFireSingleBatch(
+  A: CombatEntity, B: CombatEntity,
+  metricsA: VersusMetrics, metricsB: VersusMetrics,
+  mult: { multA: number; multB: number; totalCostA: number; totalCostB: number },
+): Pick<VersusResult, 'winner' | 'winnerHpRemaining' | 'winnerUnitsRemaining' | 'resourceDifference' | 'mcDistribution'> {
+  return resolveBatchEngine(A, B, metricsA, metricsB, mult, {
+    formBatches: formSingleBatch, bRetargets: true, capped: false, iterations: 1,
+  });
+}
+
+// Deterministic focus-fire: every unit on a side concentrates on a single shared target.
+function resolveFocusFireDeterministic(
+  A: CombatEntity, B: CombatEntity,
+  metricsA: VersusMetrics, metricsB: VersusMetrics,
+  { multA, multB, totalCostA, totalCostB }: { multA: number; multB: number; totalCostA: number; totalCostB: number },
+): Pick<VersusResult, 'winner' | 'winnerHpRemaining' | 'winnerUnitsRemaining' | 'resourceDifference'> {
     const dmgA = metricsA.effectiveDamagePerHit;
     const dmgB = metricsB.effectiveDamagePerHit;
     const asA = (A.weapons[0]?.speed ?? 0) * (1 + (B.opponentAttackSpeedDebuff ?? 0));
@@ -1617,8 +1657,204 @@ export const focusFireModel: MultiUnitModel = {
     }
 
     return { winner, winnerHpRemaining, winnerUnitsRemaining, resourceDifference };
-  },
-};
+}
+
+// ─── Capped melee focus-fire (Monte-Carlo) ───────────────────────────────────
+// Physical surround limit: at most CAP_SURROUND melee units can attack one target at once;
+// CAP_LAST_UNIT when the target is the lone last unit of its side (it can be swarmed from
+// more angles). A melee side with >5 units therefore can't all focus one target — units
+// fight in random batches and the overflow waits idle, cycling in as front-liners die.
+const CAP_SURROUND = 5;
+const CAP_LAST_UNIT = 8;
+
+// Max units one side may field in a batch, given how many enemies that batch holds.
+function batchCap(opposingCount: number): number {
+  return opposingCount <= 1 ? CAP_LAST_UNIT : CAP_SURROUND;
+}
+
+// Random capped batch formation: like createBatchesGrouped but each batch holds at most
+// batchCap(opposing) units per side. Overflow is pushed to pendingA/pendingB (idle until a
+// slot frees). Uneven sizes (randomPartition) — models clustered melee engagements.
+function createBatchesGroupedCapped(
+  hpA: number[], hpB: number[], pendingA: number[], pendingB: number[],
+): Array<{ hpA: number[]; hpB: number[] }> {
+  const nA = hpA.length, nB = hpB.length;
+  if (nA === 0 || nB === 0) {
+    pendingA.push(...hpA);
+    pendingB.push(...hpB);
+    return [];
+  }
+  const nBatches = Math.floor(rng() * Math.min(nA, nB)) + 1;
+  const sA = [...hpA].sort(() => rng() - 0.5);
+  const sB = [...hpB].sort(() => rng() - 0.5);
+  const sizesA = randomPartition(nA, nBatches);
+  const sizesB = randomPartition(nB, nBatches);
+  let offA = 0, offB = 0;
+  const batches: Array<{ hpA: number[]; hpB: number[] }> = [];
+  for (let b = 0; b < nBatches; b++) {
+    const wantA = sizesA[b], wantB = sizesB[b];
+    const takeA = Math.min(wantA, batchCap(wantB));
+    const takeB = Math.min(wantB, batchCap(wantA));
+    batches.push({ hpA: sA.slice(offA, offA + takeA), hpB: sB.slice(offB, offB + takeB) });
+    pendingA.push(...sA.slice(offA + takeA, offA + wantA));
+    pendingB.push(...sB.slice(offB + takeB, offB + wantB));
+    offA += wantA; offB += wantB;
+  }
+  return batches;
+}
+
+// ─── Shared batch combat engine ──────────────────────────────────────────────
+// ONE event-driven batch resolver used by both "Target focus" and "Attack move". The models
+// differ ONLY in config (how units are grouped + bRetargets + iterations), so a forced grouping
+// (e.g. 1v2 = necessarily one 1-vs-2 batch) yields the identical result; they diverge only once
+// grouping has freedom. Engine internals: batches advance in parallel by T = first death; when a
+// batch finishes, survivors (plus idlers) re-join an ongoing batch — randomly (uncapped) or into
+// a slot under the surround cap (capped) — else wait pending. Windup is applied at the initial
+// engagement only (firstShotUsed). iterations=1 → deterministic single result (no mcDistribution);
+// iterations>1 → Monte-Carlo, returns the modal-outcome median + mcDistribution.
+
+type BatchFormer = (hpA: number[], hpB: number[], pendingA: number[], pendingB: number[]) => Array<{ hpA: number[]; hpB: number[] }>;
+interface BatchEngineConfig { formBatches: BatchFormer; bRetargets: boolean; capped: boolean; iterations: number; }
+
+// One batch with every unit on each side (pure focus). No randomness.
+const formSingleBatch: BatchFormer = (hpA, hpB) => (hpA.length && hpB.length) ? [{ hpA: [...hpA], hpB: [...hpB] }] : [];
+// Random uncapped grouping (Attack move) — pending args unused (no overflow without a cap).
+const formRandomBatches: BatchFormer = (hpA, hpB) => createBatchesGrouped(hpA, hpB);
+
+function resolveBatchEngine(
+  A: CombatEntity, B: CombatEntity,
+  metricsA: VersusMetrics, metricsB: VersusMetrics,
+  { multA, multB, totalCostA, totalCostB }: { multA: number; multB: number; totalCostA: number; totalCostB: number },
+  { formBatches, bRetargets, capped, iterations }: BatchEngineConfig,
+): Pick<VersusResult, 'winner' | 'winnerHpRemaining' | 'winnerUnitsRemaining' | 'resourceDifference' | 'mcDistribution'> {
+  const dmgA = metricsA.effectiveDamagePerHit;
+  const dmgB = metricsB.effectiveDamagePerHit;
+  const asA = (A.weapons[0]?.speed ?? 0) * (1 + (B.opponentAttackSpeedDebuff ?? 0));
+  const asB = (B.weapons[0]?.speed ?? 0) * (1 + (A.opponentAttackSpeedDebuff ?? 0));
+
+  if (!dmgA || !dmgB || dmgA <= 0 || dmgB <= 0 || asA <= 0 || asB <= 0)
+    return aggregatedDPSModel.resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB });
+
+  const fDmgA = metricsA.firstHitDamage ?? dmgA;
+  const fDmgB = metricsB.firstHitDamage ?? dmgB;
+  const startHpA = A.hitpoints * (A.hpStartFraction ?? 1);
+  const startHpB = B.hitpoints * (B.hpStartFraction ?? 1);
+  const wA = A.weapons[0]?.durations?.windup ?? 0;
+  const wB = B.weapons[0]?.durations?.windup ?? 0;
+
+  type ActiveBatch = { hpA: number[]; hpB: number[]; firstShotUsed: boolean };
+  type IterResult = ReturnType<typeof buildBatchResult>;
+  const results: IterResult[] = [];
+  const durations: number[] = [];
+  const MAX_STEPS = (multA + multB) * 2 + 10;
+  seedRng(MC_SEED);
+
+  // Re-join a survivor into an ongoing batch (random; cap-respecting when capped), else queue it.
+  const place = (hp: number, side: 'A' | 'B', batches: ActiveBatch[], pending: number[]) => {
+    const pool = capped
+      ? batches.filter(b => side === 'A' ? b.hpA.length < batchCap(b.hpB.length) : b.hpB.length < batchCap(b.hpA.length))
+      : batches;
+    if (pool.length === 0) { pending.push(hp); return; }
+    const t = pool[Math.floor(rng() * pool.length)];
+    if (side === 'A') t.hpA.push(hp); else t.hpB.push(hp);
+  };
+
+  for (let iter = 0; iter < iterations; iter++) {
+    let timeElapsed = 0;
+    const pendingA: number[] = [];
+    const pendingB: number[] = [];
+    const init = formBatches(Array(multA).fill(startHpA), Array(multB).fill(startHpB), pendingA, pendingB);
+    const active: ActiveBatch[] = init.map(b => ({ hpA: b.hpA.slice(), hpB: b.hpB.slice(), firstShotUsed: false }));
+
+    for (let step = 0; step < MAX_STEPS && active.length > 0; step++) {
+      const T = Math.min(...active.map(b => {
+        const cFA = b.firstShotUsed ? dmgA : fDmgA;
+        const cFB = b.firstShotUsed ? dmgB : fDmgB;
+        return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB);
+      }));
+      if (!isFinite(T)) break;
+      timeElapsed += T;
+
+      const nextActive: ActiveBatch[] = [];
+      for (const b of active) {
+        const cFA = b.firstShotUsed ? dmgA : fDmgA;
+        const cFB = b.firstShotUsed ? dmgB : fDmgB;
+        const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB, bRetargets);
+        const nA = r.hpA.filter(h => h > 0);
+        const nB = r.hpB.filter(h => h > 0);
+        if (nA.length > 0 && nB.length > 0) {
+          nextActive.push({ hpA: nA, hpB: nB, firstShotUsed: true });
+        } else {
+          for (const hp of nA) place(hp, 'A', nextActive, pendingA);
+          for (const hp of nB) place(hp, 'B', nextActive, pendingB);
+        }
+      }
+
+      // All batches finished simultaneously: start fresh batches from the pending survivors.
+      if (nextActive.length === 0 && pendingA.length > 0 && pendingB.length > 0) {
+        const snapA = pendingA.splice(0);
+        const snapB = pendingB.splice(0);
+        const fresh = formBatches(snapA, snapB, pendingA, pendingB);
+        for (const b of fresh) nextActive.push({ hpA: b.hpA.slice(), hpB: b.hpB.slice(), firstShotUsed: false });
+      }
+
+      // Flush any remaining pending into the active batches.
+      for (const hp of pendingA.splice(0)) place(hp, 'A', nextActive, pendingA);
+      for (const hp of pendingB.splice(0)) place(hp, 'B', nextActive, pendingB);
+
+      active.length = 0;
+      active.push(...nextActive);
+    }
+
+    const finalA = [...pendingA, ...active.flatMap(b => b.hpA)].filter(h => h > 0);
+    const finalB = [...pendingB, ...active.flatMap(b => b.hpB)].filter(h => h > 0);
+    results.push(buildBatchResult(
+      finalA.length, finalB.length,
+      finalA.reduce((s, h) => s + h, 0), finalB.reduce((s, h) => s + h, 0),
+      multA, multB, totalCostA, totalCostB,
+    ));
+    if (timeElapsed > 0) durations.push(timeElapsed);
+  }
+
+  // Deterministic single run → plain result, no win-rate band.
+  if (iterations === 1) return results[0];
+
+  const nWinA = results.filter(r => r.winner === 'attacker').length;
+  const nWinB = results.filter(r => r.winner === 'defender').length;
+  const nDraw = results.filter(r => r.winner === 'draw').length;
+  const n = results.length;
+  const mcDistribution: MCDistribution = {
+    winRateA: nWinA / n,
+    winRateB: nWinB / n,
+    drawRate: nDraw / n,
+    iterations: n,
+    durationMin: durations.length ? Math.min(...durations) : undefined,
+    durationMax: durations.length ? Math.max(...durations) : undefined,
+    whenAWins: computeMCWinnerStats(results, 'attacker'),
+    whenBWins: computeMCWinnerStats(results, 'defender'),
+  };
+
+  const modeWinner = nWinA >= nWinB && nWinA >= nDraw ? 'attacker'
+    : nWinB > nWinA && nWinB >= nDraw ? 'defender' : 'draw';
+  const modeResults = results.filter(r => r.winner === modeWinner);
+  modeResults.sort((a, b) =>
+    (b.winnerUnitsRemaining ?? 0) - (a.winnerUnitsRemaining ?? 0) ||
+    (b.winnerHpRemaining ?? 0) - (a.winnerHpRemaining ?? 0)
+  );
+  const median = modeResults[Math.floor(modeResults.length / 2)];
+  return { ...median, mcDistribution };
+}
+
+// Melee-crowd focus fire (Target focus, melee >5): capped random batches with idle overflow.
+function resolveFocusFireCappedMC(
+  A: CombatEntity, B: CombatEntity,
+  metricsA: VersusMetrics, metricsB: VersusMetrics,
+  mult: { multA: number; multB: number; totalCostA: number; totalCostB: number },
+): Pick<VersusResult, 'winner' | 'winnerHpRemaining' | 'winnerUnitsRemaining' | 'resourceDifference' | 'mcDistribution'> {
+  return resolveBatchEngine(A, B, metricsA, metricsB, mult, {
+    formBatches: createBatchesGroupedCapped, bRetargets: true, capped: true, iterations: MC_ITERATIONS,
+  });
+}
 
 // ─── Focus-Fire Batches helpers ──────────────────────────────────────────────
 
@@ -1705,19 +1941,31 @@ function advanceBatchFF(
   fDmgA: number, fDmgB: number,
   asA: number, asB: number,
   wA: number, wB: number,
+  bRetargets = false,
 ): { hpA: number[]; hpB: number[] } {
   const aC = hpA.length, bC = hpB.length;
   const sA = T >= wA ? Math.floor((T - wA) / asA) + 1 : 0;
   const sB = T >= wB ? Math.floor((T - wB) / asB) + 1 : 0;
-  const dToA = sB > 0 ? bC * (fDmgB + Math.max(0, sB - 1) * dmgB) : 0;
   const newHpA = [...hpA];
   const newHpB = [...hpB];
-  newHpA[0] -= dToA;
-  // A-side: shots spill over to the next B target when the current one dies
+  // A-side focus fire: each volley hits one B target; on death the next volley moves to the
+  // next unit (overkill lost, never carried).
   let bTarget = 0;
   for (let shot = 0; shot < sA && bTarget < newHpB.length; shot++) {
     newHpB[bTarget] -= (shot === 0 ? fDmgA : dmgA) * aC;
     if (newHpB[bTarget] <= 0) bTarget++;
+  }
+  // B-side: default (Attack move) dumps all fire on A[0]. With bRetargets (Target focus) it
+  // focus-fires symmetrically — moves to the next A unit on death, overkill lost.
+  if (bRetargets) {
+    let aTarget = 0;
+    for (let shot = 0; shot < sB && aTarget < newHpA.length; shot++) {
+      newHpA[aTarget] -= (shot === 0 ? fDmgB : dmgB) * bC;
+      if (newHpA[aTarget] <= 0) aTarget++;
+    }
+  } else {
+    const dToA = sB > 0 ? bC * (fDmgB + Math.max(0, sB - 1) * dmgB) : 0;
+    newHpA[0] -= dToA;
   }
   return { hpA: newHpA, hpB: newHpB };
 }
@@ -1866,6 +2114,8 @@ export const focusFireBatchesMCModel: MultiUnitModel = {
     const fDmgB = metricsB.firstHitDamage ?? dmgB;
     const startHpA = A.hitpoints * (A.hpStartFraction ?? 1);
     const startHpB = B.hitpoints * (B.hpStartFraction ?? 1);
+    const wA = A.weapons[0]?.durations?.windup ?? 0;
+    const wB = B.weapons[0]?.durations?.windup ?? 0;
 
     // Asymmetric (one ranged, one melee): deterministic symmetric batch model — both sides
     // fight via batches, no focus-fire distinction between ranged and melee.
@@ -1879,12 +2129,12 @@ export const focusFireBatchesMCModel: MultiUnitModel = {
         const cFB = phase === 0 ? fDmgB : dmgB;
         const batches = createBatchesFF(hpA, hpB);
         const T = Math.min(...batches.map(b =>
-          batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, 0, 0)
+          batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, phase === 0 ? wA : 0, phase === 0 ? wB : 0)
         ));
         if (!isFinite(T)) break;
         const nHA: number[] = [], nHB: number[] = [];
         for (const b of batches) {
-          const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, 0, 0);
+          const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, phase === 0 ? wA : 0, phase === 0 ? wB : 0);
           nHA.push(...r.hpA); nHB.push(...r.hpB);
         }
         hpA = nHA.filter(h => h > 0);
@@ -1908,121 +2158,10 @@ export const focusFireBatchesMCModel: MultiUnitModel = {
       };
     }
 
-    // Event-driven MC: batches run in parallel; when one batch finishes, its survivors
-    // immediately join a random ongoing batch rather than waiting for all to finish.
-    type ActiveBatch = { hpA: number[]; hpB: number[]; firstShotUsed: boolean };
-    type IterResult = ReturnType<typeof buildBatchResult>;
-    const results: IterResult[] = [];
-    const durations: number[] = [];
-    const MAX_STEPS = (multA + multB) * 2 + 10;
-    seedRng(MC_SEED);
-
-    for (let iter = 0; iter < MC_ITERATIONS; iter++) {
-      let timeElapsed = 0;
-      const init = createBatchesGrouped(
-        Array(multA).fill(startHpA),
-        Array(multB).fill(startHpB)
-      );
-
-      const active: ActiveBatch[] = init.map(b => ({ hpA: b.hpA.slice(), hpB: b.hpB.slice(), firstShotUsed: false }));
-      const pendingA: number[] = [];
-      const pendingB: number[] = [];
-
-      for (let step = 0; step < MAX_STEPS && active.length > 0; step++) {
-        const T = Math.min(...active.map(b => {
-          const cFA = b.firstShotUsed ? dmgA : fDmgA;
-          const cFB = b.firstShotUsed ? dmgB : fDmgB;
-          return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, 0, 0);
-        }));
-        if (!isFinite(T)) break;
-        timeElapsed += T;
-
-        const nextActive: ActiveBatch[] = [];
-
-        for (const b of active) {
-          const cFA = b.firstShotUsed ? dmgA : fDmgA;
-          const cFB = b.firstShotUsed ? dmgB : fDmgB;
-          const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, 0, 0);
-          const nA = r.hpA.filter(h => h > 0);
-          const nB = r.hpB.filter(h => h > 0);
-
-          if (nA.length > 0 && nB.length > 0) {
-            nextActive.push({ hpA: nA, hpB: nB, firstShotUsed: true });
-          } else {
-            // Batch done: survivors join a random ongoing batch
-            for (const hp of nA) {
-              if (nextActive.length > 0) nextActive[Math.floor(rng() * nextActive.length)].hpA.push(hp);
-              else pendingA.push(hp);
-            }
-            for (const hp of nB) {
-              if (nextActive.length > 0) nextActive[Math.floor(rng() * nextActive.length)].hpB.push(hp);
-              else pendingB.push(hp);
-            }
-          }
-        }
-
-        // All batches finished simultaneously: start new batches from pending survivors
-        if (nextActive.length === 0 && pendingA.length > 0 && pendingB.length > 0) {
-          const newBatches = createBatchesGrouped(pendingA, pendingB);
-          pendingA.length = 0;
-          pendingB.length = 0;
-          for (const b of newBatches)
-            nextActive.push({ hpA: b.hpA.slice(), hpB: b.hpB.slice(), firstShotUsed: false });
-        }
-
-        // Flush any remaining pending into active batches
-        for (const hp of pendingA.splice(0)) {
-          if (nextActive.length > 0) nextActive[Math.floor(rng() * nextActive.length)].hpA.push(hp);
-          else pendingA.push(hp);
-        }
-        for (const hp of pendingB.splice(0)) {
-          if (nextActive.length > 0) nextActive[Math.floor(rng() * nextActive.length)].hpB.push(hp);
-          else pendingB.push(hp);
-        }
-
-        active.length = 0;
-        active.push(...nextActive);
-      }
-
-      const finalA = [...pendingA, ...active.flatMap(b => b.hpA)].filter(h => h > 0);
-      const finalB = [...pendingB, ...active.flatMap(b => b.hpB)].filter(h => h > 0);
-
-      results.push(buildBatchResult(
-        finalA.length, finalB.length,
-        finalA.reduce((s, h) => s + h, 0),
-        finalB.reduce((s, h) => s + h, 0),
-        multA, multB, totalCostA, totalCostB,
-      ));
-      if (timeElapsed > 0) durations.push(timeElapsed);
-    }
-
-    const nWinA = results.filter(r => r.winner === 'attacker').length;
-    const nWinB = results.filter(r => r.winner === 'defender').length;
-    const nDraw = results.filter(r => r.winner === 'draw').length;
-    const n = results.length;
-    const mcDistribution: MCDistribution = {
-      winRateA: nWinA / n,
-      winRateB: nWinB / n,
-      drawRate: nDraw / n,
-      iterations: n,
-      durationMin: durations.length ? Math.min(...durations) : undefined,
-      durationMax: durations.length ? Math.max(...durations) : undefined,
-      whenAWins: computeMCWinnerStats(results, 'attacker'),
-      whenBWins: computeMCWinnerStats(results, 'defender'),
-    };
-
-    // Representative result: median of the modal outcome (by units then HP remaining)
-    const modeWinner = nWinA >= nWinB && nWinA >= nDraw ? 'attacker'
-      : nWinB > nWinA && nWinB >= nDraw ? 'defender'
-        : 'draw';
-    const modeResults = results.filter(r => r.winner === modeWinner);
-    modeResults.sort((a, b) =>
-      (b.winnerUnitsRemaining ?? 0) - (a.winnerUnitsRemaining ?? 0) ||
-      (b.winnerHpRemaining ?? 0) - (a.winnerHpRemaining ?? 0)
-    );
-    const median = modeResults[Math.floor(modeResults.length / 2)];
-
-    return { ...median, mcDistribution };
+    // Symmetric (both melee / both ranged): random uncapped grouping via the shared engine.
+    return resolveBatchEngine(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB }, {
+      formBatches: formRandomBatches, bRetargets: false, capped: false, iterations: MC_ITERATIONS,
+    });
   },
 };
 
@@ -2047,10 +2186,18 @@ export const focusFireBatchesMCAsymmetricModel: MultiUnitModel = {
     if (isMeleeA === isMeleeB)
       return focusFireBatchesMCModel.resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB });
 
+    // Forced grouping (one side ≤1 unit ⇒ necessarily a single batch): no concentration vs
+    // distribution choice, so resolve via the shared single-batch engine — identical to
+    // "Target focus" at e.g. 1v2 (1 ranged vs 2 melee).
+    if (Math.min(multA, multB) <= 1)
+      return resolveFocusFireSingleBatch(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB });
+
     const fDmgA = metricsA.firstHitDamage ?? dmgA;
     const fDmgB = metricsB.firstHitDamage ?? dmgB;
     const startHpA = A.hitpoints * (A.hpStartFraction ?? 1);
     const startHpB = B.hitpoints * (B.hpStartFraction ?? 1);
+    const wA = A.weapons[0]?.durations?.windup ?? 0;
+    const wB = B.weapons[0]?.durations?.windup ?? 0;
 
     const nMelee = isMeleeA ? multA : multB;
     const nRanged = isMeleeA ? multB : multA;
@@ -2081,7 +2228,7 @@ export const focusFireBatchesMCAsymmetricModel: MultiUnitModel = {
         const T = Math.min(...active.map(b => {
           const cFA = b.firstShotUsed ? dmgA : fDmgA;
           const cFB = b.firstShotUsed ? dmgB : fDmgB;
-          return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, 0, 0);
+          return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB);
         }));
         if (!isFinite(T)) break;
         timeElapsed += T;
@@ -2090,7 +2237,7 @@ export const focusFireBatchesMCAsymmetricModel: MultiUnitModel = {
         for (const b of active) {
           const cFA = b.firstShotUsed ? dmgA : fDmgA;
           const cFB = b.firstShotUsed ? dmgB : fDmgB;
-          const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, 0, 0);
+          const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB);
           const nA = r.hpA.filter(h => h > 0);
           const nB = r.hpB.filter(h => h > 0);
           if (nA.length > 0 && nB.length > 0) {
@@ -2182,6 +2329,12 @@ export const focusFireAsymmetricModel: MultiUnitModel = {
 
     if (isMeleeA === isMeleeB)
       return focusFireModel.resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB });
+
+    // Forced grouping (one side ≤1 unit ⇒ necessarily a single batch): no concentration vs
+    // distribution choice, so resolve via the shared single-batch engine — identical to
+    // "Attack move" at e.g. 1v2 (1 ranged vs 2 melee).
+    if (Math.min(multA, multB) <= 1)
+      return resolveFocusFireSingleBatch(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB });
 
     const fDmgA = metricsA.firstHitDamage ?? dmgA;
     const fDmgB = metricsB.firstHitDamage ?? dmgB;
@@ -2742,6 +2895,8 @@ export function computeVersusAtEqualCostKitingBatchesMC(
 
   const fDmgA = metricsA.firstHitDamage ?? dmgA;
   const fDmgB = metricsB.firstHitDamage ?? dmgB;
+  const wA = A.weapons[0]?.durations?.windup ?? 0;
+  const wB = B.weapons[0]?.durations?.windup ?? 0;
 
   type ActiveBatch = { hpA: number[]; hpB: number[]; firstShotUsed: boolean };
   type IterResult = ReturnType<typeof buildBatchResult>;
@@ -2766,7 +2921,7 @@ export function computeVersusAtEqualCostKitingBatchesMC(
       const T = Math.min(...active.map(b => {
         const cFA = b.firstShotUsed ? dmgA : fDmgA;
         const cFB = b.firstShotUsed ? dmgB : fDmgB;
-        return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, 0, 0);
+        return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB);
       }));
       if (!isFinite(T)) break;
       timeElapsed += T;
@@ -2775,7 +2930,7 @@ export function computeVersusAtEqualCostKitingBatchesMC(
       for (const b of active) {
         const cFA = b.firstShotUsed ? dmgA : fDmgA;
         const cFB = b.firstShotUsed ? dmgB : fDmgB;
-        const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, 0, 0);
+        const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB);
         const nA = r.hpA.filter(h => h > 0);
         const nB = r.hpB.filter(h => h > 0);
         if (nA.length > 0 && nB.length > 0) {
@@ -2876,7 +3031,10 @@ export function computeLoserUnitsToWin(
 
   const isRangedLoser = getMaxRange(loserEntity) >= 1;
   const isRangedWinner = getMaxRange(winnerEntity) >= 1;
-  const model = isRangedLoser !== isRangedWinner ? focusFireAsymmetricModel : focusFireModel;
+  // Symmetric branch uses the deterministic focus-fire helper (NOT focusFireModel): the binary
+  // search below needs stable results, and focusFireModel routes melee crowds to MC (noisy).
+  const symmetricModel: MultiUnitModel = { resolve: resolveFocusFireDeterministic };
+  const model = isRangedLoser !== isRangedWinner ? focusFireAsymmetricModel : symmetricModel;
 
   for (let n = 2; n <= maxN; n++) {
     const r = model.resolve(loserEntity, winnerEntity, metricsLoser, metricsWinner, {
