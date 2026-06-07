@@ -8,6 +8,7 @@
     "build": "vite-react-ssg build",
     "build:dev": "vite-react-ssg build --mode development",
     "build:ext": "vite build -c vite.extension.config.ts",
+    "build:ext-data": "node scripts/build-twitch-data.mjs",
     "dev:ext": "vite -c vite.extension.config.ts",
     "lint": "eslint .",
     "preview": "vite preview",
