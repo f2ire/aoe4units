@@ -1,12 +1,17 @@
+import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   categorizeTechnology,
   getTechnologyTier,
   getTechnologyBaseName,
   IMPROVED_TECH_BASE,
+  IMPROVED_TECH_PAIRS,
+  allTechnologies,
 } from "@/data/unified-technologies";
 import type { Technology } from "@/data/unified-technologies";
 import { foreignEngineeringTechIds } from "@/data/patches/technologies";
 import type { Ability } from "@/data/unified-abilities";
+import { ABILITY_ROW_GROUPS } from "@/data/patches/abilities";
 import { cn } from "@/lib/utils";
 import { assetUrl } from "./assetUrl";
 
@@ -71,40 +76,94 @@ const emptyBuckets = (): AgeBuckets => ({ 1: [], 2: [], 3: [], 4: [] });
 function IconToggle({
   src,
   name,
+  description,
   active,
   locked,
+  isAlways,
   onClick,
+  mongol,
 }: {
   src: string;
   name: string;
+  description?: string;
   active: boolean;
   locked?: boolean;
+  isAlways?: boolean;
   onClick: () => void;
+  mongol?: { active: boolean; name: string; onToggle: () => void };
 }) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [tipPos, setTipPos] = useState<{ x: number; y: number } | null>(null);
+
+  const showTip = () => {
+    if (!btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    setTipPos({ x: r.left + r.width / 2, y: r.top });
+  };
+
   return (
-    <button
-      type="button"
-      title={name}
-      disabled={locked}
-      onClick={onClick}
-      className={cn(
-        "relative h-[34px] w-[34px] shrink-0 overflow-hidden rounded border transition-all",
-        locked && !active
-          ? "cursor-not-allowed border-zinc-700 bg-zinc-800/60 opacity-50"
-          : active
-            ? "border-amber-500 bg-amber-500/20 ring-1 ring-amber-500/50"
-            : "border-zinc-600 bg-zinc-800 hover:border-amber-400/60 active:scale-95",
-      )}
-    >
-      <img
-        src={assetUrl(src)}
-        alt={name}
-        className="h-full w-full object-contain p-0.5"
-        onError={(e) => {
-          (e.currentTarget as HTMLImageElement).src = FALLBACK_ICON;
-        }}
-      />
-    </button>
+    <>
+      <div className="relative">
+        <button
+          ref={btnRef}
+          type="button"
+          disabled={locked}
+          onClick={onClick}
+          onMouseEnter={showTip}
+          onMouseLeave={() => setTipPos(null)}
+          className={cn(
+            "relative h-[34px] w-[34px] shrink-0 overflow-hidden rounded border transition-all",
+            locked && !active
+              ? "cursor-not-allowed border-zinc-700 bg-zinc-800/60 opacity-50"
+              : active
+                ? "border-amber-500 bg-amber-500/20 ring-1 ring-amber-500/50"
+                : "border-zinc-600 bg-zinc-800 hover:border-amber-400/60 active:scale-95",
+          )}
+        >
+          <img
+            src={assetUrl(src)}
+            alt={name}
+            className="h-full w-full object-contain p-0.5"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = FALLBACK_ICON;
+            }}
+          />
+          {isAlways && (
+            <span className="absolute bottom-0 right-0 rounded-tl bg-green-600 px-0.5 text-[8px] leading-3 text-white">
+              auto
+            </span>
+          )}
+        </button>
+        {mongol && (
+          <button
+            type="button"
+            title={mongol.name}
+            onClick={(e) => { e.stopPropagation(); mongol.onToggle(); }}
+            className={cn(
+              "absolute -right-1 -top-1 z-10 flex h-3.5 w-3.5 items-center justify-center rounded-full border text-[8px] font-bold transition-all hover:scale-110 active:scale-90",
+              mongol.active
+                ? "border-green-500 bg-green-900/80 text-green-400"
+                : active
+                  ? "border-orange-500 bg-orange-900/80 text-orange-400"
+                  : "border-orange-500/40 bg-orange-900/30 text-orange-400/50",
+            )}
+          >
+            {mongol.active ? "✓" : "+"}
+          </button>
+        )}
+      </div>
+      {tipPos &&
+        createPortal(
+          <div
+            className="pointer-events-none fixed z-[99999] w-48 -translate-x-1/2 rounded-md border border-amber-500/40 bg-zinc-950/95 p-2 shadow-2xl backdrop-blur"
+            style={{ left: tipPos.x, top: tipPos.y - 8, transform: "translate(-50%, -100%)" }}
+          >
+            <p className="text-[11px] font-semibold text-amber-200">{name}</p>
+            {description && <p className="mt-0.5 text-[10px] leading-snug text-zinc-400">{description}</p>}
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
@@ -252,14 +311,22 @@ export function CompactLoadout({
         );
       } else {
         for (const tech of techs) {
+          const improvedId = (IMPROVED_TECH_PAIRS as Record<string, string>)[tech.id];
+          const improvedTech = improvedId ? allTechnologies.find((t) => t.id === improvedId) : undefined;
           byAge[clampAge(tech.minAge)].push(
             <IconToggle
               key={tech.id}
               src={techIconPath(tech.icon)}
               name={tech.name}
+              description={(tech as any).uiTooltip || tech.description}
               active={activeTechnologies.has(tech.id)}
               locked={lockedTechnologies?.has(tech.id)}
               onClick={() => onToggleTech(tech.id)}
+              mongol={
+                (tech as any).hasMongolUpgrade && selectedCiv === "mo" && improvedId
+                  ? { active: activeTechnologies.has(improvedId), name: improvedTech?.name ?? "Improved", onToggle: () => onToggleTech(improvedId) }
+                  : undefined
+              }
             />,
           );
         }
@@ -267,37 +334,65 @@ export function CompactLoadout({
     }
   }
 
-  // --- Abilities: simple toggles + counter cells, bucketed by age. ---
-  const abilityByAge = emptyBuckets();
-  abilities.forEach((a) => {
-    if (a.counterMax !== undefined) {
-      const count = abilityCounters?.get(a.id) ?? 0;
-      abilityByAge[clampAge(a.minAge)].push(
-        <CounterCell
-          key={a.id}
-          src={a.icon}
-          name={a.name}
-          count={count}
-          max={a.counterMax}
-          hideMax={a.counterHideMax}
-          onInc={() => onIncrement?.(a.id)}
-          onDec={() => onDecrement?.(a.id)}
-        />,
-      );
-    } else {
-      abilityByAge[clampAge(a.minAge)].push(
-        <IconToggle
-          key={a.id}
-          src={a.icon}
-          name={a.name}
-          active={activeAbilities.has(a.id)}
-          locked={lockedAbilities?.has(a.id)}
-          onClick={() => onToggleAbility(a.id)}
-        />,
-      );
-    }
-  });
-  const hasAbilities = AGES.some((age) => abilityByAge[age].length > 0);
+  // --- Abilities: grouped by ABILITY_ROW_GROUPS (mirrors AbilitySelector). ---
+  const buildAbilityBuckets = (groupAbilities: Ability[]): AgeBuckets => {
+    const byAge = emptyBuckets();
+    groupAbilities.forEach((a) => {
+      if (a.counterMax !== undefined) {
+        const count = abilityCounters?.get(a.id) ?? 0;
+        byAge[clampAge(a.minAge)].push(
+          <CounterCell
+            key={a.id}
+            src={a.icon}
+            name={a.name}
+            count={count}
+            max={a.counterMax}
+            hideMax={a.counterHideMax}
+            onInc={() => onIncrement?.(a.id)}
+            onDec={() => onDecrement?.(a.id)}
+          />,
+        );
+      } else {
+        const isAlways =
+          (a as any).active === "always" ||
+          (a.variations?.some(
+            (v: any) =>
+              v.active === "always" &&
+              (v.civs.length === 0 || !selectedCiv || v.civs.includes(selectedCiv)),
+          ) ?? false);
+        const abilityDesc =
+          (selectedCiv && a.variations?.find((v: any) => v.civs?.length > 0 && v.civs?.includes(selectedCiv))?.description)
+          || (a as any).uiTooltip
+          || a.description;
+        byAge[clampAge(a.minAge)].push(
+          <IconToggle
+            key={a.id}
+            src={a.icon}
+            name={a.name}
+            description={abilityDesc}
+            active={activeAbilities.has(a.id)}
+            locked={lockedAbilities?.has(a.id)}
+            isAlways={isAlways}
+            onClick={() => onToggleAbility(a.id)}
+          />,
+        );
+      }
+    });
+    return byAge;
+  };
+
+  const namedIds = new Set(ABILITY_ROW_GROUPS.flatMap((g) => g.ids));
+  const abilityGroupRows = [
+    { label: "ABI", abilities: abilities.filter((a) => !namedIds.has(a.id)) },
+    ...ABILITY_ROW_GROUPS.map((g) => ({
+      label: g.label,
+      abilities: abilities.filter((a) => g.ids.includes(a.id)),
+    })),
+  ]
+    .filter((g) => g.abilities.length > 0)
+    .map((g) => ({ label: g.label, byAge: buildAbilityBuckets(g.abilities) }));
+
+  const hasAbilities = abilityGroupRows.length > 0;
 
   // One label + 4 age columns. Shared by category rows and the abilities row.
   const renderColumns = (byAge: AgeBuckets, label: string, labelColor: string) => (
@@ -356,9 +451,11 @@ export function CompactLoadout({
         <div key={row.label}>{renderColumns(row.byAge, row.label, "text-amber-400/70")}</div>
       ))}
 
-      {/* Abilities — same age columns */}
+      {/* Abilities — one row per group (ABI default + named groups like KHAN) */}
       {hasAbilities && <div className="mt-0.5 border-t border-zinc-800 pt-1.5" />}
-      {hasAbilities && renderColumns(abilityByAge, "ABI", "text-purple-400/80")}
+      {abilityGroupRows.map((row) => (
+        <div key={row.label}>{renderColumns(row.byAge, row.label, "text-purple-400/80")}</div>
+      ))}
     </div>
   );
 }

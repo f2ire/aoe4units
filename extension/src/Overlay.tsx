@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import { Swords } from "lucide-react";
 import "@/index.css";
@@ -8,17 +8,102 @@ import { useUnitSlot } from "@/hooks/useUnitSlot";
 import UnitPanel from "./UnitPanel";
 import { assetUrl } from "./assetUrl";
 
+// Persisted position + scale of the floating unit/stats panel.
+const STORE_KEY = "aoe4-overlay-panel";
+const PANEL_BASE_WIDTH = 300; // px — used to convert resize-drag distance into a scale delta
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 2.5;
+
+type PanelState = { x: number; y: number; scale: number };
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+function loadPanelState(): PanelState {
+  // First load picks a viewport-aware scale so small players start sensibly;
+  // afterwards the user's saved choice wins.
+  const fallbackScale = clamp(window.innerWidth / 900, MIN_SCALE, 1);
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    if (saved && typeof saved.x === "number") {
+      return { x: saved.x, y: saved.y, scale: clamp(saved.scale ?? fallbackScale, MIN_SCALE, MAX_SCALE) };
+    }
+  } catch {
+    /* ignore corrupted storage */
+  }
+  return { x: 48, y: 8, scale: fallbackScale };
+}
+
 // Twitch Video-Overlay surface. The root spans the whole video but is
 // pointer-events:none + transparent, so clicks pass through to the player —
 // only the left icon rail (panel toggle + civ picker) and the panel capture
 // pointer events. The unit slot is owned here so the rail's civ picker and the
-// panel share one state.
+// panel share one state. The unit/stats panel floats: it can be dragged by its
+// top handle and resized from its bottom-right corner (both persisted).
 function Overlay() {
   const slot = useUnitSlot();
   const [open, setOpen] = useState(true);
   const [civOpen, setCivOpen] = useState(false);
+  const [panel, setPanel] = useState<PanelState>(loadPanelState);
 
   const civ = CIVILIZATIONS.find((c) => c.abbr === slot.selectedCiv);
+
+  // Persist position/scale whenever they change.
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(panel));
+    } catch {
+      /* storage may be unavailable in the sandboxed iframe */
+    }
+  }, [panel]);
+
+  // Drag-to-move: the gesture state lives in a ref so the window listeners stay
+  // stable; setPanel uses a functional update + live viewport bounds.
+  const moveGesture = useRef<{ px: number; py: number; bx: number; by: number } | null>(null);
+  const onMove = useCallback((e: PointerEvent) => {
+    const g = moveGesture.current;
+    if (!g) return;
+    setPanel((p) => ({
+      ...p,
+      x: clamp(g.bx + (e.clientX - g.px), 0, window.innerWidth - 40),
+      y: clamp(g.by + (e.clientY - g.py), 0, window.innerHeight - 40),
+    }));
+  }, []);
+  const endMove = useCallback(() => {
+    moveGesture.current = null;
+    window.removeEventListener("pointermove", onMove);
+  }, [onMove]);
+  const startMove = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      moveGesture.current = { px: e.clientX, py: e.clientY, bx: panel.x, by: panel.y };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", endMove, { once: true });
+    },
+    [panel.x, panel.y, onMove, endMove],
+  );
+
+  // Corner resize: convert the diagonal drag distance into a uniform scale delta.
+  const resizeGesture = useRef<{ px: number; py: number; base: number } | null>(null);
+  const onResize = useCallback((e: PointerEvent) => {
+    const g = resizeGesture.current;
+    if (!g) return;
+    const delta = ((e.clientX - g.px) + (e.clientY - g.py)) / 2 / PANEL_BASE_WIDTH;
+    setPanel((p) => ({ ...p, scale: clamp(g.base + delta, MIN_SCALE, MAX_SCALE) }));
+  }, []);
+  const endResize = useCallback(() => {
+    resizeGesture.current = null;
+    window.removeEventListener("pointermove", onResize);
+  }, [onResize]);
+  const startResize = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      resizeGesture.current = { px: e.clientX, py: e.clientY, base: panel.scale };
+      window.addEventListener("pointermove", onResize);
+      window.addEventListener("pointerup", endResize, { once: true });
+    },
+    [panel.scale, onResize, endResize],
+  );
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[9999]">
@@ -81,18 +166,29 @@ function Overlay() {
             ))}
           </div>
         )}
+      </div>
 
-        {/* Unit panel */}
-        <div
-          className={cn(
-            "pointer-events-auto p-2 transition-opacity duration-200",
-            open ? "opacity-100" : "pointer-events-none opacity-0",
-          )}
-          style={open ? undefined : { visibility: "hidden" }}
-          aria-hidden={!open}
-        >
-          <UnitPanel slot={slot} />
-        </div>
+      {/* Floating unit panel — draggable + resizable, positioned freely. */}
+      <div
+        className={cn(
+          "pointer-events-auto absolute transition-opacity duration-200",
+          open ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+        style={{
+          left: panel.x,
+          top: panel.y,
+          transform: `scale(${panel.scale})`,
+          transformOrigin: "top left",
+          visibility: open ? undefined : "hidden",
+        }}
+        aria-hidden={!open}
+      >
+        <UnitPanel
+          slot={slot}
+          scale={panel.scale}
+          onMovePointerDown={startMove}
+          onResizePointerDown={startResize}
+        />
       </div>
     </div>
   );

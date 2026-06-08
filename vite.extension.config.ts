@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import fs from "fs";
+import sharp from "sharp";
 
 // Separate build for the Twitch extension. Reuses the main app's `src/` via the
 // `@/` alias. Multi-entry (panel + broadcaster config). Output is fully
@@ -29,18 +30,21 @@ function slimTwitchData() {
   };
 }
 
-// The only images the extension references locally are the cost icons and the
-// civ flags (~350 KB) — every unit/ability/tech icon is a remote CDN URL. These
-// live in the app's root public/ (not extension/public/), so copy just those two
-// folders into the build and serve them in dev. `assetUrl()` makes the runtime
-// paths relative so they resolve under Twitch's hashed CDN base.
+// Cost icons and civ flags are copied as-is. Ability/tech/unit icons come partly
+// from CDN (data.aoe4world.com) and partly from local paths set in patches/ — the
+// local ones are resized to ICON_SIZE so the extension zip stays small.
 const LOCAL_ASSET_FOLDERS = ["resources", "flags"];
+const RESIZED_ASSET_FOLDERS = ["abilities", "technologies", "units"];
+const ICON_SIZE = 128; // px — icons render at 34 px; 128 px covers 3.7× scale
 const MIME: Record<string, string> = {
   ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
   ".webp": "image/webp", ".svg": "image/svg+xml", ".gif": "image/gif",
 };
+const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
+
 function copyLocalAssets() {
   const srcPublic = path.resolve(__dirname, "public");
+
   const copyDir = (from: string, to: string) => {
     fs.mkdirSync(to, { recursive: true });
     for (const e of fs.readdirSync(from, { withFileTypes: true })) {
@@ -50,13 +54,33 @@ function copyLocalAssets() {
       else fs.copyFileSync(s, d);
     }
   };
+
+  const resizeDir = async (from: string, to: string) => {
+    fs.mkdirSync(to, { recursive: true });
+    for (const e of fs.readdirSync(from, { withFileTypes: true })) {
+      if (e.name.startsWith(".")) continue;
+      const s = path.join(from, e.name);
+      const d = path.join(to, e.name);
+      if (e.isDirectory()) {
+        await resizeDir(s, d);
+      } else if (IMAGE_EXTS.has(path.extname(e.name).toLowerCase())) {
+        await sharp(s)
+          .resize(ICON_SIZE, ICON_SIZE, { fit: "inside", withoutEnlargement: true })
+          .toFile(d);
+      } else {
+        fs.copyFileSync(s, d);
+      }
+    }
+  };
+
   return {
     name: "copy-local-assets",
-    // Dev/preview: serve the folders straight from the app's root public/.
+    // Dev/preview: serve all asset folders directly from public/ (full res is fine in dev).
     configureServer(server: any) {
       server.middlewares.use((req: any, res: any, next: any) => {
         const url = (req.url || "").split("?")[0];
-        if (LOCAL_ASSET_FOLDERS.some((f) => url.startsWith(`/${f}/`))) {
+        const allFolders = [...LOCAL_ASSET_FOLDERS, ...RESIZED_ASSET_FOLDERS];
+        if (allFolders.some((f) => url.startsWith(`/${f}/`))) {
           const file = path.join(srcPublic, decodeURIComponent(url));
           if (fs.existsSync(file)) {
             res.setHeader("Content-Type", MIME[path.extname(file).toLowerCase()] ?? "application/octet-stream");
@@ -67,12 +91,16 @@ function copyLocalAssets() {
         next();
       });
     },
-    // Build: copy into the extension output so the zip is self-contained.
-    closeBundle() {
+    // Build: copy as-is for small assets, resize to ICON_SIZE for icon folders.
+    async closeBundle() {
       const outDir = path.resolve(__dirname, "dist-extension");
       for (const folder of LOCAL_ASSET_FOLDERS) {
         const from = path.join(srcPublic, folder);
         if (fs.existsSync(from)) copyDir(from, path.join(outDir, folder));
+      }
+      for (const folder of RESIZED_ASSET_FOLDERS) {
+        const from = path.join(srcPublic, folder);
+        if (fs.existsSync(from)) await resizeDir(from, path.join(outDir, folder));
       }
     },
   };

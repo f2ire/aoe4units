@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState } from "react";
-import { ChevronDown, ChevronUp, Search, Settings2 } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { ChevronDown, ChevronUp, GripHorizontal, Search, Settings2 } from "lucide-react";
 import { getAvailableAges } from "@/data/unified-units";
 import type { AoE4Unit } from "@/data/unified-units";
 import { useUnitSlot } from "@/hooks/useUnitSlot";
@@ -33,10 +33,75 @@ const CATEGORY_ORDER = [
 // unit name to change unit) + a collapsible technologies/abilities loadout, all
 // in a single box so the stream stays visible behind it. Civ selection lives in
 // the Overlay's left rail; `slot` is owned there and passed in.
-export default function UnitPanel({ slot }: { slot: Slot }) {
+const DRAWER_HEIGHT_KEY = "aoe4-overlay-drawer-h";
+const DRAWER_MIN_HEIGHT = 80;
+const DRAWER_MAX_HEIGHT = 1200;
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+export default function UnitPanel({
+  slot,
+  scale = 1,
+  onMovePointerDown,
+  onResizePointerDown,
+}: {
+  slot: Slot;
+  scale?: number;
+  onMovePointerDown?: (e: React.PointerEvent) => void;
+  onResizePointerDown?: (e: React.PointerEvent) => void;
+}) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
+
+  // User-adjustable max height of the technologies/abilities drawer. Drag its
+  // bottom handle up to shrink it (content then scrolls). Persisted across loads.
+  const [drawerHeight, setDrawerHeight] = useState<number>(() => {
+    const saved = Number(localStorage.getItem(DRAWER_HEIGHT_KEY));
+    return saved >= DRAWER_MIN_HEIGHT ? saved : 320;
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAWER_HEIGHT_KEY, String(drawerHeight));
+    } catch {
+      /* storage may be unavailable in the sandboxed iframe */
+    }
+  }, [drawerHeight]);
+
+  // Drawer resize gesture. The panel may be scaled, so screen-px deltas are
+  // divided by the scale captured at gesture start to get the unscaled delta.
+  const drawerGesture = useRef<{ py: number; base: number; scale: number } | null>(null);
+  const onDrawerResize = useCallback((e: PointerEvent) => {
+    const g = drawerGesture.current;
+    if (!g) return;
+    const delta = (e.clientY - g.py) / (g.scale || 1);
+    setDrawerHeight(clamp(g.base + delta, DRAWER_MIN_HEIGHT, DRAWER_MAX_HEIGHT));
+  }, []);
+  const endDrawerResize = useCallback(() => {
+    drawerGesture.current = null;
+    window.removeEventListener("pointermove", onDrawerResize);
+  }, [onDrawerResize]);
+  const startDrawerResize = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      drawerGesture.current = { py: e.clientY, base: drawerHeight, scale };
+      window.addEventListener("pointermove", onDrawerResize);
+      window.addEventListener("pointerup", endDrawerResize, { once: true });
+    },
+    [drawerHeight, scale, onDrawerResize, endDrawerResize],
+  );
+
+  const techBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Cap the drawer to the available viewport space below the tech toggle button,
+  // so the resize handle is always reachable.
+  const effectiveDrawerMaxHeight = (() => {
+    if (!techBtnRef.current) return drawerHeight;
+    const r = techBtnRef.current.getBoundingClientRect();
+    const resizeBarScreenPx = 20 * scale; // resize bar ~20px in natural units × scale
+    const available = window.innerHeight - r.bottom - resizeBarScreenPx;
+    return Math.min(drawerHeight, Math.max(DRAWER_MIN_HEIGHT, available / scale));
+  })();
 
   const source = slot.variation ?? slot.unit;
   const isVariation = !!slot.variation;
@@ -66,7 +131,17 @@ export default function UnitPanel({ slot }: { slot: Slot }) {
 
   return (
     <div className="relative w-[300px]">
-      <div className="overflow-hidden rounded-lg border border-amber-500/30 bg-zinc-950/65 text-zinc-100 shadow-2xl ring-1 ring-black/30 backdrop-blur-md">
+      <div className="relative overflow-hidden rounded-lg border border-amber-500/30 bg-zinc-950/65 text-zinc-100 shadow-2xl ring-1 ring-black/30 backdrop-blur-md">
+        {/* Drag handle — grab here to move the panel. */}
+        {onMovePointerDown && (
+          <div
+            onPointerDown={onMovePointerDown}
+            className="flex cursor-move touch-none select-none items-center justify-center border-b border-amber-500/15 bg-zinc-900/70 py-0.5 text-zinc-500 hover:text-zinc-300"
+            title="Move panel"
+          >
+            <GripHorizontal className="h-3.5 w-3.5" />
+          </div>
+        )}
         {slot.unit && modified ? (
           <>
             <CompactUnitCard
@@ -87,6 +162,7 @@ export default function UnitPanel({ slot }: { slot: Slot }) {
 
             {/* Technologies & abilities — merged into the same panel */}
             <button
+              ref={techBtnRef}
               type="button"
               aria-pressed={drawerOpen}
               onClick={() => setDrawerOpen((v) => !v)}
@@ -102,26 +178,39 @@ export default function UnitPanel({ slot }: { slot: Slot }) {
               {drawerOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
             {drawerOpen && (
-              <div className="max-h-[55vh] overflow-y-auto border-t border-amber-500/10 bg-black/20 p-3">
-                <CompactLoadout
-                  technologies={slot.techs}
-                  activeTechnologies={slot.activeTechnologies}
-                  onToggleTech={slot.toggleTechnology}
-                  lockedTechnologies={slot.lockedTechnologies}
-                  selectedCiv={slot.selectedCiv}
-                  unitMinAge={slot.unitMinAge}
-                  fullUpgradeAge={slot.fullUpgradeAge}
-                  onApplyFullUpgrade={slot.applyFullUpgrade}
-                  onReset={slot.resetTechnologies}
-                  abilities={slot.abilities}
-                  activeAbilities={slot.activeAbilities}
-                  onToggleAbility={slot.toggleAbility}
-                  lockedAbilities={slot.lockedAbilities}
-                  abilityCounters={slot.abilityCounters}
-                  onIncrement={slot.incrementAbility}
-                  onDecrement={slot.decrementAbility}
-                />
-              </div>
+              <>
+                <div
+                  className="overflow-y-auto border-t border-amber-500/10 bg-black/20 p-3"
+                  style={{ maxHeight: effectiveDrawerMaxHeight }}
+                >
+                  <CompactLoadout
+                    technologies={slot.techs}
+                    activeTechnologies={slot.activeTechnologies}
+                    onToggleTech={slot.toggleTechnology}
+                    lockedTechnologies={slot.lockedTechnologies}
+                    selectedCiv={slot.selectedCiv}
+                    unitMinAge={slot.unitMinAge}
+                    fullUpgradeAge={slot.fullUpgradeAge}
+                    onApplyFullUpgrade={slot.applyFullUpgrade}
+                    onReset={slot.resetTechnologies}
+                    abilities={slot.abilities}
+                    activeAbilities={slot.activeAbilities}
+                    onToggleAbility={slot.toggleAbility}
+                    lockedAbilities={slot.lockedAbilities}
+                    abilityCounters={slot.abilityCounters}
+                    onIncrement={slot.incrementAbility}
+                    onDecrement={slot.decrementAbility}
+                  />
+                </div>
+                {/* Drag up to shrink this section (content scrolls). */}
+                <div
+                  onPointerDown={startDrawerResize}
+                  className="flex cursor-ns-resize touch-none select-none items-center justify-center border-t border-amber-500/15 bg-zinc-900/70 py-0.5 text-zinc-500 hover:text-zinc-300"
+                  title="Resize section"
+                >
+                  <GripHorizontal className="h-3 w-3" />
+                </div>
+              </>
             )}
           </>
         ) : (
@@ -135,6 +224,16 @@ export default function UnitPanel({ slot }: { slot: Slot }) {
               <ChevronDown className="h-4 w-4" />
             </button>
           </div>
+        )}
+
+        {/* Resize grip — drag the corner to scale the panel. */}
+        {onResizePointerDown && (
+          <div
+            onPointerDown={onResizePointerDown}
+            className="absolute bottom-0 right-0 z-20 h-3.5 w-3.5 cursor-nwse-resize touch-none"
+            style={{ background: "linear-gradient(135deg, transparent 50%, rgba(245,158,11,0.7) 50%)" }}
+            title="Resize panel"
+          />
         )}
       </div>
 

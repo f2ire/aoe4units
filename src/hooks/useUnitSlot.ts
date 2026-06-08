@@ -1061,7 +1061,13 @@ export function useUnitSlot(initialUnit?: AoE4Unit | null, initialCiv?: string) 
     }
 
     const toActivate = new Set<string>();
-    for (const tech of tieredBest.values()) toActivate.add(tech.id);
+    for (const tech of tieredBest.values()) {
+      toActivate.add(tech.id);
+      // If the best tier is an improved variant, also add its base tech so the
+      // displayed icon (which is the base, not the improved badge) gets highlighted.
+      const baseId = IMPROVED_TECH_BASE[tech.id];
+      if (baseId) toActivate.add(baseId);
+    }
 
     // Add standalones, respecting civ-exclusive groups (pick first in group only)
     const civGroups = CIV_TECH_EXCLUSIVE_GROUPS[selectedCiv] || [];

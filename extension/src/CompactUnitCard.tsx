@@ -125,6 +125,7 @@ export function CompactUnitCard({
   const baseSpeed = base.movement?.speed;
 
   const range = weapon?.range?.max;
+  const baseRange = baseWeapon?.range?.max;
   const atkSpeed = weapon?.speed;
   const baseAtkSpeed = baseWeapon?.speed;
 
@@ -247,7 +248,7 @@ export function CompactUnitCard({
           </Chip>
         )}
         {range != null && (
-          <Chip icon={<Crosshair className={ICON} />} label="Range">
+          <Chip icon={<Crosshair className={ICON} />} label="Range" delta={baseRange != null ? range - baseRange : undefined}>
             {parseFloat(range.toFixed(2))}
           </Chip>
         )}
