@@ -10,6 +10,7 @@
     "build:ext": "vite build -c vite.extension.config.ts",
     "build:ext-data": "node scripts/build-twitch-data.mjs",
     "dev:ext": "vite -c vite.extension.config.ts",
+    "preview:ext": "vite preview -c vite.extension.config.ts",
     "lint": "eslint .",
     "preview": "vite preview",
     "update-data": "node scripts/update-data.mjs",

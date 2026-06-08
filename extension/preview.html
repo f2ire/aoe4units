@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+
+<!--
+  DEV-ONLY preview for the Video-Overlay extension. Renders a fake 16:9 "live
+  video" and lays the overlay (index.html) transparently on top, so you can see
+  the left icon rail + sliding panel over the video WITHOUT going live on Twitch.
+  Not part of the extension build (only index.html / config.html are build inputs).
+  Open via the server: http://localhost:8081/preview.html (or 127.0.0.1).
+-->
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Twitch Video-Overlay Preview — AoE4 Units</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; gap: 14px;
+      padding: 24px 16px; background: #0e0e10; color: #efeff1;
+      font-family: Inter, Roobert, Helvetica, Arial, sans-serif;
+    }
+    h1 { font-size: 15px; font-weight: 600; margin: 0; }
+    p { font-size: 12px; color: #adadb8; margin: 0; text-align: center; max-width: 560px; }
+
+    /* 16:9 player area. The "video" is a placeholder gradient so you can judge
+       overlay contrast/transparency; on Twitch the real stream shows here. */
+    .player {
+      position: relative;
+      width: min(960px, 100%);
+      aspect-ratio: 16 / 9;
+      border: 1px solid #2a2a2d;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+      background:
+        radial-gradient(circle at 30% 35%, #2a5d3a, transparent 45%),
+        radial-gradient(circle at 70% 60%, #3a4a6a, transparent 50%),
+        linear-gradient(135deg, #1b2a22, #1a2030 70%);
+    }
+    .player .fake-label {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      font-size: 28px; font-weight: 700; color: rgba(255, 255, 255, 0.12);
+      letter-spacing: 2px; user-select: none; pointer-events: none;
+    }
+    /* Fake player controls bar, to check the overlay doesn't hide them. */
+    .player .fake-controls {
+      position: absolute; left: 0; right: 0; bottom: 0; height: 40px;
+      display: flex; align-items: center; gap: 10px; padding: 0 12px;
+      background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
+      font-size: 12px; color: #efeff1;
+    }
+    .player .live { color: #fff; background: #eb0400; border-radius: 3px; padding: 1px 6px; font-weight: 700; font-size: 11px; }
+
+    iframe {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      border: 0; background: transparent;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Twitch Video-Overlay preview (16:9)</h1>
+  <p>The overlay is laid transparently over a fake stream. Click the ⚔ icon on the left edge to open the unit panel. The rest of the area stays click-through (try the fake controls below).</p>
+
+  <div class="player">
+    <div class="fake-label">FAKE LIVE VIDEO</div>
+    <iframe src="./index.html" title="AoE4 Units overlay" allowtransparency="true"></iframe>
+    <div class="fake-controls">
+      <span class="live">LIVE</span>
+      <span>twitch.tv/your_channel — overlay test</span>
+    </div>
+  </div>
+</body>
+
+</html>
