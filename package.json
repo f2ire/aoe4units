@@ -8,6 +8,7 @@
     "build": "vite-react-ssg build",
     "build:dev": "vite-react-ssg build --mode development",
     "build:ext": "vite build -c vite.extension.config.ts",
+    "zip:ext": "vite build -c vite.extension.config.ts && tar -C dist-extension -a -cf aoe4-overlay.zip .",
     "build:ext-data": "node scripts/build-twitch-data.mjs",
     "dev:ext": "vite -c vite.extension.config.ts",
     "preview:ext": "vite preview -c vite.extension.config.ts",

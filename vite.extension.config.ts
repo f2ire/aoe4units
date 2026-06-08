@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import fs from "fs";
 
 // Separate build for the Twitch extension. Reuses the main app's `src/` via the
 // `@/` alias. Multi-entry (panel + broadcaster config). Output is fully
@@ -28,13 +29,103 @@ function slimTwitchData() {
   };
 }
 
+// The only images the extension references locally are the cost icons and the
+// civ flags (~350 KB) — every unit/ability/tech icon is a remote CDN URL. These
+// live in the app's root public/ (not extension/public/), so copy just those two
+// folders into the build and serve them in dev. `assetUrl()` makes the runtime
+// paths relative so they resolve under Twitch's hashed CDN base.
+const LOCAL_ASSET_FOLDERS = ["resources", "flags"];
+const MIME: Record<string, string> = {
+  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+  ".webp": "image/webp", ".svg": "image/svg+xml", ".gif": "image/gif",
+};
+function copyLocalAssets() {
+  const srcPublic = path.resolve(__dirname, "public");
+  const copyDir = (from: string, to: string) => {
+    fs.mkdirSync(to, { recursive: true });
+    for (const e of fs.readdirSync(from, { withFileTypes: true })) {
+      const s = path.join(from, e.name);
+      const d = path.join(to, e.name);
+      if (e.isDirectory()) copyDir(s, d);
+      else fs.copyFileSync(s, d);
+    }
+  };
+  return {
+    name: "copy-local-assets",
+    // Dev/preview: serve the folders straight from the app's root public/.
+    configureServer(server: any) {
+      server.middlewares.use((req: any, res: any, next: any) => {
+        const url = (req.url || "").split("?")[0];
+        if (LOCAL_ASSET_FOLDERS.some((f) => url.startsWith(`/${f}/`))) {
+          const file = path.join(srcPublic, decodeURIComponent(url));
+          if (fs.existsSync(file)) {
+            res.setHeader("Content-Type", MIME[path.extname(file).toLowerCase()] ?? "application/octet-stream");
+            fs.createReadStream(file).pipe(res);
+            return;
+          }
+        }
+        next();
+      });
+    },
+    // Build: copy into the extension output so the zip is self-contained.
+    closeBundle() {
+      const outDir = path.resolve(__dirname, "dist-extension");
+      for (const folder of LOCAL_ASSET_FOLDERS) {
+        const from = path.join(srcPublic, folder);
+        if (fs.existsSync(from)) copyDir(from, path.join(outDir, folder));
+      }
+    },
+  };
+}
+
+// Twitch CSP for extensions allows external scripts from 'self' (correct JS MIME)
+// and inline <style> ('unsafe-inline'), but NOT inline <script>. Twitch's CDN also
+// serves .css with the wrong MIME (text/plain → refused by strict MIME checking).
+// So: keep JS external, and inline the CSS as a <style> tag (allowed) instead of a
+// <link rel="stylesheet"> (blocked). This plugin swaps the stylesheet link for an
+// inline <style> and drops the now-unused .css asset.
+function inlineCss() {
+  const outDir = path.resolve(__dirname, "dist-extension");
+  return {
+    name: "inline-css",
+    enforce: "post" as const,
+    // Per-HTML: inline the stylesheet(s) THIS page links (shared CSS is referenced
+    // by both pages, so look it up by filename rather than deleting it eagerly).
+    transformIndexHtml(html: string, ctx: any) {
+      if (!ctx?.bundle) return html;
+      const links = [...html.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"[^>]*>/g)];
+      if (!links.length) return html;
+      const styles: string[] = [];
+      for (const m of links) {
+        const base = (m[1].split("/").pop() || "").trim();
+        const key = Object.keys(ctx.bundle).find((k) => k.endsWith(base));
+        const asset = key ? ctx.bundle[key] : null;
+        if (asset && asset.type === "asset") styles.push(String(asset.source));
+      }
+      const out = html.replace(/<link[^>]+rel="stylesheet"[^>]*>\s*/g, "");
+      return {
+        html: out,
+        tags: styles.length ? [{ tag: "style", children: styles.join("\n"), injectTo: "head" as const }] : [],
+      };
+    },
+    // After every page inlined its CSS, drop the now-unused external .css files
+    // (emitted at the output root since assetsDir is "").
+    closeBundle() {
+      if (!fs.existsSync(outDir)) return;
+      for (const f of fs.readdirSync(outDir)) {
+        if (f.endsWith(".css")) fs.rmSync(path.join(outDir, f));
+      }
+    },
+  };
+}
+
 export default defineConfig({
   root,
   base: "./",
   // Plain HTTP for local dev/preview — used only to view the overlay locally
   // (preview.html). Twitch testing goes through the Hosted Test zip (Twitch
   // serves it over its own HTTPS CDN), so no local HTTPS/cert is needed here.
-  plugins: [slimTwitchData(), react()],
+  plugins: [slimTwitchData(), copyLocalAssets(), react(), inlineCss()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -48,10 +139,20 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, "dist-extension"),
     emptyOutDir: true,
+    // Emit JS at the output ROOT (no `assets/` subfolder) so the zip is trivially
+    // correct: every file sits next to index.html. Avoids the common case where a
+    // subfolder is dropped from the zip → 404 on the JS, and any Twitch subpath
+    // quirk. CSS is inlined (see inlineCss), images keep their own folders.
+    assetsDir: "",
     rollupOptions: {
       input: {
         index: path.resolve(root, "index.html"),
         config: path.resolve(root, "config.html"),
+      },
+      output: {
+        entryFileNames: "[name]-[hash].js",
+        chunkFileNames: "[name]-[hash].js",
+        assetFileNames: "[name]-[hash][extname]",
       },
     },
   },
