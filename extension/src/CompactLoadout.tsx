@@ -27,6 +27,7 @@ interface CompactLoadoutProps {
   onToggleTech: (techId: string) => void;
   lockedTechnologies?: Set<string>;
   selectedCiv?: string;
+  selectedAge?: number;
   unitMinAge?: number;
   fullUpgradeAge?: number | null;
   onApplyFullUpgrade?: (age: number) => void;
@@ -39,6 +40,7 @@ interface CompactLoadoutProps {
   abilityCounters?: Map<string, number>;
   onIncrement?: (abilityId: string) => void;
   onDecrement?: (abilityId: string) => void;
+  onSetCounter?: (abilityId: string, value: number) => void;
 }
 
 const techIconPath = (icon: string) =>
@@ -171,30 +173,58 @@ function IconToggle({
 function CounterCell({
   src,
   name,
+  description,
   count,
   max,
   hideMax,
+  fill,
   onInc,
   onDec,
+  onReset,
 }: {
   src: string;
   name: string;
+  description?: string;
   count: number;
   max: number;
   hideMax?: boolean;
+  // When true the cell stretches to its parent width (used by spanning tech
+  // counters that cover several age columns); otherwise it stays a 34px square.
+  fill?: boolean;
   onInc: () => void;
   onDec: () => void;
+  // When provided, clicking the icon while active resets the counter to 0 (with a
+  // red hover), mirroring the base app's counter-ability button. Without it the
+  // icon increments (tech counters keep the click-to-add behaviour).
+  onReset?: () => void;
 }) {
   const active = count > 0;
+  const iconClick = onReset ? (active ? onReset : undefined) : onInc;
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [tipPos, setTipPos] = useState<{ x: number; y: number } | null>(null);
+  const showTip = () => {
+    if (!btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    setTipPos({ x: r.left + r.width / 2, y: r.top });
+  };
   return (
-    <div className="flex shrink-0 flex-col items-center gap-0.5">
+    <div className={cn("flex flex-col items-center gap-0.5", fill ? "w-full" : "shrink-0")}>
       <button
+        ref={btnRef}
         type="button"
-        title={name}
-        onClick={onInc}
+        onClick={iconClick}
+        onMouseEnter={showTip}
+        onMouseLeave={() => setTipPos(null)}
         className={cn(
-          "relative h-[34px] w-[34px] overflow-hidden rounded border transition-all active:scale-95",
-          active ? "border-amber-500 bg-amber-500/20 ring-1 ring-amber-500/50" : "border-zinc-600 bg-zinc-800 hover:border-amber-400/60",
+          "relative h-[34px] overflow-hidden rounded border transition-all active:scale-95",
+          fill ? "w-full" : "w-[34px]",
+          active
+            ? onReset
+              ? "border-amber-500 bg-amber-500/20 ring-1 ring-amber-500/50 cursor-pointer hover:border-red-500 hover:bg-red-500/20"
+              : "border-amber-500 bg-amber-500/20 ring-1 ring-amber-500/50"
+            : onReset
+              ? "border-zinc-600 bg-zinc-800 opacity-60"
+              : "border-zinc-600 bg-zinc-800 hover:border-amber-400/60",
         )}
       >
         <img
@@ -211,7 +241,18 @@ function CounterCell({
           </span>
         )}
       </button>
-      <div className="flex w-[34px] items-center justify-between">
+      {tipPos &&
+        createPortal(
+          <div
+            className="pointer-events-none fixed z-[99999] w-48 -translate-x-1/2 rounded-md border border-amber-500/40 bg-zinc-950/95 p-2 shadow-2xl backdrop-blur"
+            style={{ left: tipPos.x, top: tipPos.y - 8, transform: "translate(-50%, -100%)" }}
+          >
+            <p className="text-[11px] font-semibold text-amber-200">{name}</p>
+            {description && <p className="mt-0.5 text-[10px] leading-snug text-zinc-400">{description}</p>}
+          </div>,
+          document.body,
+        )}
+      <div className={cn("flex items-center justify-between", fill ? "w-full" : "w-[34px]")}>
         <button
           type="button"
           onClick={onDec}
@@ -240,6 +281,7 @@ export function CompactLoadout({
   onToggleTech,
   lockedTechnologies,
   selectedCiv,
+  selectedAge,
   unitMinAge = 1,
   fullUpgradeAge,
   onApplyFullUpgrade,
@@ -251,6 +293,7 @@ export function CompactLoadout({
   abilityCounters,
   onIncrement,
   onDecrement,
+  onSetCounter,
 }: CompactLoadoutProps) {
   // --- Technologies: group by category → tier-line (mirrors TechnologySelector). ---
   const visible = technologies.filter(
@@ -268,11 +311,19 @@ export function CompactLoadout({
     (grouped[category][lineKey] ||= []).push(tech);
   });
 
-  // Collapse into rows keyed by the short label (ATK/ARM/HP…), category order
-  // preserved. Each row buckets its icons into the 4 age columns.
+  // One row per tech line, in category order. Plain (non-counter) lines sharing
+  // a short label (ATK/ARM/HP…) collapse into a single age-bucketed row; counter
+  // lines get their own row so they can span age columns like TechnologySelector.
   const clampAge = (age: number) => Math.min(4, Math.max(1, age || 1));
-  const rows: { label: string; byAge: AgeBuckets }[] = [];
-  const rowIndex = new Map<string, number>();
+  type IconRow = { kind: "icons"; key: string; label: string; byAge: AgeBuckets };
+  type CounterRow = {
+    kind: "counter"; key: string; label: string;
+    startAge: number; endAge: number; count: number; max: number;
+    src: string; name: string; description?: string; hideMax?: boolean;
+    onInc: () => void; onDec: () => void; onReset: () => void;
+  };
+  const rows: (IconRow | CounterRow)[] = [];
+  const iconRowIndex = new Map<string, number>();
   for (const category of CATEGORY_ORDER) {
     const lines = grouped[category];
     if (!lines) continue;
@@ -283,53 +334,59 @@ export function CompactLoadout({
         .sort((a, b) => (getTechnologyTier(a)?.tier ?? 0) - (getTechnologyTier(b)?.tier ?? 0));
       if (!techs.length) continue;
 
-      let ri = rowIndex.get(label);
-      if (ri === undefined) {
-        ri = rows.length;
-        rowIndex.set(label, ri);
-        rows.push({ label, byAge: emptyBuckets() });
-      }
-      const byAge = rows[ri].byAge;
-
       const first = techs[0];
       if (first.counterMax !== undefined) {
+        // Counter line: a single widget that spans the age columns from its first
+        // tier up to selectedAge. The max grows with age because higher tiers
+        // carry a higher minAge (2/2/3/3/4/4) → 2 stacks at II, 4 at III, 6 at IV.
         const activeIdx = techs.findIndex((t) => activeTechnologies.has(t.id));
         const count = activeIdx === -1 ? 0 : activeIdx + 1;
-        const max = first.counterMax ?? techs.length;
+        const cap = selectedAge ?? 4;
+        const availTiers = techs.filter((t) => t.minAge <= cap);
+        const max = Math.min(first.counterMax ?? techs.length, availTiers.length);
+        const startAge = clampAge(first.minAge);
+        const endAge = availTiers.length
+          ? clampAge(Math.max(...availTiers.map((t) => t.minAge)))
+          : startAge;
         const cur = count > 0 ? techs[count - 1] : first;
-        byAge[clampAge(first.minAge)].push(
-          <CounterCell
-            key={lineKey}
-            src={techIconPath(cur.icon)}
-            name={cur.name}
-            count={count}
-            max={max}
-            hideMax={first.counterHideMax}
-            onInc={() => count < max && onToggleTech(techs[count].id)}
-            onDec={() => count > 0 && onToggleTech(techs[count - (count === 1 ? 1 : 2)].id)}
+        rows.push({
+          kind: "counter", key: lineKey, label, startAge, endAge, count, max,
+          src: techIconPath(cur.icon), name: cur.name, hideMax: first.counterHideMax,
+          onInc: () => count < max && onToggleTech(techs[count].id),
+          onDec: () => count > 0 && onToggleTech(techs[count - (count === 1 ? 1 : 2)].id),
+          // Clicking the icon resets the line to 0 (toggles the active tier off),
+          // mirroring the base app's tech counter; + still increments.
+          onReset: () => count > 0 && onToggleTech(techs[count - 1].id),
+        });
+        continue;
+      }
+
+      let ri = iconRowIndex.get(label);
+      if (ri === undefined) {
+        ri = rows.length;
+        iconRowIndex.set(label, ri);
+        rows.push({ kind: "icons", key: `icons:${label}`, label, byAge: emptyBuckets() });
+      }
+      const byAge = (rows[ri] as IconRow).byAge;
+      for (const tech of techs) {
+        const improvedId = (IMPROVED_TECH_PAIRS as Record<string, string>)[tech.id];
+        const improvedTech = improvedId ? allTechnologies.find((t) => t.id === improvedId) : undefined;
+        byAge[clampAge(tech.minAge)].push(
+          <IconToggle
+            key={tech.id}
+            src={techIconPath(tech.icon)}
+            name={tech.name}
+            description={(tech as any).uiTooltip || tech.description}
+            active={activeTechnologies.has(tech.id)}
+            locked={lockedTechnologies?.has(tech.id)}
+            onClick={() => onToggleTech(tech.id)}
+            mongol={
+              (tech as any).hasMongolUpgrade && selectedCiv === "mo" && improvedId
+                ? { active: activeTechnologies.has(improvedId), name: improvedTech?.name ?? "Improved", onToggle: () => onToggleTech(improvedId) }
+                : undefined
+            }
           />,
         );
-      } else {
-        for (const tech of techs) {
-          const improvedId = (IMPROVED_TECH_PAIRS as Record<string, string>)[tech.id];
-          const improvedTech = improvedId ? allTechnologies.find((t) => t.id === improvedId) : undefined;
-          byAge[clampAge(tech.minAge)].push(
-            <IconToggle
-              key={tech.id}
-              src={techIconPath(tech.icon)}
-              name={tech.name}
-              description={(tech as any).uiTooltip || tech.description}
-              active={activeTechnologies.has(tech.id)}
-              locked={lockedTechnologies?.has(tech.id)}
-              onClick={() => onToggleTech(tech.id)}
-              mongol={
-                (tech as any).hasMongolUpgrade && selectedCiv === "mo" && improvedId
-                  ? { active: activeTechnologies.has(improvedId), name: improvedTech?.name ?? "Improved", onToggle: () => onToggleTech(improvedId) }
-                  : undefined
-              }
-            />,
-          );
-        }
       }
     }
   }
@@ -338,6 +395,10 @@ export function CompactLoadout({
   const buildAbilityBuckets = (groupAbilities: Ability[]): AgeBuckets => {
     const byAge = emptyBuckets();
     groupAbilities.forEach((a) => {
+      const abilityDesc =
+        (selectedCiv && a.variations?.find((v: any) => v.civs?.length > 0 && v.civs?.includes(selectedCiv))?.description)
+        || (a as any).uiTooltip
+        || a.description;
       if (a.counterMax !== undefined) {
         const count = abilityCounters?.get(a.id) ?? 0;
         byAge[clampAge(a.minAge)].push(
@@ -345,11 +406,13 @@ export function CompactLoadout({
             key={a.id}
             src={a.icon}
             name={a.name}
+            description={abilityDesc}
             count={count}
             max={a.counterMax}
             hideMax={a.counterHideMax}
             onInc={() => onIncrement?.(a.id)}
             onDec={() => onDecrement?.(a.id)}
+            onReset={() => onSetCounter?.(a.id, 0)}
           />,
         );
       } else {
@@ -360,10 +423,6 @@ export function CompactLoadout({
               v.active === "always" &&
               (v.civs.length === 0 || !selectedCiv || v.civs.includes(selectedCiv)),
           ) ?? false);
-        const abilityDesc =
-          (selectedCiv && a.variations?.find((v: any) => v.civs?.length > 0 && v.civs?.includes(selectedCiv))?.description)
-          || (a as any).uiTooltip
-          || a.description;
         byAge[clampAge(a.minAge)].push(
           <IconToggle
             key={a.id}
@@ -403,6 +462,37 @@ export function CompactLoadout({
           {byAge[age]}
         </div>
       ))}
+    </div>
+  );
+
+  // A counter line rendered as one widget spanning age columns startAge→endAge.
+  // The start column is widened to cover the span (w-9 = 36px, gap-1 = 4px);
+  // the absorbed columns return null so the wide cell takes their place.
+  const renderCounterRow = (row: CounterRow) => (
+    <div className="flex items-start gap-1">
+      <span className="w-8 shrink-0 pt-1.5 text-[10px] font-bold uppercase text-amber-400/70">{row.label}</span>
+      {AGES.map((age) => {
+        if (age === row.startAge) {
+          const cols = row.endAge - row.startAge + 1;
+          return (
+            <div key={age} style={{ width: cols * 36 + (cols - 1) * 4 }} className="flex shrink-0">
+              <CounterCell
+                fill
+                src={row.src}
+                name={row.name}
+                count={row.count}
+                max={row.max}
+                hideMax={row.hideMax}
+                onInc={row.onInc}
+                onDec={row.onDec}
+                onReset={row.onReset}
+              />
+            </div>
+          );
+        }
+        if (age > row.startAge && age <= row.endAge) return null;
+        return <div key={age} className="w-9 shrink-0" />;
+      })}
     </div>
   );
 
@@ -446,10 +536,14 @@ export function CompactLoadout({
         )}
       </div>
 
-      {/* Upgrades — one row per category, split into age columns */}
-      {rows.map((row) => (
-        <div key={row.label}>{renderColumns(row.byAge, row.label, "text-amber-400/70")}</div>
-      ))}
+      {/* Upgrades — one row per tech line (counters span age columns) */}
+      {rows.map((row) =>
+        row.kind === "counter" ? (
+          <div key={row.key}>{renderCounterRow(row)}</div>
+        ) : (
+          <div key={row.key}>{renderColumns(row.byAge, row.label, "text-amber-400/70")}</div>
+        ),
+      )}
 
       {/* Abilities — one row per group (ABI default + named groups like KHAN) */}
       {hasAbilities && <div className="mt-0.5 border-t border-zinc-800 pt-1.5" />}

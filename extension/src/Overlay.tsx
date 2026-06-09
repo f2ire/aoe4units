@@ -3,13 +3,12 @@ import { createRoot } from "react-dom/client";
 import { Swords } from "lucide-react";
 import "@/index.css";
 import { cn } from "@/lib/utils";
-import { CIVILIZATIONS } from "@/data/civilizations";
 import { useUnitSlot } from "@/hooks/useUnitSlot";
 import UnitPanel from "./UnitPanel";
-import { assetUrl } from "./assetUrl";
+import { useAoe4WorldDetection } from "./useAoe4WorldDetection";
 
 // Persisted position + scale of the floating unit/stats panel.
-const STORE_KEY = "aoe4-overlay-panel";
+const STORE_KEY = "aoe4-overlay-panel-v2";
 const PANEL_BASE_WIDTH = 300; // px — used to convert resize-drag distance into a scale delta
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 2.5;
@@ -30,7 +29,7 @@ function loadPanelState(): PanelState {
   } catch {
     /* ignore corrupted storage */
   }
-  return { x: 48, y: 8, scale: fallbackScale };
+  return { x: 48, y: clamp(Math.round(window.innerHeight / 2) - 18, 8, window.innerHeight - 40), scale: fallbackScale };
 }
 
 // Twitch Video-Overlay surface. The root spans the whole video but is
@@ -42,10 +41,36 @@ function loadPanelState(): PanelState {
 function Overlay() {
   const slot = useUnitSlot();
   const [open, setOpen] = useState(true);
-  const [civOpen, setCivOpen] = useState(false);
   const [panel, setPanel] = useState<PanelState>(loadPanelState);
 
-  const civ = CIVILIZATIONS.find((c) => c.abbr === slot.selectedCiv);
+  const { detectedCiv } = useAoe4WorldDetection();
+  const prevDetectedCiv = useRef<string | null>(null);
+
+  // Auto-select the first displayed unit whenever no unit is selected (mount + civ change).
+  const hasUnit = !!slot.unit;
+  const selectedCiv = slot.selectedCiv;
+  useEffect(() => {
+    if (hasUnit) return;
+    const CATEGORY_ORDER = [
+      "jeanne", "melee_infantry", "ranged", "cavalry", "siege",
+      "mercenary", "khaganate", "monk", "ship", "other",
+    ];
+    for (const cat of CATEGORY_ORDER) {
+      const units = (slot.categorizedUnits[cat] ?? []).slice().sort((a, b) => a.name.localeCompare(b.name));
+      if (units.length > 0) { slot.setUnit(units[0]); return; }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasUnit, selectedCiv]);
+
+  // Auto-apply detected civ only when it changes to a new value.
+  // Viewers can freely override after a detection; the next distinct
+  // detected civ (= new game) will override again.
+  useEffect(() => {
+    if (!detectedCiv || detectedCiv === prevDetectedCiv.current) return;
+    prevDetectedCiv.current = detectedCiv;
+    slot.setSelectedCiv(detectedCiv);
+    slot.setUnit(null);
+  }, [detectedCiv, slot]);
 
   // Persist position/scale whenever they change.
   useEffect(() => {
@@ -107,66 +132,19 @@ function Overlay() {
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[9999]">
-      <div className="absolute inset-y-0 left-0 flex items-start">
-        {/* Icon rail — always visible at the left edge. */}
-        <div className="pointer-events-auto flex w-11 flex-col items-center gap-2 self-stretch bg-black/55 py-2 backdrop-blur-sm">
-          <button
-            type="button"
-            aria-label={open ? "Close unit panel" : "Open unit panel"}
-            aria-pressed={open}
-            onClick={() => setOpen((v) => !v)}
-            className={cn(
-              "flex h-9 w-9 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white",
-              open && "bg-amber-500 text-black hover:bg-amber-500",
-            )}
-          >
-            <Swords className="h-5 w-5" />
-          </button>
-
-          {/* Civilization picker */}
-          <button
-            type="button"
-            aria-label="Select civilization"
-            aria-pressed={civOpen}
-            title={civ?.name ?? "Civilization"}
-            onClick={() => setCivOpen((v) => !v)}
-            className={cn(
-              "flex h-9 w-9 items-center justify-center overflow-hidden rounded-md border transition-colors",
-              civOpen ? "border-amber-500 bg-amber-500/15" : "border-white/15 hover:border-amber-500/60",
-            )}
-          >
-            {civ ? (
-              <img src={assetUrl(civ.flagPath)} alt={civ.name} className="h-6 w-6 object-contain" />
-            ) : (
-              <span className="text-[10px] font-bold uppercase text-white/80">{slot.selectedCiv}</span>
-            )}
-          </button>
-        </div>
-
-        {/* Civ dropdown — slides out from the rail. */}
-        {civOpen && (
-          <div className="pointer-events-auto absolute left-11 top-0 z-50 max-h-[85vh] w-52 overflow-y-auto rounded-r-md border border-amber-500/30 bg-zinc-950/95 p-1 shadow-2xl backdrop-blur">
-            {CIVILIZATIONS.map((c) => (
-              <button
-                key={c.abbr}
-                type="button"
-                onClick={() => {
-                  slot.setSelectedCiv(c.abbr);
-                  slot.setUnit(null); // avoid a stale cross-civ unit
-                  setCivOpen(false);
-                }}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-amber-500/15",
-                  c.abbr === slot.selectedCiv ? "text-amber-300" : "text-zinc-200",
-                )}
-              >
-                <img src={assetUrl(c.flagPath)} alt="" className="h-4 w-6 shrink-0 rounded-sm object-cover" />
-                <span className="truncate">{c.name}</span>
-              </button>
-            ))}
-          </div>
+      {/* Toggle button — floating at the top-left corner. */}
+      <button
+        type="button"
+        aria-label={open ? "Close unit panel" : "Open unit panel"}
+        aria-pressed={open}
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "pointer-events-auto absolute left-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-md text-white/80 shadow-lg transition-colors hover:bg-white/10 hover:text-white",
+          open ? "bg-amber-500 text-black hover:bg-amber-500" : "bg-black/55 backdrop-blur-sm",
         )}
-      </div>
+      >
+        <Swords className="h-5 w-5" />
+      </button>
 
       {/* Floating unit panel — draggable + resizable, positioned freely. */}
       <div
