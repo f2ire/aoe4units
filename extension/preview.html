@@ -14,15 +14,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Twitch Video-Overlay Preview — AoE4 Units</title>
   <style>
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      margin: 0; min-height: 100vh;
-      display: flex; flex-direction: column; align-items: center; gap: 14px;
-      padding: 24px 16px; background: #0e0e10; color: #efeff1;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 24px 16px;
+      background: #0e0e10;
+      color: #efeff1;
       font-family: Inter, Roobert, Helvetica, Arial, sans-serif;
     }
-    h1 { font-size: 15px; font-weight: 600; margin: 0; }
-    p { font-size: 12px; color: #adadb8; margin: 0; text-align: center; max-width: 560px; }
+
+    h1 {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    p {
+      font-size: 12px;
+      color: #adadb8;
+      margin: 0;
+      text-align: center;
+      max-width: 560px;
+    }
 
     /* 16:9 player area. The "video" is a placeholder gradient so you can judge
        overlay contrast/transparency; on Twitch the real stream shows here. */
@@ -39,30 +60,61 @@
         radial-gradient(circle at 70% 60%, #3a4a6a, transparent 50%),
         linear-gradient(135deg, #1b2a22, #1a2030 70%);
     }
+
     .player .fake-label {
-      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-      font-size: 28px; font-weight: 700; color: rgba(255, 255, 255, 0.12);
-      letter-spacing: 2px; user-select: none; pointer-events: none;
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.12);
+      letter-spacing: 2px;
+      user-select: none;
+      pointer-events: none;
     }
+
     /* Fake player controls bar, to check the overlay doesn't hide them. */
     .player .fake-controls {
-      position: absolute; left: 0; right: 0; bottom: 0; height: 40px;
-      display: flex; align-items: center; gap: 10px; padding: 0 12px;
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 12px;
       background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
-      font-size: 12px; color: #efeff1;
+      font-size: 12px;
+      color: #efeff1;
     }
-    .player .live { color: #fff; background: #eb0400; border-radius: 3px; padding: 1px 6px; font-weight: 700; font-size: 11px; }
+
+    .player .live {
+      color: #fff;
+      background: #eb0400;
+      border-radius: 3px;
+      padding: 1px 6px;
+      font-weight: 700;
+      font-size: 11px;
+    }
 
     iframe {
-      position: absolute; inset: 0; width: 100%; height: 100%;
-      border: 0; background: transparent;
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: transparent;
     }
   </style>
 </head>
 
 <body>
   <h1>Twitch Video-Overlay preview (16:9)</h1>
-  <p>The overlay is laid transparently over a fake stream. Click the ⚔ icon on the left edge to open the unit panel. The rest of the area stays click-through (try the fake controls below).</p>
+  <p>The overlay is laid transparently over a fake stream. Click the ⚔ icon on the left edge to open the unit panel. The
+    rest of the area stays click-through (try the fake controls below).</p>
 
   <div class="player">
     <div class="fake-label">FAKE LIVE VIDEO</div>

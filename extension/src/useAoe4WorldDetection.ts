@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { CIVILIZATIONS } from "@/data/civilizations";
 
-const POLL_MS = 30_000;
+const POLL_MS = 10_000;
 const MAX_BACKOFF_MS = 300_000; // 5 min cap
 
 // aoe4world uses lowercase snake_case civ slugs (verified live 2026-06-07).
@@ -68,7 +68,20 @@ export function useAoe4WorldDetection(): Aoe4WorldDetection {
   useEffect(() => {
     if (devOverride) return;
     const ext = window.Twitch?.ext;
-    if (!ext) return;
+
+    // Dev fallback: outside Twitch (e.g. localhost:8081) config.tsx saves to
+    // localStorage instead of the broadcaster segment — read it from there.
+    if (!ext) {
+      try {
+        const raw = localStorage.getItem("aoe4-ext-config");
+        if (raw) {
+          const data = JSON.parse(raw) as { profileId?: number | string };
+          const id = Number(data.profileId);
+          if (id > 0) setProfileId(id);
+        }
+      } catch { /* ignore */ }
+      return;
+    }
 
     function readConfig() {
       const seg = ext!.configuration.broadcaster;
@@ -104,6 +117,7 @@ export function useAoe4WorldDetection(): Aoe4WorldDetection {
         }
         const game = await res.json() as {
           ongoing?: boolean;
+          just_finished?: boolean;
           teams?: { profile_id: number; civilization: string }[][];
         };
 
