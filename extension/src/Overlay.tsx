@@ -9,6 +9,9 @@ import { useAoe4WorldDetection } from "./useAoe4WorldDetection";
 
 // Persisted position + scale of the floating unit/stats panel.
 const STORE_KEY = "aoe4-overlay-panel-v2";
+// Persisted viewer preference: lock the displayed civ to the streamer's detected
+// civ (default) vs let the viewer pick freely.
+const CIV_LOCK_KEY = "aoe4-overlay-civ-locked";
 const PANEL_BASE_WIDTH = 300; // px — used to convert resize-drag distance into a scale delta
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 4; // raised so the auto default keeps growing on large/4K players
@@ -173,7 +176,30 @@ function Overlay() {
   }, []);
 
   const { detectedCiv } = useAoe4WorldDetection();
-  const prevDetectedCiv = useRef<string | null>(null);
+
+  // Civ lock: when on (default), the displayed civ stays pinned to the streamer's
+  // detected civ — including when the streamer starts a new game with a new civ —
+  // and the civ picker is disabled. When off, detection is ignored and the viewer
+  // picks freely. Persisted so the viewer's choice sticks across reloads.
+  const [civLocked, setCivLocked] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(CIV_LOCK_KEY);
+      return raw === null ? true : JSON.parse(raw) === true;
+    } catch {
+      return true;
+    }
+  });
+  const toggleCivLock = useCallback(() => {
+    setCivLocked((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(CIV_LOCK_KEY, JSON.stringify(next));
+      } catch {
+        /* storage may be unavailable in the sandboxed iframe */
+      }
+      return next;
+    });
+  }, []);
 
   // Auto-select the first displayed unit whenever no unit is selected (mount + civ change).
   const hasUnit = !!slot.unit;
@@ -191,15 +217,14 @@ function Overlay() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasUnit, selectedCiv]);
 
-  // Auto-apply detected civ only when it changes to a new value.
-  // Viewers can freely override after a detection; the next distinct
-  // detected civ (= new game) will override again.
+  // While locked, keep the displayed civ pinned to the streamer's detected civ —
+  // this re-syncs on each new game (detectedCiv changes) and the moment the viewer
+  // re-locks after picking freely. While unlocked, detection is ignored entirely.
   useEffect(() => {
-    if (!detectedCiv || detectedCiv === prevDetectedCiv.current) return;
-    prevDetectedCiv.current = detectedCiv;
+    if (!civLocked || !detectedCiv || slot.selectedCiv === detectedCiv) return;
     slot.setSelectedCiv(detectedCiv);
     slot.setUnit(null);
-  }, [detectedCiv, slot]);
+  }, [civLocked, detectedCiv, slot]);
 
   // Persistence is handled by commitManual on gesture end (placement fractions),
   // not on every panel change — relayout writes live px we don't want to store.
@@ -296,6 +321,8 @@ function Overlay() {
           scale={panel.scale}
           onMovePointerDown={startMove}
           onResizePointerDown={startResize}
+          civLocked={civLocked}
+          onToggleCivLock={toggleCivLock}
         />
       </div>
     </div>

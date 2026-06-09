@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ChevronDown, ChevronRight, ChevronUp, GripHorizontal, Search, Settings2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, GripHorizontal, Lock, Search, Settings2, Unlock } from "lucide-react";
 import { getAvailableAges } from "@/data/unified-units";
 import type { AoE4Unit } from "@/data/unified-units";
 import { getTechnologyTier, getTechnologyBaseName } from "@/data/unified-technologies";
@@ -59,16 +59,22 @@ export default function UnitPanel({
   scale = 1,
   onMovePointerDown,
   onResizePointerDown,
+  civLocked = false,
+  onToggleCivLock,
 }: {
   slot: Slot;
   scale?: number;
   onMovePointerDown?: (e: React.PointerEvent) => void;
   onResizePointerDown?: (e: React.PointerEvent) => void;
+  /** When true, the civ is pinned to the streamer's detected civ (picker disabled). */
+  civLocked?: boolean;
+  onToggleCivLock?: () => void;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [civPickerOpen, setCivPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [civSearch, setCivSearch] = useState("");
   const [openCategories, setOpenCategories] = useState<Set<string>>(() => new Set());
 
   // Lowering the age must drop counter-tech stacks that belong to a higher age
@@ -151,6 +157,7 @@ export default function UnitPanel({
       setPickerOpen(false);
       setCivPickerOpen(false);
       setSearch("");
+      setCivSearch("");
     };
     document.addEventListener("pointerdown", onDocPointerDown);
     return () => document.removeEventListener("pointerdown", onDocPointerDown);
@@ -206,19 +213,22 @@ export default function UnitPanel({
           >
             <button
               type="button"
+              disabled={civLocked}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={() =>
                 setCivPickerOpen((v) => {
                   const next = !v;
                   if (next) setPickerOpen(false);
+                  if (!next) setCivSearch("");
                   return next;
                 })
               }
               className={cn(
-                "flex items-center gap-2 rounded px-1 py-0.5 transition-colors hover:bg-white/10",
+                "flex items-center gap-2 rounded px-1 py-0.5 transition-colors",
+                civLocked ? "cursor-default opacity-60" : "hover:bg-white/10",
                 civPickerOpen && "bg-amber-500/15",
               )}
-              title="Change civilization"
+              title={civLocked ? "Civilization locked to the streamer" : "Change civilization"}
             >
               {civ ? (
                 <>
@@ -228,8 +238,29 @@ export default function UnitPanel({
               ) : (
                 <span className="text-xs text-zinc-500">{slot.selectedCiv}</span>
               )}
-              <ChevronDown className="h-3 w-3 text-zinc-500" />
+              {/* Kept mounted (invisible when locked) so the lock button never shifts. */}
+              <ChevronDown className={cn("h-3 w-3 text-zinc-500", civLocked && "invisible")} />
             </button>
+            {/* Lock: pin the civ to the streamer's detected civ (on) vs free pick (off). */}
+            {onToggleCivLock && (
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={onToggleCivLock}
+                aria-pressed={civLocked}
+                className={cn(
+                  "flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors hover:bg-white/10",
+                  civLocked ? "text-amber-400" : "text-zinc-500",
+                )}
+                title={
+                  civLocked
+                    ? "Civilization follows the streamer — click to unlock and pick freely"
+                    : "Free civilization — click to follow the streamer"
+                }
+              >
+                {civLocked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+              </button>
+            )}
             <GripHorizontal className="ml-auto h-3.5 w-3.5 text-zinc-600" />
           </div>
         )}
@@ -334,26 +365,41 @@ export default function UnitPanel({
       {/* Civ dropdown — at root level (outside the overflow-hidden box) so it can
           overflow the panel. Outside clicks are handled by the document listener. */}
       {civPickerOpen && (
-        <div className="absolute inset-x-0 top-8 z-50 max-h-[50vh] overflow-y-auto rounded-b-md border border-amber-500/30 bg-zinc-950/98 shadow-2xl backdrop-blur">
-          {CIVILIZATIONS.map((c) => (
-            <button
-              key={c.abbr}
-              type="button"
-              onClick={() => {
-                slot.setSelectedCiv(c.abbr);
-                slot.setUnit(null);
-                setCivPickerOpen(false);
-                setPickerOpen(false);
-              }}
-              className={cn(
-                "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-amber-500/15",
-                c.abbr === slot.selectedCiv ? "text-amber-300" : "text-zinc-200",
-              )}
-            >
-              <img src={assetUrl(c.flagPath)} alt="" className="h-4 w-6 shrink-0 rounded-sm object-cover" />
-              <span className="truncate">{c.name}</span>
-            </button>
-          ))}
+        <div className="absolute inset-x-0 top-8 z-50 flex max-h-[50vh] flex-col rounded-b-md border border-amber-500/30 bg-zinc-950/98 shadow-2xl backdrop-blur">
+          <div className="flex items-center gap-2 border-b border-amber-500/15 px-2 py-1.5">
+            <Search className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+            <input
+              autoFocus
+              value={civSearch}
+              onChange={(e) => setCivSearch(e.target.value)}
+              placeholder="Search civilization…"
+              className="w-full bg-transparent text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
+            />
+          </div>
+          <div className="overflow-y-auto">
+            {CIVILIZATIONS.filter((c) =>
+              !civSearch.trim() || c.name.toLowerCase().includes(civSearch.trim().toLowerCase())
+            ).map((c) => (
+              <button
+                key={c.abbr}
+                type="button"
+                onClick={() => {
+                  slot.setSelectedCiv(c.abbr);
+                  slot.setUnit(null);
+                  setCivPickerOpen(false);
+                  setCivSearch("");
+                  setPickerOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-amber-500/15",
+                  c.abbr === slot.selectedCiv ? "text-amber-300" : "text-zinc-200",
+                )}
+              >
+                <img src={assetUrl(c.flagPath)} alt="" className="h-4 w-6 shrink-0 rounded-sm object-cover" />
+                <span className="truncate">{c.name}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
