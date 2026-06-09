@@ -1,186 +1,57 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import { Swords } from "lucide-react";
 import "@/index.css";
 import { cn } from "@/lib/utils";
 import { useUnitSlot } from "@/hooks/useUnitSlot";
-import UnitPanel from "./UnitPanel";
+import UnitPanel, { SlotPanel, VSCard, type VSResultData, type VSSlotInfo } from "./UnitPanel";
 import { useAoe4WorldDetection } from "./useAoe4WorldDetection";
+import { useDraggablePanel, DEFAULT_PANEL_X, PANEL_BASE_WIDTH } from "./useDraggablePanel";
+import { computeVersus, computeLoserUnitsToWin } from "@/lib/combat";
+import { buildModifiedVariation, getChargeBonus } from "@/lib/buildVariation";
 
-// Persisted position + scale of the floating unit/stats panel.
 const STORE_KEY = "aoe4-overlay-panel-v2";
-// Persisted viewer preference: lock the displayed civ to the streamer's detected
-// civ (default) vs let the viewer pick freely.
+const STORE_KEY_VS = "aoe4-overlay-panel-vs-v1";
 const CIV_LOCK_KEY = "aoe4-overlay-civ-locked";
-const PANEL_BASE_WIDTH = 300; // px — used to convert resize-drag distance into a scale delta
-const MIN_SCALE = 0.5;
-const MAX_SCALE = 4; // raised so the auto default keeps growing on large/4K players
+const OPP_CIV_LOCK_KEY = "aoe4-overlay-opp-civ-locked";
 
-// Screen-relative default sizing: the panel targets this fraction of the
-// viewport width, bounded so it never exceeds this fraction of the height.
-const PANEL_WIDTH_FRACTION = 0.2;
-const PANEL_HEIGHT_FRACTION = 0.9;
+const VS_CARD_BASE_WIDTH = 180;
 
-// Toggle-logo geometry (kept in sync with the button's `left-2`/`h-9 w-9`
-// classes) so the panel can open adjacent to it.
-const LOGO_LEFT = 8; // left-2
-const LOGO_SIZE = 36; // h-9 / w-9
-const LOGO_GAP = 8; // breathing room between the logo and the panel
-const DEFAULT_PANEL_X = LOGO_LEFT + LOGO_SIZE + LOGO_GAP; // 52 — just right of the logo
+// Default x for the versus panel: primary panel + VS card + gaps.
+const VS_DEFAULT_X = DEFAULT_PANEL_X + PANEL_BASE_WIDTH + 8 + VS_CARD_BASE_WIDTH + 8;
 
-type PanelState = { x: number; y: number; scale: number };
+const AUTO_SELECT_ORDER = [
+  "jeanne", "melee_infantry", "ranged", "cavalry", "siege",
+  "mercenary", "khaganate", "monk", "ship", "other",
+];
 
-// How the panel is positioned/sized — stored as viewport-relative fractions so
-// it stays correct across resize / fullscreen / different screens:
-//  - "auto"   → screen-relative default: scaled to a fraction of the viewport
-//               (fitScale), centered vertically, adjacent to the logo.
-//  - "manual" → user dragged/resized it. fx/fy = top-left as fractions of the
-//               viewport; widthFrac = rendered width as a fraction of viewport
-//               width (→ scale). All reapplied on every viewport change.
-type Placement =
-  | { mode: "auto" }
-  | { mode: "manual"; fx: number; fy: number; widthFrac: number };
-
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-
-// Provisional default scale from the viewport width alone, for the first render
-// before the panel's natural size is measured (refined in relayout).
-function defaultScale(): number {
-  return clamp((window.innerWidth * PANEL_WIDTH_FRACTION) / PANEL_BASE_WIDTH, MIN_SCALE, MAX_SCALE);
-}
-
-// Scale that makes the panel occupy PANEL_WIDTH_FRACTION of the viewport width
-// without exceeding PANEL_HEIGHT_FRACTION of its height. `naturalW`/`naturalH`
-// are untransformed layout dimensions (transform: scale doesn't affect
-// offsetWidth/Height), so this is stable across recomputes.
-function fitScale(naturalW: number, naturalH: number): number {
-  const byWidth = (window.innerWidth * PANEL_WIDTH_FRACTION) / naturalW;
-  const byHeight = (window.innerHeight * PANEL_HEIGHT_FRACTION) / naturalH;
-  return clamp(Math.min(byWidth, byHeight), MIN_SCALE, MAX_SCALE);
-}
-
-// Read the persisted placement. Old (pre-v6) pixel states have no `mode` and are
-// ignored → fall back to the screen-relative auto default.
-function loadPlacement(): Placement {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
-    if (saved && saved.mode === "manual" && Number.isFinite(saved.fx)) {
-      return { mode: "manual", fx: saved.fx, fy: saved.fy, widthFrac: saved.widthFrac };
-    }
-  } catch {
-    /* ignore corrupted storage */
-  }
-  return { mode: "auto" };
-}
-
-// Resolve a placement to concrete {x,y,scale} for the current viewport, given
-// the panel's untransformed natural size. This is what makes both position and
-// size relative: it's re-run on every viewport change.
-function computeLayout(p: Placement, naturalW: number, naturalH: number): PanelState {
-  if (p.mode === "manual") {
-    return {
-      x: clamp(Math.round(p.fx * window.innerWidth), 0, Math.max(0, window.innerWidth - 40)),
-      y: clamp(Math.round(p.fy * window.innerHeight), 0, Math.max(0, window.innerHeight - 40)),
-      scale: clamp((p.widthFrac * window.innerWidth) / naturalW, MIN_SCALE, MAX_SCALE),
-    };
-  }
-  const scale = fitScale(naturalW, naturalH);
-  const y = clamp(Math.round((window.innerHeight - naturalH * scale) / 2), 8, window.innerHeight - 40);
-  return { x: DEFAULT_PANEL_X, y, scale };
-}
-
-// First-render state before the panel can be measured (estimates with
-// PANEL_BASE_WIDTH; relayout refines it before paint, so this isn't seen).
-function provisionalState(p: Placement): PanelState {
-  if (p.mode === "manual") {
-    return {
-      x: clamp(Math.round(p.fx * window.innerWidth), 0, Math.max(0, window.innerWidth - 40)),
-      y: clamp(Math.round(p.fy * window.innerHeight), 0, Math.max(0, window.innerHeight - 40)),
-      scale: clamp((p.widthFrac * window.innerWidth) / PANEL_BASE_WIDTH, MIN_SCALE, MAX_SCALE),
-    };
-  }
-  return { x: DEFAULT_PANEL_X, y: clamp(Math.round(window.innerHeight / 2) - 18, 8, window.innerHeight - 40), scale: defaultScale() };
-}
-
-// Twitch Video-Overlay surface. The root spans the whole video but is
-// pointer-events:none + transparent, so clicks pass through to the player —
-// only the left icon rail (panel toggle + civ picker) and the panel capture
-// pointer events. The unit slot is owned here so the rail's civ picker and the
-// panel share one state. The unit/stats panel floats: it can be dragged by its
-// top handle and resized from its bottom-right corner (both persisted).
 function Overlay() {
   const slot = useUnitSlot();
+  const slot2 = useUnitSlot();
   const [open, setOpen] = useState(true);
-  const placementRef = useRef<Placement>(loadPlacement());
-  const [panel, setPanel] = useState<PanelState>(() => provisionalState(placementRef.current));
-  const panelRef = useRef<HTMLDivElement>(null);
-  // True while a drag/resize gesture is in progress — skip relayout so a stray
-  // resize event mid-gesture doesn't fight the pointer.
-  const gestureActive = useRef(false);
+  const [panelMode, setPanelMode] = useState<null | "compare" | "versus">(null);
 
-  // Re-apply the current placement to the live viewport: measure the panel's
-  // untransformed size and recompute {x,y,scale}. This is what keeps BOTH
-  // position and size relative to the screen on resize / fullscreen / DPI
-  // change, in both auto and manual modes. offsetWidth/Height are layout sizes
-  // (unaffected by the scale transform), so the result never feeds back.
-  const relayout = useCallback(() => {
-    if (gestureActive.current) return;
-    const el = panelRef.current;
-    if (!el) return;
-    const naturalW = el.offsetWidth;
-    const naturalH = el.offsetHeight;
-    setPanel(computeLayout(placementRef.current, naturalW, naturalH));
-  }, []);
+  const panelOpen = panelMode !== null;
 
-  // Run before paint, then on every viewport change. A ResizeObserver on the
-  // root element catches fullscreen / player-resize that a bare window "resize"
-  // can miss inside the Twitch iframe; observing the panel itself re-centers
-  // when its content height changes (unit/drawer). visualViewport covers
-  // mobile/zoom.
-  useLayoutEffect(() => {
-    relayout();
-    const ro = new ResizeObserver(() => relayout());
-    ro.observe(document.documentElement);
-    if (panelRef.current) ro.observe(panelRef.current);
-    window.addEventListener("resize", relayout);
-    window.addEventListener("orientationchange", relayout);
-    document.addEventListener("fullscreenchange", relayout);
-    window.visualViewport?.addEventListener("resize", relayout);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", relayout);
-      window.removeEventListener("orientationchange", relayout);
-      document.removeEventListener("fullscreenchange", relayout);
-      window.visualViewport?.removeEventListener("resize", relayout);
-    };
-  }, [relayout]);
+  const primary = useDraggablePanel(STORE_KEY, DEFAULT_PANEL_X);
+  const versus = useDraggablePanel(STORE_KEY_VS, VS_DEFAULT_X);
 
-  // Capture the current on-screen geometry as viewport fractions (manual mode)
-  // and persist it, so a user-placed panel stays relative on later resizes.
-  const commitManual = useCallback(() => {
-    const el = panelRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const placement: Placement = {
-      mode: "manual",
-      fx: clamp(rect.left / window.innerWidth, 0, 1),
-      fy: clamp(rect.top / window.innerHeight, 0, 1),
-      widthFrac: clamp(rect.width / window.innerWidth, 0.02, 1),
-    };
-    placementRef.current = placement;
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(placement));
-    } catch {
-      /* storage may be unavailable in the sandboxed iframe */
-    }
-  }, []);
+  // On every open, reset the versus panel to its default position adjacent to
+  // the primary panel. Captures primary position at open time — no live follow.
+  const primaryPanel = primary.panel;
+  useEffect(() => {
+    if (!panelOpen) return;
+    versus.resetPanel({
+      x: primaryPanel.x + Math.round((PANEL_BASE_WIDTH + VS_CARD_BASE_WIDTH) * primaryPanel.scale) + 16,
+      y: primaryPanel.y,
+      scale: primaryPanel.scale,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelOpen]);
 
-  const { detectedCiv } = useAoe4WorldDetection();
+  const { detectedCiv, detectedOpponentCiv } = useAoe4WorldDetection();
 
-  // Civ lock: when on (default), the displayed civ stays pinned to the streamer's
-  // detected civ — including when the streamer starts a new game with a new civ —
-  // and the civ picker is disabled. When off, detection is ignored and the viewer
-  // picks freely. Persisted so the viewer's choice sticks across reloads.
+  // Civ lock: pin the displayed civ to the streamer's detected civ (default on).
   const [civLocked, setCivLocked] = useState<boolean>(() => {
     try {
       const raw = localStorage.getItem(CIV_LOCK_KEY);
@@ -192,101 +63,144 @@ function Overlay() {
   const toggleCivLock = useCallback(() => {
     setCivLocked((v) => {
       const next = !v;
-      try {
-        localStorage.setItem(CIV_LOCK_KEY, JSON.stringify(next));
-      } catch {
-        /* storage may be unavailable in the sandboxed iframe */
-      }
+      try { localStorage.setItem(CIV_LOCK_KEY, JSON.stringify(next)); } catch { /* iframe */ }
       return next;
     });
   }, []);
 
-  // Auto-select the first displayed unit whenever no unit is selected (mount + civ change).
+  // Opponent civ lock: pin the versus panel to the opponent's detected civ (1v1 only).
+  const [oppCivLocked, setOppCivLocked] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(OPP_CIV_LOCK_KEY);
+      return raw === null ? true : JSON.parse(raw) === true;
+    } catch {
+      return true;
+    }
+  });
+  const toggleOppCivLock = useCallback(() => {
+    setOppCivLocked((v) => {
+      const next = !v;
+      try { localStorage.setItem(OPP_CIV_LOCK_KEY, JSON.stringify(next)); } catch { /* iframe */ }
+      return next;
+    });
+  }, []);
+
+  // Auto-select first unit on mount / civ change for each slot.
   const hasUnit = !!slot.unit;
   const selectedCiv = slot.selectedCiv;
   useEffect(() => {
     if (hasUnit) return;
-    const CATEGORY_ORDER = [
-      "jeanne", "melee_infantry", "ranged", "cavalry", "siege",
-      "mercenary", "khaganate", "monk", "ship", "other",
-    ];
-    for (const cat of CATEGORY_ORDER) {
+    for (const cat of AUTO_SELECT_ORDER) {
       const units = (slot.categorizedUnits[cat] ?? []).slice().sort((a, b) => a.name.localeCompare(b.name));
       if (units.length > 0) { slot.setUnit(units[0]); return; }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasUnit, selectedCiv]);
 
-  // While locked, keep the displayed civ pinned to the streamer's detected civ —
-  // this re-syncs on each new game (detectedCiv changes) and the moment the viewer
-  // re-locks after picking freely. While unlocked, detection is ignored entirely.
+  const hasUnit2 = !!slot2.unit;
+  const selectedCiv2 = slot2.selectedCiv;
+  useEffect(() => {
+    if (hasUnit2) return;
+    for (const cat of AUTO_SELECT_ORDER) {
+      const units = (slot2.categorizedUnits[cat] ?? []).slice().sort((a, b) => a.name.localeCompare(b.name));
+      if (units.length > 0) { slot2.setUnit(units[0]); return; }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasUnit2, selectedCiv2]);
+
+  // While locked, keep the displayed civ pinned to the streamer's detected civ.
   useEffect(() => {
     if (!civLocked || !detectedCiv || slot.selectedCiv === detectedCiv) return;
     slot.setSelectedCiv(detectedCiv);
     slot.setUnit(null);
   }, [civLocked, detectedCiv, slot]);
 
-  // Persistence is handled by commitManual on gesture end (placement fractions),
-  // not on every panel change — relayout writes live px we don't want to store.
+  // While locked, keep the versus panel pinned to the opponent's detected civ (1v1 only).
+  useEffect(() => {
+    if (!oppCivLocked || !detectedOpponentCiv || slot2.selectedCiv === detectedOpponentCiv) return;
+    slot2.setSelectedCiv(detectedOpponentCiv);
+    slot2.setUnit(null);
+  }, [oppCivLocked, detectedOpponentCiv, slot2]);
 
-  // Drag-to-move: the gesture state lives in a ref so the window listeners stay
-  // stable; setPanel uses a functional update + live viewport bounds.
-  const moveGesture = useRef<{ px: number; py: number; bx: number; by: number } | null>(null);
-  const onMove = useCallback((e: PointerEvent) => {
-    const g = moveGesture.current;
-    if (!g) return;
-    setPanel((p) => ({
-      ...p,
-      x: clamp(g.bx + (e.clientX - g.px), 0, window.innerWidth - 40),
-      y: clamp(g.by + (e.clientY - g.py), 0, window.innerHeight - 40),
-    }));
-  }, []);
-  const endMove = useCallback(() => {
-    moveGesture.current = null;
-    gestureActive.current = false;
-    window.removeEventListener("pointermove", onMove);
-    commitManual();
-  }, [onMove, commitManual]);
-  const startMove = useCallback(
-    (e: React.PointerEvent) => {
-      e.preventDefault();
-      gestureActive.current = true;
-      moveGesture.current = { px: e.clientX, py: e.clientY, bx: panel.x, by: panel.y };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", endMove, { once: true });
-    },
-    [panel.x, panel.y, onMove, endMove],
-  );
+  // Versus panel resize grip ref — needed to stop propagation from reaching
+  // the versus panel's drag handle.
+  const vsResizeRef = useRef<HTMLDivElement>(null);
 
-  // Corner resize: convert the diagonal drag distance into a uniform scale delta.
-  const resizeGesture = useRef<{ px: number; py: number; base: number } | null>(null);
-  const onResize = useCallback((e: PointerEvent) => {
-    const g = resizeGesture.current;
-    if (!g) return;
-    const delta = ((e.clientX - g.px) + (e.clientY - g.py)) / 2 / PANEL_BASE_WIDTH;
-    setPanel((p) => ({ ...p, scale: clamp(g.base + delta, MIN_SCALE, MAX_SCALE) }));
-  }, []);
-  const endResize = useCallback(() => {
-    resizeGesture.current = null;
-    gestureActive.current = false;
-    window.removeEventListener("pointermove", onResize);
-    commitManual();
-  }, [onResize, commitManual]);
-  const startResize = useCallback(
-    (e: React.PointerEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      gestureActive.current = true;
-      resizeGesture.current = { px: e.clientX, py: e.clientY, base: panel.scale };
-      window.addEventListener("pointermove", onResize);
-      window.addEventListener("pointerup", endResize, { once: true });
-    },
-    [panel.scale, onResize, endResize],
-  );
+  // Combat VS result — computed only when panelMode === 'versus' and both units loaded.
+  let vsResult: VSResultData | undefined;
+  if (panelMode === "versus" && slot.unit && slot2.unit) {
+    try {
+      const src1 = (slot.variation ?? slot.unit) as any;
+      const src2 = (slot2.variation ?? slot2.unit) as any;
+      const mod1 = buildModifiedVariation(src1, slot.modifiedStats, {
+        baseId: slot.variation ? src1.baseId : src1.id,
+        activeTechnologies: slot.activeTechnologies,
+        activeAbilities: slot.activeAbilities,
+        abilityCounters: slot.abilityCounters,
+        selectedAge: slot.selectedAge,
+        secondaryWeapons: slot.secondaryWeapons,
+        applyCostMultiplier: true,
+      });
+      const mod2 = buildModifiedVariation(src2, slot2.modifiedStats, {
+        baseId: slot2.variation ? src2.baseId : src2.id,
+        activeTechnologies: slot2.activeTechnologies,
+        activeAbilities: slot2.activeAbilities,
+        abilityCounters: slot2.abilityCounters,
+        selectedAge: slot2.selectedAge,
+        secondaryWeapons: slot2.secondaryWeapons,
+        applyCostMultiplier: true,
+      });
+      const ms1 = slot.modifiedStats as any;
+      const ms2 = slot2.modifiedStats as any;
+      const chargeA = getChargeBonus(src1, slot.activeAbilities, slot.selectedAge, slot.activeTechnologies, ms1.chargeMultiplier, ms1.meleeAttack, slot.abilityCounters, ms1.rangedAttack, ms1.chargeChange);
+      const chargeB = getChargeBonus(src2, slot2.activeAbilities, slot2.selectedAge, slot2.activeTechnologies, ms2.chargeMultiplier, ms2.meleeAttack, slot2.abilityCounters, ms2.rangedAttack, ms2.chargeChange);
+      const result = computeVersus(mod1, mod2, [...slot.activeAbilities], [...slot2.activeAbilities], chargeA, chargeB);
+      let loserUnitsToWin: number | undefined;
+      try { loserUnitsToWin = computeLoserUnitsToWin(result, mod1, mod2); } catch { /* ignore */ }
+      vsResult = {
+        winner: result.winner,
+        unit1Name: slot.unit.name,
+        unit2Name: slot2.unit.name,
+        ttk1: result.attacker.timeToKill,
+        ttk2: result.defender.timeToKill,
+        dps1: result.attacker.dps,
+        dps2: result.defender.dps,
+        hitsToKill1: result.attacker.hitsToKill,
+        hitsToKill2: result.defender.hitsToKill,
+        dpsPerCost1: result.attacker.dpsPerCost,
+        dpsPerCost2: result.defender.dpsPerCost,
+        winnerHp: result.winnerHpRemaining,
+        winnerMaxHp: result.winner === "attacker" ? slot.modifiedStats.hitpoints : result.winner === "defender" ? slot2.modifiedStats.hitpoints : undefined,
+        loserUnitsToWin,
+      };
+    } catch {
+      // combat computation failed — no result displayed
+    }
+  }
+
+  // VS card follows the primary panel horizontally (reactive to drag).
+  const vsCardX = primary.panel.x + Math.round(PANEL_BASE_WIDTH * primary.panel.scale) + 8;
+  const vsCardY = primary.panel.y;
+
+  // In versus mode the versus panel is pinned at a fixed offset from the primary panel
+  // (derived position, never independent). Dragging either handle moves the primary only.
+  // The VS card uses versus.panel.scale independently from the primary panel scale.
+  const versusRenderX = panelMode === "versus"
+    ? vsCardX + Math.round(VS_CARD_BASE_WIDTH * versus.panel.scale) + 8
+    : versus.panel.x;
+  const versusRenderY = panelMode === "versus" ? primary.panel.y : versus.panel.y;
+
+  const vsInfo2: VSSlotInfo | undefined = vsResult
+    ? {
+        hpRemaining: vsResult.winner === "defender" ? vsResult.winnerHp : undefined,
+        hpMax: vsResult.winner === "defender" ? vsResult.winnerMaxHp : undefined,
+        unitsToWin: vsResult.winner === "attacker" ? vsResult.loserUnitsToWin : undefined,
+      }
+    : undefined;
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[9999]">
-      {/* Toggle button — floating at the top-left corner. */}
+      {/* Toggle button */}
       <button
         type="button"
         aria-label={open ? "Close unit panel" : "Open unit panel"}
@@ -300,17 +214,17 @@ function Overlay() {
         <Swords className="h-5 w-5" />
       </button>
 
-      {/* Floating unit panel — draggable + resizable, positioned freely. */}
+      {/* Primary panel */}
       <div
-        ref={panelRef}
+        ref={primary.panelRef}
         className={cn(
           "pointer-events-auto absolute transition-opacity duration-200",
           open ? "opacity-100" : "pointer-events-none opacity-0",
         )}
         style={{
-          left: panel.x,
-          top: panel.y,
-          transform: `scale(${panel.scale})`,
+          left: primary.panel.x,
+          top: primary.panel.y,
+          transform: `scale(${primary.panel.scale})`,
           transformOrigin: "top left",
           visibility: open ? undefined : "hidden",
         }}
@@ -318,20 +232,75 @@ function Overlay() {
       >
         <UnitPanel
           slot={slot}
-          scale={panel.scale}
-          onMovePointerDown={startMove}
-          onResizePointerDown={startResize}
+          scale={primary.panel.scale}
+          onMovePointerDown={primary.startMove}
+          onResizePointerDown={primary.startResize}
           civLocked={civLocked}
           onToggleCivLock={toggleCivLock}
+          onComparClick={() => setPanelMode((v) => (v === "compare" ? null : "compare"))}
+          comparActive={panelMode === "compare"}
+          onVsClick={() => setPanelMode((v) => (v === "versus" ? null : "versus"))}
+          vsActive={panelMode === "versus"}
+          compareSlot={panelOpen ? slot2 : undefined}
+          vsResult={vsResult}
         />
       </div>
+
+      {/* VS card — follows the primary panel, shown only in versus mode */}
+      {panelMode === "versus" && vsResult && (
+        <div
+          className="pointer-events-none absolute"
+          style={{
+            left: vsCardX,
+            top: vsCardY,
+            transform: `scale(${versus.panel.scale})`,
+            transformOrigin: "top left",
+          }}
+        >
+          <VSCard {...vsResult} />
+        </div>
+      )}
+
+      {/* Versus panel — independent position, independent drag/resize */}
+      {panelOpen && (
+        <div
+          ref={versus.panelRef}
+          className="pointer-events-auto absolute"
+          style={{
+            left: versusRenderX,
+            top: versusRenderY,
+            transform: `scale(${versus.panel.scale})`,
+            transformOrigin: "top left",
+          }}
+        >
+          <div className="relative">
+            <SlotPanel
+              slot={slot2}
+              scale={versus.panel.scale}
+              onMovePointerDown={panelMode === "versus" ? primary.startMove : versus.startMove}
+              onClose={() => setPanelMode(null)}
+              drawerStorageKey="aoe4-overlay-drawer-h-2"
+              compareSlot={slot}
+              civLocked={oppCivLocked}
+              onToggleCivLock={toggleOppCivLock}
+              opponentMode
+              vsInfo={vsInfo2}
+            />
+            {/* Resize grip for the versus panel */}
+            <div
+              ref={vsResizeRef}
+              onPointerDown={versus.startResize}
+              className="absolute bottom-0 right-0 z-20 h-3.5 w-3.5 cursor-nwse-resize touch-none"
+              style={{ background: "linear-gradient(135deg, transparent 50%, rgba(245,158,11,0.7) 50%)" }}
+              title="Resize versus panel"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// Entry: the page background MUST be transparent so the stream shows through
-// (index.css applies an opaque bg-background to <body>); theme follows the
-// Twitch player context.
 function Root() {
   useEffect(() => {
     document.documentElement.style.background = "transparent";

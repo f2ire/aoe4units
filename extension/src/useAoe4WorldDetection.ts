@@ -46,6 +46,8 @@ function mapCiv(raw: string): string | null {
 export interface Aoe4WorldDetection {
   /** Our civ abbreviation (e.g. "en", "fr") or null if unknown / no ongoing game. */
   detectedCiv: string | null;
+  /** Opponent civ — only set in 1v1 (2 teams × 1 player). Null in team games. */
+  detectedOpponentCiv: string | null;
   profileId: number | null;
   isPolling: boolean;
   error: string | null;
@@ -61,6 +63,7 @@ export function useAoe4WorldDetection(): Aoe4WorldDetection {
 
   const [profileId, setProfileId] = useState<number | null>(null);
   const [detectedCiv, setDetectedCiv] = useState<string | null>(null);
+  const [detectedOpponentCiv, setDetectedOpponentCiv] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -124,14 +127,25 @@ export function useAoe4WorldDetection(): Aoe4WorldDetection {
         if (!cancelled) {
           // ongoing = partie en cours ; just_finished = quelques secondes après la fin
           if (game.ongoing || game.just_finished) {
-            outer: for (const team of game.teams ?? []) {
-              for (const player of team) {
+            const teams = game.teams ?? [];
+            let streamerTeamIdx = -1;
+            outer: for (let ti = 0; ti < teams.length; ti++) {
+              for (const player of teams[ti]) {
                 if (player.profile_id === profileId) {
                   const abbr = mapCiv(player.civilization);
                   if (abbr) setDetectedCiv(abbr);
+                  streamerTeamIdx = ti;
                   break outer;
                 }
               }
+            }
+            // Opponent civ: only in 1v1 (2 teams × 1 player each).
+            if (teams.length === 2 && teams[0].length === 1 && teams[1].length === 1 && streamerTeamIdx >= 0) {
+              const oppIdx = 1 - streamerTeamIdx;
+              const abbr = mapCiv(teams[oppIdx][0].civilization);
+              setDetectedOpponentCiv(abbr);
+            } else {
+              setDetectedOpponentCiv(null);
             }
           }
           // Don't clear detectedCiv on game-end — keep last known civ until a new one arrives.
@@ -157,6 +171,6 @@ export function useAoe4WorldDetection(): Aoe4WorldDetection {
     };
   }, [profileId]);
 
-  if (devOverride) return { detectedCiv: devOverride, profileId: null, isPolling: false, error: null };
-  return { detectedCiv, profileId, isPolling, error };
+  if (devOverride) return { detectedCiv: devOverride, detectedOpponentCiv: null, profileId: null, isPolling: false, error: null };
+  return { detectedCiv, detectedOpponentCiv, profileId, isPolling, error };
 }
