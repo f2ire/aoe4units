@@ -4,9 +4,9 @@ import { Swords } from "lucide-react";
 import "@/index.css";
 import { cn } from "@/lib/utils";
 import { useUnitSlot } from "@/hooks/useUnitSlot";
-import UnitPanel, { SlotPanel, VSCard, type VSResultData, type VSSlotInfo, type MultiUnitModelKey } from "./UnitPanel";
+import UnitPanel, { SlotPanel, VSCard, ResizeGrip, type VSResultData, type VSSlotInfo, type MultiUnitModelKey } from "./UnitPanel";
 import { useAoe4WorldDetection } from "./useAoe4WorldDetection";
-import { useDraggablePanel, DEFAULT_PANEL_X, PANEL_BASE_WIDTH } from "./useDraggablePanel";
+import { useDraggablePanel, DEFAULT_PANEL_X, PANEL_BASE_WIDTH, clampPanel } from "./useDraggablePanel";
 import {
   computeVersus,
   computeLoserUnitsToWin,
@@ -26,9 +26,9 @@ import {
 import { getPrimaryWeapon, getTotalCost } from "@/data/unified-units";
 import { buildModifiedVariation, getChargeBonus } from "@/lib/buildVariation";
 
-const STORE_KEY = "aoe4-overlay-panel-v2";
-const STORE_KEY_VS = "aoe4-overlay-panel-vs-v1";
-const STORE_KEY_VS_STATS = "aoe4-overlay-panel-vs-stats-v1";
+const STORE_KEY = "aoe4-overlay-panel-v3";
+const STORE_KEY_VS = "aoe4-overlay-panel-vs-v2";
+const STORE_KEY_VS_STATS = "aoe4-overlay-panel-vs-stats-v2";
 const CIV_LOCK_KEY = "aoe4-overlay-civ-locked";
 const OPP_CIV_LOCK_KEY = "aoe4-overlay-opp-civ-locked";
 
@@ -45,6 +45,91 @@ const AUTO_SELECT_ORDER = [
   "mercenary", "khaganate", "monk", "ship", "other",
 ];
 
+const LOGO_KEY = "aoe4-overlay-logo-v1";
+const LOGO_SIZE = 36; // h-9 w-9
+const LOGO_DRAG_THRESHOLD = 5;
+
+// Drag-to-move for the toggle logo. A press only becomes a drag past
+// LOGO_DRAG_THRESHOLD; the click that follows a drag is swallowed by the
+// caller via wasDragged(). Position persisted as viewport fractions.
+// With no saved drag, fracRef stays null and the default (left edge,
+// vertically centered) is recomputed from the live viewport on every layout —
+// the Twitch iframe can be 0×0 at mount, so fractions must never be derived
+// from the initial dimensions.
+function useDraggableLogo() {
+  const fracRef = useRef<{ fx: number; fy: number } | null | undefined>(undefined);
+  if (fracRef.current === undefined) {
+    let saved: { fx?: number; fy?: number } | null = null;
+    try { saved = JSON.parse(localStorage.getItem(LOGO_KEY) || "null"); } catch { /* corrupted storage */ }
+    fracRef.current = saved && Number.isFinite(saved.fx) && Number.isFinite(saved.fy)
+      ? { fx: saved.fx!, fy: saved.fy! }
+      : null;
+  }
+
+  const layout = useCallback(() => {
+    const frac = fracRef.current;
+    if (!frac) {
+      return {
+        x: 8,
+        y: Math.max(0, Math.round((window.innerHeight - LOGO_SIZE) / 2)),
+      };
+    }
+    return {
+      x: clampPanel(Math.round(frac.fx * window.innerWidth), 0, Math.max(0, window.innerWidth - LOGO_SIZE)),
+      y: clampPanel(Math.round(frac.fy * window.innerHeight), 0, Math.max(0, window.innerHeight - LOGO_SIZE)),
+    };
+  }, []);
+
+  const [pos, setPos] = useState(layout);
+  const posRef = useRef(pos);
+  posRef.current = pos;
+  const dragged = useRef(false);
+
+  useEffect(() => {
+    const relayout = () => setPos(layout());
+    window.addEventListener("resize", relayout);
+    window.addEventListener("orientationchange", relayout);
+    document.addEventListener("fullscreenchange", relayout);
+    return () => {
+      window.removeEventListener("resize", relayout);
+      window.removeEventListener("orientationchange", relayout);
+      document.removeEventListener("fullscreenchange", relayout);
+    };
+  }, [layout]);
+
+  const startDrag = useCallback((e: React.PointerEvent) => {
+    dragged.current = false;
+    const start = { px: e.clientX, py: e.clientY, bx: posRef.current.x, by: posRef.current.y };
+    const onMove = (ev: PointerEvent) => {
+      const dx = ev.clientX - start.px;
+      const dy = ev.clientY - start.py;
+      if (!dragged.current && Math.hypot(dx, dy) < LOGO_DRAG_THRESHOLD) return;
+      dragged.current = true;
+      setPos({
+        x: clampPanel(start.bx + dx, 0, Math.max(0, window.innerWidth - LOGO_SIZE)),
+        y: clampPanel(start.by + dy, 0, Math.max(0, window.innerHeight - LOGO_SIZE)),
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      if (!dragged.current) return;
+      if (window.innerWidth <= 0 || window.innerHeight <= 0) return;
+      const p = posRef.current;
+      fracRef.current = {
+        fx: clampPanel(p.x / window.innerWidth, 0, 1),
+        fy: clampPanel(p.y / window.innerHeight, 0, 1),
+      };
+      try { localStorage.setItem(LOGO_KEY, JSON.stringify(fracRef.current)); } catch { /* sandboxed iframe */ }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }, []);
+
+  const wasDragged = useCallback(() => dragged.current, []);
+
+  return { pos, startDrag, wasDragged };
+}
+
 function Overlay() {
   const slot = useUnitSlot();
   const slot2 = useUnitSlot();
@@ -57,10 +142,11 @@ function Overlay() {
 
   const panelOpen = panelMode !== null;
 
+  const logo = useDraggableLogo();
   const primary = useDraggablePanel(STORE_KEY, DEFAULT_PANEL_X);
   const versus = useDraggablePanel(STORE_KEY_VS, VS_DEFAULT_X);
-  // VS stats card: its own scale, never wired to a resize grip, so resizing
-  // either unit card leaves it untouched (stays at the viewport-responsive default).
+  // VS stats card: its own scale with its own resize grip, so resizing
+  // either unit card leaves it untouched (and vice versa).
   const vsStats = useDraggablePanel(STORE_KEY_VS_STATS, VS_DEFAULT_X);
 
   // On every open, reset the versus panel to its default position adjacent to
@@ -269,13 +355,6 @@ function Overlay() {
     }
   }
 
-  // Prevent rapid clicks from triggering Twitch's dblclick-to-fullscreen behavior.
-  useEffect(() => {
-    const handler = (e: MouseEvent) => e.preventDefault();
-    document.addEventListener("dblclick", handler, true);
-    return () => document.removeEventListener("dblclick", handler, true);
-  }, []);
-
   // VS card follows the primary panel horizontally (reactive to drag).
   const vsCardX = primary.panel.x + Math.round(PANEL_BASE_WIDTH * primary.panel.scale) + 8;
   const vsCardY = primary.panel.y;
@@ -299,17 +378,19 @@ function Overlay() {
     : undefined;
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[9999]" onDoubleClick={(e) => e.preventDefault()}>
+    <div className="pointer-events-none fixed inset-0 z-[9999]">
       {/* Toggle button */}
       <button
         type="button"
         aria-label={open ? "Close unit panel" : "Open unit panel"}
         aria-pressed={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { if (logo.wasDragged()) return; setOpen((v) => !v); }}
+        onPointerDown={logo.startDrag}
         className={cn(
-          "pointer-events-auto absolute left-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-md text-white/80 shadow-lg transition-colors hover:bg-white/10 hover:text-white",
+          "pointer-events-auto absolute flex h-9 w-9 touch-none items-center justify-center rounded-md text-white/80 shadow-lg transition-colors hover:bg-white/10 hover:text-white",
           open ? "bg-amber-500 text-black hover:bg-amber-500" : "bg-black/55 backdrop-blur-sm",
         )}
+        style={{ left: logo.pos.x, top: logo.pos.y }}
       >
         <Swords className="h-5 w-5" />
       </button>
@@ -358,19 +439,27 @@ function Overlay() {
             transformOrigin: "top left",
           }}
         >
-          <VSCard
-            {...vsResult}
-            controls={{
-              atEqualCost,
-              onToggleEqualCost: () => setAtEqualCost((v) => !v),
-              equalCostDisabled,
-              equalCostDisabledTitle,
-              allowKiting,
-              onToggleKiting: () => setAllowKiting((v) => !v),
-              modelKey: multiUnitModelKey,
-              onModelChange: setMultiUnitModelKey,
-            }}
-          />
+          <div className="relative">
+            <VSCard
+              {...vsResult}
+              controls={{
+                atEqualCost,
+                onToggleEqualCost: () => setAtEqualCost((v) => !v),
+                equalCostDisabled,
+                equalCostDisabledTitle,
+                allowKiting,
+                onToggleKiting: () => setAllowKiting((v) => !v),
+                modelKey: multiUnitModelKey,
+                onModelChange: setMultiUnitModelKey,
+              }}
+            />
+            {/* Resize grip for the VS stats card */}
+            <ResizeGrip
+              onPointerDown={vsStats.startResize}
+              title="Resize VS stats"
+              className="pointer-events-auto"
+            />
+          </div>
         </div>
       )}
 
@@ -391,7 +480,6 @@ function Overlay() {
               slot={slot2}
               scale={versus.panel.scale}
               onMovePointerDown={panelMode === "versus" ? primary.startMove : versus.startMove}
-              onClose={() => setPanelMode(null)}
               drawerStorageKey="aoe4-overlay-drawer-h-2"
               compareSlot={slot}
               civLocked={oppCivLocked}
@@ -400,11 +488,9 @@ function Overlay() {
               vsInfo={vsInfo2}
             />
             {/* Resize grip for the versus panel */}
-            <div
-              ref={vsResizeRef}
+            <ResizeGrip
+              gripRef={vsResizeRef}
               onPointerDown={versus.startResize}
-              className="absolute bottom-0 right-0 z-20 h-3.5 w-3.5 cursor-nwse-resize touch-none"
-              style={{ background: "linear-gradient(135deg, transparent 50%, rgba(245,158,11,0.7) 50%)" }}
               title="Resize versus panel"
             />
           </div>

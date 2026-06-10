@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ChevronDown, ChevronRight, ChevronUp, GripHorizontal, Lock, Search, Settings2, Unlock, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, GripHorizontal, Search, Settings2 } from "lucide-react";
 import { getAvailableAges, getTotalCost } from "@/data/unified-units";
 import type { AoE4Unit } from "@/data/unified-units";
 import { getTechnologyTier, getTechnologyBaseName } from "@/data/unified-technologies";
@@ -133,6 +133,29 @@ function pctSplit(parts: number[]): number[] {
   return floors;
 }
 
+// Corner resize grip — diagonal rounded strokes instead of a filled triangle,
+// so it sits inside the cards' rounded corners without a hard edge.
+export function ResizeGrip({ onPointerDown, title, className, gripRef }: {
+  onPointerDown: (e: React.PointerEvent) => void;
+  title: string;
+  className?: string;
+  gripRef?: React.Ref<HTMLDivElement>;
+}) {
+  return (
+    <div
+      ref={gripRef}
+      onPointerDown={onPointerDown}
+      title={title}
+      className={cn("absolute bottom-0 right-0 z-20 flex h-4 w-4 cursor-nwse-resize touch-none items-end justify-end p-[3px]", className)}
+    >
+      <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+        <path d="M9 2.5 L2.5 9" stroke="rgba(245,158,11,0.7)" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M9 6.5 L6.5 9" stroke="rgba(245,158,11,0.7)" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    </div>
+  );
+}
+
 // Small amber soldier pictogram used to visualize unit counts.
 function SoldierChip({ size = 14 }: { size?: number }) {
   return (
@@ -174,10 +197,10 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
   const ttkCols = vsStatColors(ttk1, ttk2, false);
 
   const rows: Array<{ label: string; v1: string; v2: string; c1: string; c2: string }> = [
-    { label: "DPS",     v1: fmtN(dps1),        v2: fmtN(dps2),        ...dpsCols },
-    { label: "HTK",     v1: hitsToKill1 == null ? "—" : String(hitsToKill1), v2: hitsToKill2 == null ? "—" : String(hitsToKill2), ...htkCols },
-    { label: "DPS/Cost",v1: fmtN(dpsPerCost1, 3), v2: fmtN(dpsPerCost2, 3), ...dpcCols },
-    { label: "TTK",     v1: ttk1 == null ? "—" : `${ttk1.toFixed(1)}s`, v2: ttk2 == null ? "—" : `${ttk2.toFixed(1)}s`, ...ttkCols },
+    { label: "DPS", v1: fmtN(dps1), v2: fmtN(dps2), ...dpsCols },
+    { label: "HTK", v1: hitsToKill1 == null ? "—" : String(hitsToKill1), v2: hitsToKill2 == null ? "—" : String(hitsToKill2), ...htkCols },
+    { label: "DPS/Cost", v1: fmtN(dpsPerCost1, 3), v2: fmtN(dpsPerCost2, 3), ...dpcCols },
+    { label: "TTK", v1: ttk1 == null ? "—" : `${ttk1.toFixed(1)}s`, v2: ttk2 == null ? "—" : `${ttk2.toFixed(1)}s`, ...ttkCols },
   ];
 
   const slot1Wins = winner === "attacker";
@@ -262,7 +285,7 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
       )}
       <div className="px-2 py-2 space-y-1.5">
         {rows.map(({ label, v1, v2, c1, c2 }) => (
-          <div key={label} className="flex items-center gap-0.5 text-[13px]">
+          <div key={label} className="flex items-center gap-0.5 text-[12px]">
             <span className={cn("w-[44px] text-right tabular-nums leading-none", c1)}>{v1}</span>
             <span className="mx-1 min-w-[56px] text-center text-[11px] uppercase tracking-wide text-zinc-400">{label}</span>
             <span className={cn("w-[44px] text-left tabular-nums leading-none", c2)}>{v2}</span>
@@ -365,8 +388,6 @@ interface SlotPanelProps {
   /** VS button — triggers combat simulation mode. */
   onVsClick?: () => void;
   vsActive?: boolean;
-  /** Close button in the header (versus slot). */
-  onClose?: () => void;
   drawerStorageKey?: string;
   /** Other slot — enables versus stat comparison colors on the card. */
   compareSlot?: Slot;
@@ -407,7 +428,6 @@ export function SlotPanel({
   comparActive = false,
   onVsClick,
   vsActive = false,
-  onClose,
   drawerStorageKey = DRAWER_HEIGHT_KEY,
   compareSlot,
   opponentMode = false,
@@ -504,14 +524,14 @@ export function SlotPanel({
   const isVariation = !!slot.variation;
   const modified = source
     ? buildModifiedVariation(source, slot.modifiedStats, {
-        baseId: isVariation ? (source as any).baseId : (source as any).id,
-        activeTechnologies: slot.activeTechnologies,
-        activeAbilities: slot.activeAbilities,
-        abilityCounters: slot.abilityCounters,
-        selectedAge: slot.selectedAge,
-        secondaryWeapons: slot.secondaryWeapons,
-        applyCostMultiplier: true,
-      })
+      baseId: isVariation ? (source as any).baseId : (source as any).id,
+      activeTechnologies: slot.activeTechnologies,
+      activeAbilities: slot.activeAbilities,
+      abilityCounters: slot.abilityCounters,
+      selectedAge: slot.selectedAge,
+      secondaryWeapons: slot.secondaryWeapons,
+      applyCostMultiplier: true,
+    })
     : null;
 
   const pickUnit = (id: string) => {
@@ -555,7 +575,7 @@ export function SlotPanel({
               civLocked ? "cursor-default opacity-60" : "hover:bg-white/10",
               civPickerOpen && "bg-amber-500/15",
             )}
-            title={civLocked ? "Civilization locked to the streamer" : "Change civilization"}
+            title={civLocked ? `Civilization follows the ${opponentMode ? "opponent" : "streamer"} automatically` : "Change civilization"}
           >
             {civ ? (
               <>
@@ -571,36 +591,38 @@ export function SlotPanel({
           {onToggleCivLock && (
             <button
               type="button"
+              role="switch"
+              aria-checked={civLocked}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={onToggleCivLock}
-              aria-pressed={civLocked}
-              className={cn(
-                "flex h-6 w-6 shrink-0 items-center justify-center rounded transition-colors hover:bg-white/10",
-                civLocked ? "text-amber-400" : "text-zinc-500",
-              )}
+              className="flex h-6 shrink-0 items-center gap-1.5 rounded px-1 transition-colors hover:bg-white/10"
               title={
                 civLocked
-                  ? `Civilization follows the ${opponentMode ? "opponent" : "streamer"} — click to unlock and pick freely`
-                  : `Free civilization — click to follow the ${opponentMode ? "opponent" : "streamer"}`
+                  ? `Auto: civilization follows the ${opponentMode ? "opponent" : "streamer"} — click to pick freely`
+                  : `Manual civilization — click to auto-follow the ${opponentMode ? "opponent" : "streamer"}`
               }
             >
-              {civLocked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+              <span className={cn("text-[10px] font-medium", civLocked ? "text-amber-400" : "text-zinc-500")}>
+                {opponentMode ? "Opponent" : "Streamer"}
+              </span>
+              <span
+                className={cn(
+                  "relative inline-flex h-3.5 w-6 items-center rounded-full transition-colors",
+                  civLocked ? "bg-amber-500" : "bg-zinc-600",
+                )}
+              >
+                <span
+                  className={cn(
+                    "inline-block h-2.5 w-2.5 rounded-full bg-white transition-transform",
+                    civLocked ? "translate-x-3" : "translate-x-0.5",
+                  )}
+                />
+              </span>
             </button>
           )}
 
           {onMovePointerDown && <GripHorizontal className="ml-auto h-3.5 w-3.5 text-zinc-600" />}
 
-          {onClose && (
-            <button
-              type="button"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={onClose}
-              className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-200"
-              title="Close versus panel"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
         </div>
 
         {slot.unit && modified ? (
@@ -840,10 +862,10 @@ export default function UnitPanel({
 }) {
   const vsInfo1: VSSlotInfo | undefined = vsResult
     ? {
-        hpRemaining: vsResult.winner === "attacker" ? vsResult.winnerHp : undefined,
-        hpMax: vsResult.winner === "attacker" ? vsResult.winnerMaxHp : undefined,
-        unitsToWin: vsResult.winner === "defender" ? vsResult.loserUnitsToWin : undefined,
-      }
+      hpRemaining: vsResult.winner === "attacker" ? vsResult.winnerHp : undefined,
+      hpMax: vsResult.winner === "attacker" ? vsResult.winnerMaxHp : undefined,
+      unitsToWin: vsResult.winner === "defender" ? vsResult.loserUnitsToWin : undefined,
+    }
     : undefined;
 
   return (
@@ -862,12 +884,7 @@ export default function UnitPanel({
         vsInfo={vsInfo1}
       />
       {onResizePointerDown && (
-        <div
-          onPointerDown={onResizePointerDown}
-          className="absolute bottom-0 right-0 z-20 h-3.5 w-3.5 cursor-nwse-resize touch-none"
-          style={{ background: "linear-gradient(135deg, transparent 50%, rgba(245,158,11,0.7) 50%)" }}
-          title="Resize panel"
-        />
+        <ResizeGrip onPointerDown={onResizePointerDown} title="Resize panel" />
       )}
     </div>
   );

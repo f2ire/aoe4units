@@ -3,24 +3,41 @@ import { useState, useRef, useCallback, useLayoutEffect } from "react";
 export const PANEL_BASE_WIDTH = 300;
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 4;
-const PANEL_WIDTH_FRACTION = 0.2;
+const PANEL_WIDTH_FRACTION = 0.25;
 const PANEL_HEIGHT_FRACTION = 0.9;
+// Floor for the default (auto) size only — keeps the card readable on small
+// players; manual resize can still go down to MIN_SCALE.
+const DEFAULT_MIN_SCALE = 1;
 
 export const DEFAULT_PANEL_X = 52; // left-2 (8px) + h-9/w-9 (36px) + gap (8px)
 
 export type PanelState = { x: number; y: number; scale: number };
 
+// Manual placements store fx/fy as fractions of the AVAILABLE space
+// (window minus the panel's rendered size), not of the raw window: with the
+// panel size now fixed, this keeps the placement relative when the screen
+// changes — a panel at the right edge stays at the right edge instead of
+// overflowing off-screen.
 type Placement =
   | { mode: "auto" }
-  | { mode: "manual"; fx: number; fy: number; widthFrac: number };
+  | { mode: "manual"; fx: number; fy: number; scale: number };
 
 export const clampPanel = (v: number, lo: number, hi: number) =>
   Math.min(hi, Math.max(lo, v));
 
+function toFrac(pos: number, panelSize: number, windowSize: number): number {
+  const avail = windowSize - panelSize;
+  return avail > 0 ? clampPanel(pos / avail, 0, 1) : 0;
+}
+
+function fromFrac(frac: number, panelSize: number, windowSize: number): number {
+  return Math.round(frac * Math.max(0, windowSize - panelSize));
+}
+
 function defaultScale(): number {
   return clampPanel(
     (window.innerWidth * PANEL_WIDTH_FRACTION) / PANEL_BASE_WIDTH,
-    MIN_SCALE,
+    DEFAULT_MIN_SCALE,
     MAX_SCALE,
   );
 }
@@ -28,22 +45,24 @@ function defaultScale(): number {
 function fitScale(naturalH: number): number {
   const byWidth = (window.innerWidth * PANEL_WIDTH_FRACTION) / PANEL_BASE_WIDTH;
   const byHeight = (window.innerHeight * PANEL_HEIGHT_FRACTION) / naturalH;
-  return clampPanel(Math.min(byWidth, byHeight), MIN_SCALE, MAX_SCALE);
+  return clampPanel(Math.min(byWidth, byHeight), DEFAULT_MIN_SCALE, MAX_SCALE);
 }
 
 function computeLayout(
   p: Placement,
   naturalH: number,
   defaultX: number,
+  autoScale?: number,
 ): PanelState {
   if (p.mode === "manual") {
+    const scale = clampPanel(p.scale, MIN_SCALE, MAX_SCALE);
     return {
-      x: clampPanel(Math.round(p.fx * window.innerWidth), 0, Math.max(0, window.innerWidth - 40)),
-      y: clampPanel(Math.round(p.fy * window.innerHeight), 0, Math.max(0, window.innerHeight - 40)),
-      scale: clampPanel((p.widthFrac * window.innerWidth) / PANEL_BASE_WIDTH, MIN_SCALE, MAX_SCALE),
+      x: fromFrac(p.fx, PANEL_BASE_WIDTH * scale, window.innerWidth),
+      y: fromFrac(p.fy, naturalH * scale, window.innerHeight),
+      scale,
     };
   }
-  const scale = fitScale(naturalH);
+  const scale = autoScale ?? fitScale(naturalH);
   const y = clampPanel(
     Math.round((window.innerHeight - naturalH * scale) / 2),
     8,
@@ -54,10 +73,14 @@ function computeLayout(
 
 function provisionalState(p: Placement, defaultX: number): PanelState {
   if (p.mode === "manual") {
+    const scale = clampPanel(p.scale, MIN_SCALE, MAX_SCALE);
+    const w = PANEL_BASE_WIDTH * scale;
     return {
-      x: clampPanel(Math.round(p.fx * window.innerWidth), 0, Math.max(0, window.innerWidth - 40)),
-      y: clampPanel(Math.round(p.fy * window.innerHeight), 0, Math.max(0, window.innerHeight - 40)),
-      scale: clampPanel((p.widthFrac * window.innerWidth) / PANEL_BASE_WIDTH, MIN_SCALE, MAX_SCALE),
+      // Panel height is unknown before mount — approximate with the width;
+      // the first relayout (layout effect, pre-paint) corrects it.
+      x: fromFrac(p.fx, w, window.innerWidth),
+      y: fromFrac(p.fy, w, window.innerHeight),
+      scale,
     };
   }
   return {
@@ -70,8 +93,8 @@ function provisionalState(p: Placement, defaultX: number): PanelState {
 function loadPlacement(storeKey: string): Placement {
   try {
     const saved = JSON.parse(localStorage.getItem(storeKey) || "null");
-    if (saved && saved.mode === "manual" && Number.isFinite(saved.fx)) {
-      return { mode: "manual", fx: saved.fx, fy: saved.fy, widthFrac: saved.widthFrac };
+    if (saved && saved.mode === "manual" && Number.isFinite(saved.fx) && Number.isFinite(saved.scale)) {
+      return { mode: "manual", fx: saved.fx, fy: saved.fy, scale: saved.scale };
     }
   } catch {
     /* ignore corrupted storage */
@@ -91,12 +114,21 @@ export function useDraggablePanel(storeKey: string, defaultX = DEFAULT_PANEL_X) 
   const gestureActive = useRef(false);
   const panelScaleRef = useRef(panel.scale);
   panelScaleRef.current = panel.scale;
+  // Auto mode fits the scale to the window once, then keeps it fixed so the
+  // card no longer resizes when the window does.
+  const autoScaleSettled = useRef(false);
 
   const relayout = useCallback(() => {
     if (gestureActive.current) return;
     const el = panelRef.current;
     if (!el) return;
-    setPanel(computeLayout(placementRef.current, el.offsetHeight, defaultX));
+    // Settle the auto scale only once the window has a real size — the Twitch
+    // iframe can be 0×0 at mount, and a scale fitted to that would stick.
+    const fitNow = !autoScaleSettled.current && window.innerWidth > 0 && window.innerHeight > 0;
+    if (fitNow) autoScaleSettled.current = true;
+    setPanel((prev) =>
+      computeLayout(placementRef.current, el.offsetHeight, defaultX, fitNow ? undefined : prev.scale),
+    );
   }, [defaultX]);
 
   useLayoutEffect(() => {
@@ -123,13 +155,9 @@ export function useDraggablePanel(storeKey: string, defaultX = DEFAULT_PANEL_X) 
     const rect = el.getBoundingClientRect();
     const placement: Placement = {
       mode: "manual",
-      fx: clampPanel(rect.left / window.innerWidth, 0, 1),
-      fy: clampPanel(rect.top / window.innerHeight, 0, 1),
-      widthFrac: clampPanel(
-        (PANEL_BASE_WIDTH * panelScaleRef.current) / window.innerWidth,
-        0.02,
-        1,
-      ),
+      fx: toFrac(rect.left, rect.width, window.innerWidth),
+      fy: toFrac(rect.top, rect.height, window.innerHeight),
+      scale: clampPanel(panelScaleRef.current, MIN_SCALE, MAX_SCALE),
     };
     placementRef.current = placement;
     try {
@@ -196,11 +224,12 @@ export function useDraggablePanel(storeKey: string, defaultX = DEFAULT_PANEL_X) 
   // Force the panel to a given position and clear any persisted placement so
   // the next viewport-resize relayout uses this position, not an old saved one.
   const resetPanel = useCallback((state: PanelState) => {
+    const h = (panelRef.current?.offsetHeight ?? 0) * state.scale;
     const placement: Placement = {
       mode: "manual",
-      fx: clampPanel(state.x / window.innerWidth, 0, 1),
-      fy: clampPanel(state.y / window.innerHeight, 0, 1),
-      widthFrac: clampPanel((PANEL_BASE_WIDTH * state.scale) / window.innerWidth, 0.02, 1),
+      fx: toFrac(state.x, PANEL_BASE_WIDTH * state.scale, window.innerWidth),
+      fy: toFrac(state.y, h, window.innerHeight),
+      scale: clampPanel(state.scale, MIN_SCALE, MAX_SCALE),
     };
     placementRef.current = placement;
     try { localStorage.removeItem(storeKey); } catch { /* iframe */ }
@@ -216,11 +245,12 @@ export function useDraggablePanel(storeKey: string, defaultX = DEFAULT_PANEL_X) 
   }, []);
 
   const savePosition = useCallback((x: number, y: number, scale: number) => {
+    const h = (panelRef.current?.offsetHeight ?? 0) * scale;
     const placement: Placement = {
       mode: "manual",
-      fx: clampPanel(x / window.innerWidth, 0, 1),
-      fy: clampPanel(y / window.innerHeight, 0, 1),
-      widthFrac: clampPanel((PANEL_BASE_WIDTH * scale) / window.innerWidth, 0.02, 1),
+      fx: toFrac(x, PANEL_BASE_WIDTH * scale, window.innerWidth),
+      fy: toFrac(y, h, window.innerHeight),
+      scale: clampPanel(scale, MIN_SCALE, MAX_SCALE),
     };
     placementRef.current = placement;
     try { localStorage.setItem(storeKey, JSON.stringify(placement)); } catch { /* sandboxed iframe */ }
