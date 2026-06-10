@@ -4,18 +4,38 @@ import { Swords } from "lucide-react";
 import "@/index.css";
 import { cn } from "@/lib/utils";
 import { useUnitSlot } from "@/hooks/useUnitSlot";
-import UnitPanel, { SlotPanel, VSCard, type VSResultData, type VSSlotInfo } from "./UnitPanel";
+import UnitPanel, { SlotPanel, VSCard, type VSResultData, type VSSlotInfo, type MultiUnitModelKey } from "./UnitPanel";
 import { useAoe4WorldDetection } from "./useAoe4WorldDetection";
 import { useDraggablePanel, DEFAULT_PANEL_X, PANEL_BASE_WIDTH } from "./useDraggablePanel";
-import { computeVersus, computeLoserUnitsToWin } from "@/lib/combat";
+import {
+  computeVersus,
+  computeLoserUnitsToWin,
+  computeVersusAtEqualCost,
+  computeVersusKitingFocusFire,
+  computeVersusKitingBatchesMC,
+  computeVersusAtEqualCostKitingFocusFire,
+  computeVersusAtEqualCostKitingBatchesMC,
+  aggregatedDPSModel,
+  focusFireModel,
+  focusFireAsymmetricModel,
+  focusFireBatchesMCModel,
+  focusFireBatchesMCAsymmetricModel,
+  type MultiUnitModel,
+  type VersusResult,
+} from "@/lib/combat";
+import { getPrimaryWeapon, getTotalCost } from "@/data/unified-units";
 import { buildModifiedVariation, getChargeBonus } from "@/lib/buildVariation";
 
 const STORE_KEY = "aoe4-overlay-panel-v2";
 const STORE_KEY_VS = "aoe4-overlay-panel-vs-v1";
+const STORE_KEY_VS_STATS = "aoe4-overlay-panel-vs-stats-v1";
 const CIV_LOCK_KEY = "aoe4-overlay-civ-locked";
 const OPP_CIV_LOCK_KEY = "aoe4-overlay-opp-civ-locked";
 
-const VS_CARD_BASE_WIDTH = 180;
+const VS_CARD_BASE_WIDTH = 185;
+// Extra scale applied to the VS stats card so it renders larger than its
+// viewport-responsive default without affecting the unit panels.
+const VS_STATS_SCALE_FACTOR = 1.25;
 
 // Default x for the versus panel: primary panel + VS card + gaps.
 const VS_DEFAULT_X = DEFAULT_PANEL_X + PANEL_BASE_WIDTH + 8 + VS_CARD_BASE_WIDTH + 8;
@@ -30,11 +50,18 @@ function Overlay() {
   const slot2 = useUnitSlot();
   const [open, setOpen] = useState(true);
   const [panelMode, setPanelMode] = useState<null | "compare" | "versus">(null);
+  // Versus options — mirror the Sandbox's atEqualCost / allowKiting / model selector.
+  const [atEqualCost, setAtEqualCost] = useState(false);
+  const [allowKiting, setAllowKiting] = useState(false);
+  const [multiUnitModelKey, setMultiUnitModelKey] = useState<MultiUnitModelKey>("focusFire");
 
   const panelOpen = panelMode !== null;
 
   const primary = useDraggablePanel(STORE_KEY, DEFAULT_PANEL_X);
   const versus = useDraggablePanel(STORE_KEY_VS, VS_DEFAULT_X);
+  // VS stats card: its own scale, never wired to a resize grip, so resizing
+  // either unit card leaves it untouched (stays at the viewport-responsive default).
+  const vsStats = useDraggablePanel(STORE_KEY_VS_STATS, VS_DEFAULT_X);
 
   // On every open, reset the versus panel to its default position adjacent to
   // the primary panel. Captures primary position at open time — no live follow.
@@ -128,10 +155,13 @@ function Overlay() {
 
   // Combat VS result — computed only when panelMode === 'versus' and both units loaded.
   let vsResult: VSResultData | undefined;
+  let equalCostDisabled = false;
+  let equalCostDisabledTitle: string | undefined;
   if (panelMode === "versus" && slot.unit && slot2.unit) {
     try {
       const src1 = (slot.variation ?? slot.unit) as any;
       const src2 = (slot2.variation ?? slot2.unit) as any;
+      // Versus blocks apply cost multipliers; equal-cost blocks don't (same as Sandbox).
       const mod1 = buildModifiedVariation(src1, slot.modifiedStats, {
         baseId: slot.variation ? src1.baseId : src1.id,
         activeTechnologies: slot.activeTechnologies,
@@ -139,7 +169,7 @@ function Overlay() {
         abilityCounters: slot.abilityCounters,
         selectedAge: slot.selectedAge,
         secondaryWeapons: slot.secondaryWeapons,
-        applyCostMultiplier: true,
+        applyCostMultiplier: !atEqualCost,
       });
       const mod2 = buildModifiedVariation(src2, slot2.modifiedStats, {
         baseId: slot2.variation ? src2.baseId : src2.id,
@@ -148,15 +178,69 @@ function Overlay() {
         abilityCounters: slot2.abilityCounters,
         selectedAge: slot2.selectedAge,
         secondaryWeapons: slot2.secondaryWeapons,
-        applyCostMultiplier: true,
+        applyCostMultiplier: !atEqualCost,
       });
       const ms1 = slot.modifiedStats as any;
       const ms2 = slot2.modifiedStats as any;
       const chargeA = getChargeBonus(src1, slot.activeAbilities, slot.selectedAge, slot.activeTechnologies, ms1.chargeMultiplier, ms1.meleeAttack, slot.abilityCounters, ms1.rangedAttack, ms1.chargeChange);
       const chargeB = getChargeBonus(src2, slot2.activeAbilities, slot2.selectedAge, slot2.activeTechnologies, ms2.chargeMultiplier, ms2.meleeAttack, slot2.abilityCounters, ms2.rangedAttack, ms2.chargeChange);
-      const result = computeVersus(mod1, mod2, [...slot.activeAbilities], [...slot2.activeAbilities], chargeA, chargeB);
+      const ab1 = [...slot.activeAbilities];
+      const ab2 = [...slot2.activeAbilities];
+
+      // Kiting start distance: fixed at the max range of the two units (Sandbox default).
+      const startDistance = Math.max(slot.modifiedStats.maxRange || 0, slot2.modifiedStats.maxRange || 0);
+
+      const cost1 = getTotalCost(mod1);
+      const cost2 = getTotalCost(mod2);
+      equalCostDisabled = (cost1 > 0 && cost2 > 0 && cost1 === cost2) || cost1 === 0 || cost2 === 0;
+      equalCostDisabledTitle = cost1 === 0 || cost2 === 0
+        ? "A unit has no cost"
+        : equalCostDisabled ? "Units have the same cost" : undefined;
+
+      let result: VersusResult;
+      let multipliers: { multA: number; multB: number; totalCostA: number; totalCostB: number } | undefined;
+      const useEqualCost = atEqualCost && !equalCostDisabled;
+      if (useEqualCost) {
+        if (allowKiting && multiUnitModelKey === "focusFire") {
+          const r = computeVersusAtEqualCostKitingFocusFire(mod1, mod2, ab1, ab2, chargeA, chargeB, startDistance);
+          result = r;
+          multipliers = r.multipliers;
+        } else if (allowKiting && multiUnitModelKey === "focusFireBatchesMC") {
+          const r = computeVersusAtEqualCostKitingBatchesMC(mod1, mod2, ab1, ab2, chargeA, chargeB, startDistance);
+          result = r;
+          multipliers = r.multipliers;
+        } else {
+          const isRanged1 = getPrimaryWeapon(mod1)?.type === "ranged";
+          const isRanged2 = getPrimaryWeapon(mod2)?.type === "ranged";
+          const model: MultiUnitModel =
+            multiUnitModelKey === "focusFire" ? (isRanged1 !== isRanged2 ? focusFireAsymmetricModel : focusFireModel) :
+              multiUnitModelKey === "focusFireBatchesMC" ? (isRanged1 !== isRanged2 ? focusFireBatchesMCAsymmetricModel : focusFireBatchesMCModel) :
+                aggregatedDPSModel;
+          const r = computeVersusAtEqualCost(mod1, mod2, ab1, ab2, chargeA, chargeB, allowKiting, startDistance, model);
+          result = r;
+          multipliers = r.multipliers;
+        }
+      } else if (allowKiting && multiUnitModelKey === "focusFire") {
+        result = computeVersusKitingFocusFire(mod1, mod2, ab1, ab2, chargeA, chargeB, startDistance);
+      } else if (allowKiting && multiUnitModelKey === "focusFireBatchesMC") {
+        result = computeVersusKitingBatchesMC(mod1, mod2, ab1, ab2, chargeA, chargeB, startDistance);
+      } else {
+        result = computeVersus(mod1, mod2, ab1, ab2, chargeA, chargeB, allowKiting, startDistance);
+      }
+
       let loserUnitsToWin: number | undefined;
-      try { loserUnitsToWin = computeLoserUnitsToWin(result, mod1, mod2); } catch { /* ignore */ }
+      if (!useEqualCost && result.winner !== "draw") {
+        try { loserUnitsToWin = computeLoserUnitsToWin(result, mod1, mod2); } catch { /* ignore */ }
+      }
+
+      // Winner group units remaining (equal-cost): MC median when available, like Sandbox.
+      const md = result.mcDistribution;
+      const winnerUnits = result.winner === "attacker"
+        ? (md?.whenAWins?.unitsMedian ?? result.winnerUnitsRemaining)
+        : result.winner === "defender"
+          ? (md?.whenBWins?.unitsMedian ?? result.winnerUnitsRemaining)
+          : undefined;
+
       vsResult = {
         winner: result.winner,
         unit1Name: slot.unit.name,
@@ -169,14 +253,28 @@ function Overlay() {
         hitsToKill2: result.defender.hitsToKill,
         dpsPerCost1: result.attacker.dpsPerCost,
         dpsPerCost2: result.defender.dpsPerCost,
-        winnerHp: result.winnerHpRemaining,
-        winnerMaxHp: result.winner === "attacker" ? slot.modifiedStats.hitpoints : result.winner === "defender" ? slot2.modifiedStats.hitpoints : undefined,
+        // In equal-cost mode the HP bar (vs single-unit max HP) is meaningless — show units left instead.
+        winnerHp: useEqualCost ? undefined : result.winnerHpRemaining,
+        winnerMaxHp: useEqualCost ? undefined : result.winner === "attacker" ? slot.modifiedStats.hitpoints : result.winner === "defender" ? slot2.modifiedStats.hitpoints : undefined,
         loserUnitsToWin,
+        multA: multipliers?.multA,
+        multB: multipliers?.multB,
+        winnerUnits: useEqualCost ? winnerUnits : undefined,
+        winRateA: md?.winRateA,
+        winRateB: md?.winRateB,
+        drawRate: md?.drawRate,
       };
     } catch {
       // combat computation failed — no result displayed
     }
   }
+
+  // Prevent rapid clicks from triggering Twitch's dblclick-to-fullscreen behavior.
+  useEffect(() => {
+    const handler = (e: MouseEvent) => e.preventDefault();
+    document.addEventListener("dblclick", handler, true);
+    return () => document.removeEventListener("dblclick", handler, true);
+  }, []);
 
   // VS card follows the primary panel horizontally (reactive to drag).
   const vsCardX = primary.panel.x + Math.round(PANEL_BASE_WIDTH * primary.panel.scale) + 8;
@@ -184,9 +282,11 @@ function Overlay() {
 
   // In versus mode the versus panel is pinned at a fixed offset from the primary panel
   // (derived position, never independent). Dragging either handle moves the primary only.
-  // The VS card uses versus.panel.scale independently from the primary panel scale.
+  // The VS card has its own independent scale (vsStats) so resizing either unit card
+  // leaves the vs stats untouched.
+  const vsStatsScale = vsStats.panel.scale * VS_STATS_SCALE_FACTOR;
   const versusRenderX = panelMode === "versus"
-    ? vsCardX + Math.round(VS_CARD_BASE_WIDTH * versus.panel.scale) + 8
+    ? vsCardX + Math.round(VS_CARD_BASE_WIDTH * vsStatsScale) + 8
     : versus.panel.x;
   const versusRenderY = panelMode === "versus" ? primary.panel.y : versus.panel.y;
 
@@ -199,7 +299,7 @@ function Overlay() {
     : undefined;
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[9999]">
+    <div className="pointer-events-none fixed inset-0 z-[9999]" onDoubleClick={(e) => e.preventDefault()}>
       {/* Toggle button */}
       <button
         type="button"
@@ -246,23 +346,36 @@ function Overlay() {
         />
       </div>
 
-      {/* VS card — follows the primary panel, shown only in versus mode */}
-      {panelMode === "versus" && vsResult && (
+      {/* VS card — follows the primary panel, shown only in versus mode (and while the overlay is open) */}
+      {open && panelMode === "versus" && vsResult && (
         <div
+          ref={vsStats.panelRef}
           className="pointer-events-none absolute"
           style={{
             left: vsCardX,
             top: vsCardY,
-            transform: `scale(${versus.panel.scale})`,
+            transform: `scale(${vsStatsScale})`,
             transformOrigin: "top left",
           }}
         >
-          <VSCard {...vsResult} />
+          <VSCard
+            {...vsResult}
+            controls={{
+              atEqualCost,
+              onToggleEqualCost: () => setAtEqualCost((v) => !v),
+              equalCostDisabled,
+              equalCostDisabledTitle,
+              allowKiting,
+              onToggleKiting: () => setAllowKiting((v) => !v),
+              modelKey: multiUnitModelKey,
+              onModelChange: setMultiUnitModelKey,
+            }}
+          />
         </div>
       )}
 
-      {/* Versus panel — independent position, independent drag/resize */}
-      {panelOpen && (
+      {/* Versus panel — independent position, independent drag/resize (hidden while the overlay is closed) */}
+      {open && panelOpen && (
         <div
           ref={versus.panelRef}
           className="pointer-events-auto absolute"

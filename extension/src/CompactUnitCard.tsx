@@ -126,7 +126,7 @@ function Chip({
   return (
     <div
       className={cn(
-        "group relative flex items-center gap-2 rounded-md border border-amber-500/15 bg-black/40 px-2 py-1.5",
+        "group relative flex items-center gap-1.5 rounded-md border border-amber-500/15 bg-black/40 px-1.5 py-1",
         tooltip && "cursor-help",
       )}
       title={tooltip ? undefined : label}
@@ -134,7 +134,7 @@ function Chip({
       <span className="text-amber-400/80">{icon}</span>
       <div className="flex min-w-0 flex-col leading-tight">
         <span className="text-[9px] uppercase tracking-wide text-zinc-500">{label}</span>
-        <span className={cn("truncate text-sm font-semibold tabular-nums", tint)}>
+        <span className={cn("truncate text-xs font-semibold tabular-nums", tint)}>
           {comparison?.symbol && <span className="mr-0.5 text-[10px]">{comparison.symbol}</span>}
           {children}
         </span>
@@ -148,7 +148,7 @@ function Chip({
   );
 }
 
-const ICON = "h-4 w-4 shrink-0";
+const ICON = "h-3.5 w-3.5 shrink-0";
 
 export function CompactUnitCard({
   modified,
@@ -396,30 +396,6 @@ export function CompactUnitCard({
         )}
       </div>
 
-      {/* VS combat result: HP remaining (winner) or units needed (loser) */}
-      {vsInfo?.hpRemaining != null && vsInfo.hpMax != null && (
-        <div className="mt-2 border-t border-green-500/20 pt-1.5">
-          <div className="mb-0.5 flex items-center justify-between text-[9px]">
-            <span className="font-semibold uppercase tracking-wide text-green-500/70">HP Remaining</span>
-            <span className="font-bold tabular-nums text-green-400">
-              {Math.round(vsInfo.hpRemaining)}&nbsp;
-              <span className="text-green-500/60">({Math.round((vsInfo.hpRemaining / vsInfo.hpMax) * 100)}%)</span>
-            </span>
-          </div>
-          <div className="h-1 overflow-hidden rounded-full bg-zinc-800">
-            <div
-              className="h-1 rounded-full bg-green-500/70 transition-all"
-              style={{ width: `${Math.max(0, Math.min(100, (vsInfo.hpRemaining / vsInfo.hpMax) * 100))}%` }}
-            />
-          </div>
-        </div>
-      )}
-      {vsInfo?.unitsToWin != null && vsInfo.unitsToWin >= 2 && (
-        <div className="mt-2 flex items-center gap-1.5 border-t border-orange-500/15 pt-1.5 text-[9px]">
-          <Users className="h-3 w-3 shrink-0 text-orange-400/70" />
-          <span className="font-semibold text-orange-400/80">×{vsInfo.unitsToWin} needed to win</span>
-        </div>
-      )}
 
       {/* Footer: costs + total, population, production time */}
       <div className="mt-2.5 flex items-center justify-between border-t border-amber-500/15 pt-2 text-xs">

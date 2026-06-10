@@ -71,7 +71,38 @@ export interface VSResultData {
   winnerHp?: number;
   winnerMaxHp?: number;
   loserUnitsToWin?: number;
+  /** Equal-cost group sizes — present only in equal-cost mode. */
+  multA?: number;
+  multB?: number;
+  /** Winner group units remaining (equal-cost mode; MC median when available). */
+  winnerUnits?: number;
+  /** Monte-Carlo win rates (Attack move model / capped melee crowds). */
+  winRateA?: number;
+  winRateB?: number;
+  drawRate?: number;
 }
+
+export type MultiUnitModelKey = "aggregated" | "focusFire" | "focusFireBatchesMC";
+
+/** Toggle/selector state rendered inside the VS card (equal cost, kiting, model). */
+export interface VSCardControls {
+  atEqualCost: boolean;
+  onToggleEqualCost: () => void;
+  /** Same cost or zero cost — equal-cost mode is a no-op, toggle disabled. */
+  equalCostDisabled?: boolean;
+  equalCostDisabledTitle?: string;
+  allowKiting: boolean;
+  onToggleKiting: () => void;
+  modelKey: MultiUnitModelKey;
+  onModelChange: (key: MultiUnitModelKey) => void;
+}
+
+// "aggregated" stays a valid key for the combat plumbing but is not exposed
+// in the Twitch UI — viewers only choose between Target focus and Attack move.
+const MODEL_OPTIONS: Array<{ key: MultiUnitModelKey; label: string; title: string }> = [
+  { key: "focusFire", label: "Focus", title: "Target focus model" },
+  { key: "focusFireBatchesMC", label: "Atk move", title: "Attack move model (Monte Carlo)" },
+];
 
 export { type VSSlotInfo };
 
@@ -88,7 +119,55 @@ function fmtN(v: number | null, precision = 1): string {
   return v == null ? "—" : v.toFixed(precision);
 }
 
-export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, hitsToKill2, dpsPerCost1, dpsPerCost2, ttk1, ttk2, winnerHp, winnerMaxHp, loserUnitsToWin }: VSResultData) {
+// Integer percentages that sum to exactly 100 (largest-remainder method) —
+// independent rounding of each rate can total 99 or 101.
+function pctSplit(parts: number[]): number[] {
+  const total = parts.reduce((a, b) => a + b, 0) || 1;
+  const exact = parts.map((p) => (p / total) * 100);
+  const floors = exact.map(Math.floor);
+  let rest = 100 - floors.reduce((a, b) => a + b, 0);
+  const byFrac = exact
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac);
+  for (let k = 0; k < byFrac.length && rest > 0; k++, rest--) floors[byFrac[k].i]++;
+  return floors;
+}
+
+// Small amber soldier pictogram used to visualize unit counts.
+function SoldierChip({ size = 14 }: { size?: number }) {
+  return (
+    <div
+      style={{
+        width: size, height: size, borderRadius: 2,
+        background: "rgba(245,158,11,0.13)", border: "1px solid rgba(245,158,11,0.5)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >
+      <svg width={Math.round(size * 0.57)} height={Math.round(size * 0.57)} viewBox="0 0 10 10" fill="none">
+        <circle cx="5" cy="3" r="2" fill="rgba(245,158,11,0.85)" />
+        <rect x="1" y="5.5" width="8" height="4.5" rx="1" fill="rgba(245,158,11,0.85)" />
+      </svg>
+    </div>
+  );
+}
+
+// One side of the equal-cost unit-count display: big number + soldier pictograms.
+function UnitCountSide({ count }: { count: number }) {
+  const shown = Math.min(count, 4);
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <span className="text-base font-bold leading-none tabular-nums text-amber-300">{count}</span>
+      <div className="flex items-center gap-0.5">
+        {Array.from({ length: shown }).map((_, i) => (
+          <SoldierChip key={i} size={11} />
+        ))}
+        {count > shown && <span className="text-[9px] leading-none text-amber-500/70">+{count - shown}</span>}
+      </div>
+    </div>
+  );
+}
+
+export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, hitsToKill2, dpsPerCost1, dpsPerCost2, ttk1, ttk2, winnerHp, winnerMaxHp, loserUnitsToWin, multA, multB, winnerUnits, winRateA, winRateB, drawRate, controls }: VSResultData & { controls?: VSCardControls }) {
   const dpsCols = vsStatColors(dps1, dps2, true);
   const htkCols = vsStatColors(hitsToKill1, hitsToKill2, false);
   const dpcCols = vsStatColors(dpsPerCost1, dpsPerCost2, true);
@@ -108,25 +187,116 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
   const loserName = slot1Wins ? unit2Name : unit1Name;
 
   return (
-    <div className="w-[180px] rounded-lg border border-amber-500/30 bg-zinc-950/65 text-zinc-100 shadow-2xl ring-1 ring-black/30 backdrop-blur-md">
-      <div className="border-b border-amber-500/15 bg-zinc-900/70 px-2 py-1 text-center text-[10px] font-bold uppercase tracking-widest text-amber-400/80">
+    <div className="w-[185px] rounded-lg border border-amber-500/30 bg-zinc-950/65 text-zinc-100 shadow-2xl ring-1 ring-black/30 backdrop-blur-md">
+      <div className="border-b border-amber-500/15 bg-zinc-900/70 px-2 py-1 text-center text-[12px] font-bold uppercase tracking-widest text-amber-400/80">
         ⚔ VS Stats
       </div>
+      {controls && (
+        <div className="pointer-events-auto border-b border-amber-500/15 px-2 py-1.5 space-y-1">
+          <div className="flex items-center justify-center gap-1">
+            <button
+              type="button"
+              onClick={() => { if (!controls.equalCostDisabled) controls.onToggleEqualCost(); }}
+              disabled={controls.equalCostDisabled}
+              title={controls.equalCostDisabledTitle ?? "Compare equal-cost groups (approx.)"}
+              className={cn(
+                "rounded border px-1.5 py-0.5 text-[10px] font-bold transition-colors",
+                controls.equalCostDisabled
+                  ? "cursor-not-allowed border-zinc-700 bg-black/40 text-zinc-600"
+                  : controls.atEqualCost
+                    ? "border-amber-500 bg-amber-500 text-black"
+                    : "border-amber-500/40 bg-black/40 text-amber-400 hover:border-amber-500/70 hover:bg-amber-500/10",
+              )}
+            >
+              = Cost
+            </button>
+            <button
+              type="button"
+              onClick={controls.onToggleKiting}
+              title="Ranged units kite while melee closes the gap"
+              className={cn(
+                "rounded border px-1.5 py-0.5 text-[10px] font-bold transition-colors",
+                controls.allowKiting
+                  ? "border-amber-500 bg-amber-500 text-black"
+                  : "border-amber-500/40 bg-black/40 text-amber-400 hover:border-amber-500/70 hover:bg-amber-500/10",
+              )}
+            >
+              Kiting
+            </button>
+          </div>
+          {(controls.atEqualCost || controls.allowKiting) && (
+            <div className="flex items-center justify-center">
+              <div className="flex overflow-hidden rounded border border-amber-500/30">
+                {MODEL_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => controls.onModelChange(opt.key)}
+                    title={opt.title}
+                    className={cn(
+                      "px-1.5 py-0.5 text-[9px] font-semibold transition-colors",
+                      controls.modelKey === opt.key
+                        ? "bg-amber-500 text-black"
+                        : "bg-black/40 text-zinc-300 hover:bg-amber-500/10",
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {multA != null && multB != null && (
+        <div className="border-b border-amber-500/15 px-2 py-1.5">
+          <div className="mb-1 text-center text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
+            Units per side
+          </div>
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
+            <UnitCountSide count={multA} />
+            <span className="text-[10px] font-semibold uppercase text-zinc-500">vs</span>
+            <UnitCountSide count={multB} />
+          </div>
+        </div>
+      )}
       <div className="px-2 py-2 space-y-1.5">
         {rows.map(({ label, v1, v2, c1, c2 }) => (
-          <div key={label} className="flex items-center gap-0.5 text-[11px]">
+          <div key={label} className="flex items-center gap-0.5 text-[13px]">
             <span className={cn("w-[44px] text-right tabular-nums leading-none", c1)}>{v1}</span>
-            <span className="mx-1 min-w-[56px] text-center text-[9px] uppercase tracking-wide text-zinc-400">{label}</span>
+            <span className="mx-1 min-w-[56px] text-center text-[11px] uppercase tracking-wide text-zinc-400">{label}</span>
             <span className={cn("w-[44px] text-left tabular-nums leading-none", c2)}>{v2}</span>
           </div>
         ))}
       </div>
       <div className="border-t border-amber-500/15 px-2 py-1.5 space-y-1">
+        {winRateA != null && winRateB != null && (() => {
+          const [pctA, pctDraw, pctB] = pctSplit([winRateA, drawRate ?? 0, winRateB]);
+          return (
+            <>
+              <div className="flex items-center justify-between text-[11px] tabular-nums">
+                <span className="font-semibold text-green-400">{pctA}%</span>
+                <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">Win rate</span>
+                <span className="font-semibold text-orange-400">{pctB}%</span>
+              </div>
+              <div className="relative flex h-1.5 overflow-hidden rounded-full bg-zinc-800">
+                <div className="h-full bg-green-500/70" style={{ width: `${pctA}%` }} />
+                <div className="h-full bg-zinc-600/70" style={{ width: `${pctDraw}%` }} />
+                <div className="h-full bg-orange-500/70" style={{ width: `${pctB}%` }} />
+              </div>
+              {pctDraw > 0 && (
+                <div className="text-center text-[9px] tabular-nums text-zinc-500">
+                  {pctDraw}% draw
+                </div>
+              )}
+            </>
+          );
+        })()}
         {isDraw ? (
-          <div className="text-center text-[10px] font-semibold text-yellow-500/80">Draw</div>
+          <div className="text-center text-[12px] font-semibold text-yellow-500/80">Draw</div>
         ) : (
           <>
-            <div className="flex items-center justify-between gap-1 text-[10px]">
+            <div className="flex items-center justify-between gap-1 text-[12px]">
               <span className={cn("truncate", slot1Wins ? "font-semibold text-green-400" : "text-zinc-400")}>
                 {slot1Wins && "★ "}{unit1Name}
               </span>
@@ -134,9 +304,18 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
                 {unit2Name}{slot2Wins && " ★"}
               </span>
             </div>
+            {winnerUnits != null && (
+              <div className="text-center text-[11px] text-zinc-400">
+                <span className="font-medium text-green-400">{winnerUnits}</span>
+                {(slot1Wins ? multA : multB) != null && (
+                  <span> of {slot1Wins ? multA : multB}</span>
+                )}{" "}
+                units left
+              </div>
+            )}
             {hpPct != null && (
               <>
-                <div className="text-center text-[10px] text-green-400/80">
+                <div className="text-center text-[12px] text-green-400/80">
                   {Math.round(winnerHp!)} HP · {hpPct}%
                 </div>
                 <div className="relative h-1 overflow-hidden rounded-full bg-zinc-800">
@@ -153,24 +332,12 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
             )}
             {loserUnitsToWin != null && (
               <>
-                <div className="text-center text-[10px] text-zinc-400">
+                <div className="text-center text-[11px] text-zinc-400">
                   <span className="text-amber-300/90 font-medium">{loserName}</span> needs <span className="text-amber-300/90 font-medium">×{loserUnitsToWin}</span>
                 </div>
                 <div className="flex items-center justify-center gap-1">
                   {Array.from({ length: Math.min(loserUnitsToWin, 7) }).map((_, i) => (
-                    <div
-                      key={i}
-                      style={{
-                        width: 14, height: 14, borderRadius: 2,
-                        background: "rgba(245,158,11,0.13)", border: "1px solid rgba(245,158,11,0.5)",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}
-                    >
-                      <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                        <circle cx="5" cy="3" r="2" fill="rgba(245,158,11,0.85)" />
-                        <rect x="1" y="5.5" width="8" height="4.5" rx="1" fill="rgba(245,158,11,0.85)" />
-                      </svg>
-                    </div>
+                    <SoldierChip key={i} />
                   ))}
                   {loserUnitsToWin > 7 && (
                     <span className="text-[9px] text-amber-500/60">+{loserUnitsToWin - 7}</span>
