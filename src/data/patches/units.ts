@@ -426,6 +426,20 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
 
 
   {
+    id: 'horseman',
+    reason: 'Jin Horseman food cost is 100 in-game (raw data has 75).',
+    after: (unit: any) => ({
+      ...unit,
+      variations: unit.variations.map((v: any) =>
+        v.civs?.includes('jin')
+          ? { ...v, costs: { ...v.costs, food: 100, total: v.costs.total - v.costs.food + 100 } }
+          : v
+      ),
+    }),
+  },
+
+
+  {
     id: 'iron-pagoda',
     reason: 'Correct food cost to 140 (was 115).',
     after: (unit: any) => ({
@@ -443,6 +457,24 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
   // FRENCH
   //
   //_________
+
+  {
+    id: 'villager',
+    reason: 'Torch (fire, anti-building) is weapons[0] in raw data, so getPrimaryWeapon treated it as the main weapon (UnitCard showed "0 (fire)"). Move fire weapons to the end so the melee Knife is primary for unit-vs-unit combat; torch kept as a secondary weapon.',
+    after: (unit: unknown) => {
+      const u = unit as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+      return {
+        ...u,
+        variations: u.variations.map((v: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+          if (!Array.isArray(v.weapons) || v.weapons.length < 2) return v;
+          const nonFire = v.weapons.filter((w: any) => w.type !== 'fire'); // eslint-disable-line @typescript-eslint/no-explicit-any
+          const fire = v.weapons.filter((w: any) => w.type === 'fire'); // eslint-disable-line @typescript-eslint/no-explicit-any
+          if (nonFire.length === 0 || fire.length === 0) return v;
+          return { ...v, weapons: [...nonFire, ...fire] };
+        }),
+      };
+    },
+  },
 
   {
     id: 'galleass',
@@ -662,7 +694,7 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
         displayClasses: ['Heavy Melee Cavalry'],
         weapons: makeWeapons(damage, torchDamage),
         armor: [{ type: 'melee', value: armor }, { type: 'ranged', value: armor }],
-        costs: { food: 0, wood: 0, stone: 0, gold: 0, total: 0, popcap: 1 },
+        costs: { food: 50, wood: 0, stone: 0, gold: 50, total: 100, popcap: 1 },
         movement: { speed: 1.62 },
       });
 
@@ -1337,7 +1369,7 @@ export const newUnits: unknown[] = [
     displayClasses: ['Heavy Ranged Cavalry'],
     classes: ['cavalry', 'heavy', 'military', 'annihilation_condition', 'human'],
     minAge: 4,
-    icon: 'public/units/Mengan_Mouke_Defender.png',
+    icon: '/units/Mengan_Mouke_Defender.png',
     description: '',
     variations: [
       {
@@ -1355,7 +1387,7 @@ export const newUnits: unknown[] = [
         unique: true,
         costs: { food: 0, wood: 0, stone: 0, gold: 0, total: 0, popcap: 0, time: 0 },
         producedBy: [],
-        icon: 'public/units/Mengan_Mouke_Defender.png',
+        icon: '/units/Mengan_Mouke_Defender.png',
         hitpoints: 200,
         weapons: [{
           name: 'Grenade', type: 'siege', damage: 12, speed: 2.12, attackSpeed: 2.12,
@@ -1375,7 +1407,7 @@ export const newUnits: unknown[] = [
     displayClasses: ['Heavy Cavalry'],
     classes: MENG_AN_MOUKE_DEFENDER_CLASSES,
     minAge: 3,
-    icon: 'public/units/Mengan_Mouke_Defender.png',
+    icon: '/units/Mengan_Mouke_Defender.png',
     description: '',
     variations: [
       {
@@ -1393,7 +1425,7 @@ export const newUnits: unknown[] = [
         unique: true,
         costs: { food: 0, wood: 0, stone: 0, gold: 0, total: 0, popcap: 0, time: 0 },
         producedBy: [],
-        icon: 'public/units/Mengan_Mouke_Defender.png',
+        icon: '/units/Mengan_Mouke_Defender.png',
         hitpoints: 160,
         weapons: [MENG_AN_MOUKE_DEFENDER_WEAPON(20)],
         armor: [{ type: 'melee', value: 4 }, { type: 'ranged', value: 4 }],
@@ -1414,7 +1446,7 @@ export const newUnits: unknown[] = [
         unique: true,
         costs: { food: 0, wood: 0, stone: 0, gold: 0, total: 0, popcap: 0, time: 0 },
         producedBy: [],
-        icon: 'public/units/Mengan_Mouke_Defender.png',
+        icon: '/units/Mengan_Mouke_Defender.png',
         hitpoints: 192,
         weapons: [MENG_AN_MOUKE_DEFENDER_WEAPON(25)],
         armor: [{ type: 'melee', value: 5 }, { type: 'ranged', value: 6 }],
@@ -1432,7 +1464,7 @@ export const newUnits: unknown[] = [
     displayClasses: ['Ranged Gunpowder Infantry'],
     classes: MILITIA_HC_CLASSES,
     minAge: 3,
-    icon: 'public/units/militia_handcannoneer.png',
+    icon: '/units/militia_handcannoneer.png',
     description: 'Light distance infantry equipped with a culverin.\n+ Fast moving\n- Countered by Archers\n- Can\'t garrison\n- Loses life over time',
     variations: [
       {
@@ -1450,7 +1482,7 @@ export const newUnits: unknown[] = [
         unique: true,
         costs: MILITIA_HC_COSTS,
         producedBy: ['town-center'],
-        icon: 'public/units/militia_handcannoneer.png',
+        icon: '/units/militia_handcannoneer.png',
         hitpoints: 85,
         weapons: [MILITIA_HC_WEAPON(12)],
         armor: [],
@@ -1472,7 +1504,7 @@ export const newUnits: unknown[] = [
         unique: true,
         costs: MILITIA_HC_COSTS,
         producedBy: ['town-center'],
-        icon: 'public/units/militia_handcannoneer.png',
+        icon: '/units/militia_handcannoneer.png',
         hitpoints: 150,
         weapons: [MILITIA_HC_WEAPON(15)],
         armor: [],

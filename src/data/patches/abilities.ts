@@ -18,6 +18,7 @@ export const ABILITY_ROW_GROUPS: readonly { label: string; ids: readonly string[
   { label: 'AURA', ids: ['ability-network-of-castles', 'ability-network-of-citadels', 'ability-daimyo-aura-2', 'ability-daimyo-aura-3', 'ability-daimyo-aura-4'] },
   { label: 'AGE', ids: ['ability-high-armory-production-bonus', 'ability-abbey-of-the-trinity', 'ability-kurultai-aura', 'ability-tower-of-victory-aura', 'ability-burgrave-palace'] },
   { label: 'CHAR', ids: ['charge-attack', 'ability-royal-knight-charge-damage'] },
+  { label: 'AKRI', ids: ['ability-akritoi-defense-1', 'ability-akritoi-defense-2', 'ability-akritoi-defense-3', 'ability-akritoi-defense-4'] }
 ];
 
 
@@ -449,11 +450,9 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
     after: (ability: Ability) => ({ ...ability, hidden: true }),
   },
 
-  {
-    id: "ability-akritoi-defense",
-    reason: "Must be implemented for all ages.",
-    uiTooltip: "Not yet implemented for all ages",
-  },
+  // ability-akritoi-defense is replaced by 4 synthetic age-independent tiers
+  // (createAkritoiDefense 1..4); the original JSON ability is filtered out in
+  // applyAbilityPatches.
 
   //___________
   //
@@ -3932,12 +3931,59 @@ function createHardCasedBombs(): Ability {
   } as Ability;
 }
 
+// Akritoi Defense — 4 age-independent tiers (separate selectable abilities, Khan War Cry style).
+// minAge = tier age so each renders in its own age column (I/II/III/IV) in AbilitySelector;
+// getAbilitiesForUnit doesn't filter by minAge, so all 4 stay accessible regardless of the age selector.
+// +2 melee/ranged armor on every tier; melee attack scales +1/2/3/5 (Dark/Feudal/Castle/Imperial). Duration 30s.
+function createAkritoiDefense(age: 1 | 2 | 3 | 4, meleeAttack: number): Ability {
+  const ageName = { 1: 'Dark', 2: 'Feudal', 3: 'Castle', 4: 'Imperial' }[age];
+  const description = `Arm nearby Villagers with stronger weapons (+${meleeAttack} damage) and increase their armor by +2 for 30 seconds.`;
+  const effects = [
+    { property: 'meleeArmor', select: { id: ['villager'] }, effect: 'change', value: 2, type: 'ability', duration: 30 },
+    { property: 'rangedArmor', select: { id: ['villager'] }, effect: 'change', value: 2, type: 'ability', duration: 30 },
+    { property: 'meleeAttack', select: { id: ['villager'] }, effect: 'change', value: meleeAttack, type: 'ability', duration: 30 },
+  ];
+  return {
+    id: `ability-akritoi-defense-${age}`,
+    name: `Akritoi Defense (${ageName})`,
+    type: 'ability',
+    civs: ['by'],
+    displayClasses: [],
+    classes: [],
+    minAge: age, // one tier per age column (I/II/III/IV); getAbilitiesForUnit doesn't filter by minAge, so all 4 stay accessible at any selected age
+    icon: 'https://data.aoe4world.com/images/abilities/ability-akritoi-defense-1.png',
+    description,
+    unique: false,
+    effects,
+    variations: [{
+      id: `ability-akritoi-defense-${age}-v`,
+      baseId: `ability-akritoi-defense-${age}`,
+      type: 'ability',
+      name: `Akritoi Defense (${ageName})`,
+      pbgid: 999200 + age,
+      attribName: `ability_akritoi_defense_${age}`,
+      age: 1,
+      civs: ['by'],
+      description,
+      classes: [], displayClasses: [], unique: false,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [],
+      effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
 export function applyAbilityPatches(abilities: Ability[]): Ability[] {
   // Add the created synthetic abilities
   const chargeAttackAbility = createChargeAttackAbility();
   const allAbilitiesMerged = [
-    ...abilities.filter(a => a.id !== 'ability-grassland-influence'),
+    ...abilities.filter(a => a.id !== 'ability-grassland-influence' && a.id !== 'ability-akritoi-defense'),
     chargeAttackAbility,
+    createAkritoiDefense(1, 1),
+    createAkritoiDefense(2, 2),
+    createAkritoiDefense(3, 3),
+    createAkritoiDefense(4, 5),
     createYuanDynastyAbility(),
     createMingDynastyAbility(),
     createClocktowerAbility(),

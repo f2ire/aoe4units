@@ -254,7 +254,7 @@ export const AbilitySelector = ({
     );
   };
 
-  const renderRow = (rowAbilities: Ability[], label: string, isFirst: boolean) => {
+  const renderRow = (rowAbilities: Ability[], label: string) => {
     const byAge: Record<number, Ability[]> = { 1: [], 2: [], 3: [], 4: [] };
     rowAbilities.forEach(a => {
       const age = a.minAge;
@@ -275,7 +275,7 @@ export const AbilitySelector = ({
 
     const labelEl = (
       <div className="text-xs font-medium text-purple-400 w-10 flex-shrink-0 pt-2">
-        {isFirst ? 'ABI:' : label ? `${label}:` : ''}
+        {label ? `${label}:` : 'ABI:'}
       </div>
     );
 
@@ -301,7 +301,7 @@ export const AbilitySelector = ({
 
   return (
     <div className="space-y-2 mt-2">
-      {rows.map((row, i) => renderRow(row.abilities, row.label, i === 0))}
+      {rows.map((row) => renderRow(row.abilities, row.label))}
     </div>
   );
 };

@@ -2657,7 +2657,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: '10000-bolts',
     reason: 'Replace flat ×1.4 multiplier with burst:+1 + burstDecay:0.4 — second bolt deals 40% of base damage with no bonus damage.',
-    uiTooltip: 'Bug: For crossbowmen, when attacking at max range, the second bolt deals full damage (so it becomes equivalent to a 100% damage bonus).',
+    uiTooltip: 'Bug: For crossbowmen, when attacking at max range, the second bolt deals full damage (so it becomes equivalent to a 100% damage bonus). Also the 2nd bolt does not apply bonus damage.',
     after: (tech) => ({
       ...tech,
       variations: tech.variations.map(v => ({
@@ -2757,7 +2757,7 @@ function createCrusaderFleets(): Technology {
     classes: [],
     displayClasses: [],
     minAge: 4,
-    icon: 'public/technologies/crusader-fleets.png',
+    icon: '/technologies/crusader-fleets.png',
     description: 'It increases the range and attack of the springald ships by +1.5 and +25% respectively.',
     unique: true,
     effects: [
@@ -2806,7 +2806,7 @@ function createEnlistMansaMusofadi(): Technology {
     classes: [],
     displayClasses: [],
     minAge: 3,
-    icon: 'public/abilities/AoE4_EnlistMansaMusofadi.png',
+    icon: '/abilities/AoE4_EnlistMansaMusofadi.png',
     description: 'Musofadi Warriors gain +1 melee attack, +10 HP, and +4/+5/+6 melee armor (age II/III/IV).',
     unique: true,
     effects: [
@@ -2856,7 +2856,7 @@ function createEnlistMansaJavelineers(): Technology {
     classes: [],
     displayClasses: [],
     minAge: 3,
-    icon: 'public/technologies/AoE4_EnlistMansaJavelineers.png',
+    icon: '/technologies/AoE4_EnlistMansaJavelineers.png',
     description: 'This increases their speed by ~5% (up to 1.31) and grants them poison tipped javelins that inflict a poison effect of 3 damage over 6 seconds.',
     unique: true,
     effects: [
@@ -2906,7 +2906,7 @@ function createAjmerBenefactor(): Technology {
     classes: [],
     displayClasses: [],
     minAge: 3,
-    icon: 'public/technologies/ajmer-benefactor.png',
+    icon: '/technologies/ajmer-benefactor.png',
     description: 'Amir Warriors train 50% faster and have 50% more health.',
     unique: true,
     effects: [
