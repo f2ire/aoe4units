@@ -9,6 +9,17 @@ import type { UnifiedWeapon } from "@/data/unified-units";
 import { foreignEngineeringAbilityUnitRestrictions } from "@/data/patches/abilities";
 import type { Ability, AbilityVariation } from "@/data/unified-abilities";
 
+// Per-unit minimum stack for specific counter abilities: while that unit is selected, the counter
+// cannot drop below `min` (e.g. lord-of-lancaster's inspiration always keeps ≥1 stack).
+const ABILITY_COUNTER_MIN: Record<string, { abilityId: string; min: number }> = {
+  'lord-of-lancaster': { abilityId: 'ability-lord-of-lancaster-inspiration', min: 1 },
+};
+
+export function getCounterMin(unitId: string | undefined, abilityId: string): number {
+  const entry = unitId ? ABILITY_COUNTER_MIN[unitId] : undefined;
+  return entry && entry.abilityId === abilityId ? entry.min : 0;
+}
+
 // Resolve the dynamic value of a counter-ability effect at a given stack count.
 // Mirrors the counterStep/counterSteps/counterDirection semantics documented in CLAUDE.md.
 function resolveCounterEffectValue(effect: any, count: number, ability: Ability, unitId?: string): number { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -164,6 +175,10 @@ export function useUnitSlot(initialUnit?: AoE4Unit | null, initialCiv?: string) 
   // Ref so toggleTechnology can read selectedCiv without a closure dep
   const selectedCivRef = useRef(selectedCiv);
   selectedCivRef.current = selectedCiv;
+
+  // Ref so counter callbacks can read the current unit (for per-unit counter minimums)
+  const unitRef = useRef(unit);
+  unitRef.current = unit;
 
   const toggleTechnology = useCallback((techId: string) => {
     const tech = allTechnologies.find(t => t.id === techId);
@@ -383,7 +398,8 @@ export function useUnitSlot(initialUnit?: AoE4Unit | null, initialCiv?: string) 
   const setAbilityCounter = useCallback((abilityId: string, value: number) => {
     const ability = abilitiesRef.current.find(a => a.id === abilityId);
     if (!ability || ability.counterMax === undefined) return;
-    const clamped = Math.max(0, Math.min(ability.counterMax, Math.round(value)));
+    const min = getCounterMin(unitRef.current?.id, abilityId);
+    const clamped = Math.max(min, Math.min(ability.counterMax, Math.round(value)));
     setAbilityCounters(prev => {
       const next = new Map(prev);
       if (clamped === 0) next.delete(abilityId); else next.set(abilityId, clamped);
@@ -417,7 +433,7 @@ export function useUnitSlot(initialUnit?: AoE4Unit | null, initialCiv?: string) 
   const decrementAbility = useCallback((abilityId: string) => {
     setAbilityCounters(prev => {
       const current = prev.get(abilityId) ?? 0;
-      if (current <= 0) return prev;
+      if (current <= getCounterMin(unitRef.current?.id, abilityId)) return prev;
       const next = new Map(prev);
       const newCount = current - 1;
       if (newCount === 0) {

@@ -656,9 +656,9 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
       return {
         ...u,
         variations: [
-          makeVariation(2, 178, 14, 2),
-          makeVariation(3, 210, 16, 3),
-          makeVariation(4, 247, 18, 4),
+          makeVariation(2, 170, 14, 2),
+          makeVariation(3, 200, 16, 3),
+          makeVariation(4, 235, 18, 4),
         ],
       };
     },

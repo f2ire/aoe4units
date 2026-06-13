@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Ability, AbilityVariation } from "@/data/unified-abilities";
 import { abilityPatches, foreignEngineeringAbilityIds, ABILITY_ROW_GROUPS } from "@/data/patches/abilities";
+import { getCounterMin } from "@/hooks/useUnitSlot";
 import {
   Tooltip,
   TooltipContent,
@@ -138,7 +139,7 @@ export const AbilitySelector = ({
         <div className="w-full flex items-center justify-between">
           <button
             onClick={() => onDecrement?.(ability.id)}
-            disabled={count === 0}
+            disabled={count <= getCounterMin(unitId, ability.id)}
             className="w-4 h-5 rounded border border-border/50 bg-secondary/60 hover:bg-secondary/90 active:scale-90 disabled:opacity-20 disabled:cursor-not-allowed flex items-center justify-center text-xs leading-none transition-all font-medium"
           >
             −

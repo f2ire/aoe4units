@@ -16,7 +16,8 @@ interface GuidedTourProps {
   applyFullUpgrade2: (age: number) => void;
   toggleAbility2: (id: string) => void;
   setIsVersus: (v: boolean) => void;
-  setAtEqualCost: (v: boolean) => void;
+  setCount1: (n: number) => void;
+  setCount2: (n: number) => void;
   setAllowKiting: (v: boolean) => void;
   setMultiUnitModelKey: (key: 'aggregated' | 'focusFire' | 'focusFireBatchesMC') => void;
 }
@@ -24,7 +25,7 @@ interface GuidedTourProps {
 export function GuidedTour({
   setSelectedCiv1, setUnit1, setSelectedAge1, applyFullUpgrade1, toggleAbility1,
   setSelectedCiv2, setUnit2, setSelectedAge2, applyFullUpgrade2, toggleAbility2,
-  setIsVersus, setAtEqualCost, setAllowKiting, setMultiUnitModelKey,
+  setIsVersus, setCount1, setCount2, setAllowKiting, setMultiUnitModelKey,
 }: GuidedTourProps) {
   const fns = useRef({ applyFullUpgrade1, applyFullUpgrade2, toggleAbility1, toggleAbility2 });
   useEffect(() => {
@@ -39,7 +40,8 @@ export function GuidedTour({
     setUnit1(null);
     setUnit2(null);
     setIsVersus(false);
-    setAtEqualCost(false);
+    setCount1(1);
+    setCount2(1);
     setAllowKiting(false);
 
     let driverObj: ReturnType<typeof driver>;
@@ -209,14 +211,14 @@ export function GuidedTour({
           },
         },
 
-        // ── 13 ── At Equal Cost
+        // ── 13 ── Unit counts / At Equal Cost
         {
-          element: '#tour-atEqualCost',
-          onHighlightStarted: () => { setAtEqualCost(true); },
+          element: '#tour-unit-counts',
+          onHighlightStarted: () => { setCount1(3); setCount2(3); },
           popover: {
-            title: '13 — At Equal Cost',
+            title: '13 — Unit Counts',
             description:
-              '<b>At Equal Cost</b> enabled. Instead of 1v1, the simulation scales each side to the same total resource budget — showing how many units each side can field and who wins the exchange.',
+              'Use the <b>Units</b> steppers above each card to fight with more than one unit per side. As soon as either side has more than one unit, the simulation switches from 1v1 to a multi-unit battle. The <b>⚖ Equal Cost</b> button auto-fills both counts to an equal-resource ratio — you can then fine-tune them.',
             side: 'bottom', align: 'center',
           },
         },
@@ -228,7 +230,7 @@ export function GuidedTour({
           popover: {
             title: '14 — Combat Model',
             description:
-              'The default model is <b>Target Focus</b>: both sides concentrate fire on one target at a time.<br><b>Attack Move</b>: Monte Carlo simulation with random batch assignment (200 iterations) — gives win rates and statistical spread.<br>Choose based on the scenario you want to model.',
+              'The default model is <b>Target Focus</b> when a ranged unit is involved (both sides concentrate fire on one target at a time), otherwise <b>Attack Move</b>. Choose based on the scenario you want to model.',
             side: 'bottom', align: 'center',
           },
         },

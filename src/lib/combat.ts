@@ -1387,13 +1387,16 @@ export function computeVersusAtEqualCost(
   allowKiting: boolean = false,
   startDistance: number = START_DISTANCE,
   model: MultiUnitModel = aggregatedDPSModel,
+  customMults?: { multA: number; multB: number },
 ): VersusResult & { multipliers: { multA: number; multB: number; totalCostA: number; totalCostB: number } } {
   const A = toCombatEntity(a, activeAbilitiesA);
   const B = toCombatEntity(b, activeAbilitiesB);
 
   const costA = totalCost(A);
   const costB = totalCost(B);
-  const multipliers = calculateEqualCostMultipliers(costA, costB);
+  const multipliers = customMults
+    ? { multA: customMults.multA, multB: customMults.multB, totalCostA: customMults.multA * costA, totalCostB: customMults.multB * costB }
+    : calculateEqualCostMultipliers(costA, costB);
 
   let metricsA = computeMetrics(A, B, chargeBonusA, multipliers.multA, multipliers.multB);
   let metricsB = computeMetrics(B, A, chargeBonusB, multipliers.multB, multipliers.multA);
@@ -2579,13 +2582,16 @@ export function computeVersusAtEqualCostKitingFocusFire(
   chargeBonusA: number = 0,
   chargeBonusB: number = 0,
   startDistance: number = START_DISTANCE,
+  customMults?: { multA: number; multB: number },
 ): VersusResult & { multipliers: { multA: number; multB: number; totalCostA: number; totalCostB: number } } {
   const A = toCombatEntity(a, activeAbilitiesA);
   const B = toCombatEntity(b, activeAbilitiesB);
 
   const costA = totalCost(A);
   const costB = totalCost(B);
-  const multipliers = calculateEqualCostMultipliers(costA, costB);
+  const multipliers = customMults
+    ? { multA: customMults.multA, multB: customMults.multB, totalCostA: customMults.multA * costA, totalCostB: customMults.multB * costB }
+    : calculateEqualCostMultipliers(costA, costB);
 
   const isMeleeA = getMaxRange(A) < 1;
   const isMeleeB = getMaxRange(B) < 1;
@@ -2668,9 +2674,11 @@ export function computeVersusAtEqualCostKitingFocusFire(
   const wConc = concIsA ? (A.weapons[0]?.durations?.windup ?? 0) : (B.weapons[0]?.durations?.windup ?? 0);
   const wDist = concIsA ? (B.weapons[0]?.durations?.windup ?? 0) : (A.weapons[0]?.durations?.windup ?? 0);
 
+  // conc is always the ranged side, dist always the melee side (the dmg/speed/windup params
+  // above are already mapped to ranged/melee via concIsA), so the HP arrays are unconditional.
   const { hpConc, hpDist } = simulateAsymmetricFFMixed(
-    concIsA ? rangedHpArr : meleeHpArr, dmgConc, fDmgConc, asConc, wConc,
-    concIsA ? meleeHpArr : rangedHpArr, dmgDist, fDmgDist, asDist, wDist,
+    rangedHpArr, dmgConc, fDmgConc, asConc, wConc,
+    meleeHpArr, dmgDist, fDmgDist, asDist, wDist,
   );
 
   const rC = hpConc.filter(h => h > 0).length;
@@ -2806,13 +2814,16 @@ export function computeVersusAtEqualCostKitingBatchesMC(
   chargeBonusA: number = 0,
   chargeBonusB: number = 0,
   startDistance: number = START_DISTANCE,
+  customMults?: { multA: number; multB: number },
 ): VersusResult & { multipliers: { multA: number; multB: number; totalCostA: number; totalCostB: number } } {
   const A = toCombatEntity(a, activeAbilitiesA);
   const B = toCombatEntity(b, activeAbilitiesB);
 
   const costA = totalCost(A);
   const costB = totalCost(B);
-  const multipliers = calculateEqualCostMultipliers(costA, costB);
+  const multipliers = customMults
+    ? { multA: customMults.multA, multB: customMults.multB, totalCostA: customMults.multA * costA, totalCostB: customMults.multB * costB }
+    : calculateEqualCostMultipliers(costA, costB);
 
   const isMeleeA = getMaxRange(A) < 1;
   const isMeleeB = getMaxRange(B) < 1;
@@ -3014,6 +3025,8 @@ export function computeLoserUnitsToWin(
   versusResult: VersusResult,
   unitA: AoE4Unit | UnifiedVariation,
   unitB: AoE4Unit | UnifiedVariation,
+  countA = 1,
+  countB = 1,
   maxN = 25,
 ): number | undefined {
   if (versusResult.winner === 'draw') return undefined;
@@ -3026,6 +3039,9 @@ export function computeLoserUnitsToWin(
   const winnerEntity = loserIsA ? entityB : entityA;
   const metricsLoser = loserIsA ? versusResult.attacker : versusResult.defender;
   const metricsWinner = loserIsA ? versusResult.defender : versusResult.attacker;
+  // The winner keeps its actual unit count; we search the minimum loser count that flips the result.
+  const winnerCount = loserIsA ? countB : countA;
+  const loserCount = loserIsA ? countA : countB;
 
   if (!metricsLoser.effectiveDamagePerHit || !metricsWinner.effectiveDamagePerHit) return undefined;
 
@@ -3036,9 +3052,9 @@ export function computeLoserUnitsToWin(
   const symmetricModel: MultiUnitModel = { resolve: resolveFocusFireDeterministic };
   const model = isRangedLoser !== isRangedWinner ? focusFireAsymmetricModel : symmetricModel;
 
-  for (let n = 2; n <= maxN; n++) {
+  for (let n = loserCount + 1; n <= maxN; n++) {
     const r = model.resolve(loserEntity, winnerEntity, metricsLoser, metricsWinner, {
-      multA: n, multB: 1, totalCostA: n, totalCostB: 1,
+      multA: n, multB: winnerCount, totalCostA: n, totalCostB: winnerCount,
     });
     if (r.winner === 'attacker') return n;
   }

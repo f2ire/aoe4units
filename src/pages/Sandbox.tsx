@@ -4,7 +4,7 @@ import { aoe4Units, AoE4Unit, getAvailableAges, getPrimaryWeapon, getTotalCost }
 import type { UnifiedVariation } from "@/data/unified-units";
 import { CIVILIZATIONS } from "@/data/civilizations";
 import { UnitCard } from "@/components/UnitCard";
-import { computeVersus, computeVersusAtEqualCost, computeVersusKitingFocusFire, computeVersusAtEqualCostKitingFocusFire, computeVersusKitingBatchesMC, computeVersusAtEqualCostKitingBatchesMC, getVersusDebuffMultiplier, aggregatedDPSModel, focusFireModel, focusFireBatchesMCModel, focusFireBatchesMCAsymmetricModel, focusFireAsymmetricModel, computeLoserUnitsToWin } from "@/lib/combat";
+import { computeVersus, computeVersusAtEqualCost, computeVersusKitingFocusFire, computeVersusAtEqualCostKitingFocusFire, computeVersusKitingBatchesMC, computeVersusAtEqualCostKitingBatchesMC, getVersusDebuffMultiplier, aggregatedDPSModel, focusFireModel, focusFireBatchesMCModel, focusFireBatchesMCAsymmetricModel, focusFireAsymmetricModel, computeLoserUnitsToWin, calculateEqualCostMultipliers } from "@/lib/combat";
 import type { MultiUnitModel } from "@/lib/combat";
 import { AgeSelector } from "@/components/AgeSelector";
 import { TechnologySelector } from "@/components/TechnologySelector";
@@ -312,9 +312,9 @@ function CivPicker({ value, onSelect }: CivPickerProps) {
   const q = search.trim().toLowerCase();
   const visibleCivs = q
     ? CIVILIZATIONS.map(civ => ({ civ, score: unitNameMatchScore(civ.name, q) }))
-        .filter(c => c.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .map(c => c.civ)
+      .filter(c => c.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(c => c.civ)
     : CIVILIZATIONS;
 
   return (
@@ -391,14 +391,82 @@ const getChargeBonusBurst = (unitData: AoE4Unit | UnifiedVariation | undefined, 
   return 1;
 };
 
+// Unit-count stepper shown above each card in versus mode. count > 1 routes the matchup
+// through the multi-unit combat engine and reveals the model selector.
+function CountStepper({ count, onChange }: { count: number; onChange: (n: number) => void }) {
+  const set = (n: number) => onChange(Math.max(1, Math.min(99, Number.isFinite(n) ? n : 1)));
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Units</span>
+      <div className="inline-flex items-center rounded-md border border-border overflow-hidden bg-card">
+        <button
+          type="button"
+          aria-label="Decrease unit count"
+          onClick={() => set(count - 1)}
+          disabled={count <= 1}
+          className="px-3 py-1.5 text-sm font-bold hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed"
+        >−</button>
+        <input
+          type="number"
+          min={1}
+          max={99}
+          value={count}
+          onChange={(e) => set(parseInt(e.target.value, 10))}
+          className="w-12 text-center bg-transparent text-sm font-semibold border-x border-border py-1.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        />
+        <button
+          type="button"
+          aria-label="Increase unit count"
+          onClick={() => set(count + 1)}
+          className="px-3 py-1.5 text-sm font-bold hover:bg-muted"
+        >+</button>
+      </div>
+    </div>
+  );
+}
+
+// Toggle button that fills both unit counts to an equalized ratio (cost or population).
+// `active` = the current counts already match this preset's ratio; clicking it then reverts to 1v1.
+function PresetButton({ label, title, disabled, active, onClick, id }: { label: string; title: string; disabled: boolean; active: boolean; onClick: () => void; id?: string }) {
+  return (
+    <button
+      type="button"
+      id={id}
+      disabled={disabled}
+      aria-pressed={active}
+      onClick={() => { if (!disabled) onClick(); }}
+      className={`inline-flex items-center gap-2 px-3 py-2 rounded-md border transition-colors ${disabled ? 'opacity-50 cursor-not-allowed border-border bg-card' : active ? 'border-primary bg-primary text-primary-foreground cursor-pointer' : 'border-border bg-card hover:bg-muted cursor-pointer'}`}
+      title={title}
+    >
+      <span className="text-sm font-medium whitespace-nowrap">{label}</span>
+    </button>
+  );
+}
+
+// Counter abilities whose stack count tracks the on-field unit count (count1/count2).
+// `useN: true` → counter = N (counts itself, e.g. inspiration stacks); otherwise → counter = N−1
+// (nearby OTHER units, per the in-game "for every other unit" wording). The sync only fires
+// when the resolved target ≥ 1, so N−1 abilities stay fully manual in a 1v1 (target 0).
+// Keyed by unit baseId; the ability is only synced when that unit is the active slot unit.
+const COUNT_SYNCED_COUNTERS: Record<string, { abilityId: string; useN: boolean }> = {
+  'lord-of-lancaster': { abilityId: 'ability-lord-of-lancaster-inspiration', useN: true },
+  'chevalier-confrere': { abilityId: 'ability-knightly-brotherhood', useN: false },
+  'templar-brother': { abilityId: 'ability-rule-of-templars', useN: false },
+  'atgeirmadr': { abilityId: 'ability-stronger-together', useN: false },
+};
+
 const Sandbox = () => {
   const [isVersus, setIsVersus] = useState<boolean>(false);
-  const [atEqualCost, setAtEqualCost] = useState<boolean>(false);
   const [multiUnitModelKey, setMultiUnitModelKey] = useState<'aggregated' | 'focusFire' | 'focusFireBatchesMC'>('focusFire');
   const [allowKiting, setAllowKiting] = useState<boolean>(false);
   const [mobileOptionsOpen, setMobileOptionsOpen] = useState<boolean>(false);
   const [startDistancePreset, setStartDistancePreset] = useState<string>("max");
   const [customDistance, setCustomDistance] = useState<number>(5);
+  // Per-slot unit count for multi-unit versus simulation (1 = pure 1v1, >1 routes to the multi-unit engine)
+  const [count1, setCount1] = useState<number>(1);
+  const [count2, setCount2] = useState<number>(1);
+  // Which equal-* preset toggle is currently selected (null = none / manual counts)
+  const [activePreset, setActivePreset] = useState<'cost' | 'pop' | null>(null);
 
   const civ1 = useUnitSlot();
   const civ2 = useUnitSlot();
@@ -463,9 +531,23 @@ const Sandbox = () => {
     resetTechnologies: resetTechnologies2,
   } = civ2;
 
+  // Reset unit counts (and any active preset toggle) to 1v1 whenever the selected unit changes
+  // (mirrors setUnit clearing techs/abilities)
+  useEffect(() => { setCount1(1); setActivePreset(null); }, [unit1?.id]);
+  useEffect(() => { setCount2(1); setActivePreset(null); }, [unit2?.id]);
+
   const maxRangeDistance = Math.max(modifiedStats1.maxRange || 0, modifiedStats2.maxRange || 0);
+  // Kiting only makes sense when at least one unit is ranged. When both units are
+  // melee (range <= 1) there is no approach phase to simulate, so disable the toggle.
+  const kitingDisabled = maxRangeDistance <= 1;
+  // Turn kiting off when both units become melee (range <= 1) — the toggle is disabled there.
+  useEffect(() => { if (kitingDisabled && allowKiting) setAllowKiting(false); }, [kitingDisabled, allowKiting]);
   const startDistance = startDistancePreset === "max" ? maxRangeDistance
     : Math.max(0, Math.min(30, customDistance));
+
+  // Multi-unit simulation is active as soon as either side has more than one unit.
+  // count1 === count2 === 1 keeps the full-fidelity 1v1 path (computeVersus).
+  const isMultiUnit = count1 > 1 || count2 > 1;
 
   // Default multi-unit model: "Attack move" (focusFireBatchesMC) when both units are melee,
   // but "Target focus" (focusFire) as soon as either unit is ranged. Re-applied only when the
@@ -1018,6 +1100,22 @@ const Sandbox = () => {
   const baseId1 = variation1?.baseId || unit1?.id;
   const baseId2 = variation2?.baseId || unit2?.id;
 
+  // Sync count-driven counter abilities to the on-field unit count. Keyed on [count, unit] so a
+  // manual stepper edit on the ability is never overwritten — it only re-fires when the count or
+  // unit changes. Always writes the resolved target (clamped to ≥0 by setAbilityCounter): a count
+  // drop back to 1 resets the counter (N−1 → 0 deactivates) instead of leaving the old value stale.
+  useEffect(() => {
+    const sync = COUNT_SYNCED_COUNTERS[baseId1];
+    if (!sync) return;
+    setAbilityCounter1(sync.abilityId, sync.useN ? count1 : count1 - 1);
+  }, [count1, baseId1, setAbilityCounter1]);
+
+  useEffect(() => {
+    const sync = COUNT_SYNCED_COUNTERS[baseId2];
+    if (!sync) return;
+    setAbilityCounter2(sync.abilityId, sync.useN ? count2 : count2 - 1);
+  }, [count2, baseId2, setAbilityCounter2]);
+
   const computeStrikeBonus = (baseId: string, abilityCounters: Map<string, number> | undefined, activeAbilities: Set<string>) => {
     if (activeAbilities.has('charge-attack')) {
       const stacks = abilityCounters?.get('ability-holy-wrath') ?? 0;
@@ -1159,7 +1257,7 @@ const Sandbox = () => {
             setSelectedAge1={setSelectedAge1} applyFullUpgrade1={applyFullUpgrade1} toggleAbility1={toggleAbility1}
             setSelectedCiv2={setSelectedCiv2} setUnit2={setUnit2}
             setSelectedAge2={setSelectedAge2} applyFullUpgrade2={applyFullUpgrade2} toggleAbility2={toggleAbility2}
-            setIsVersus={setIsVersus} setAtEqualCost={setAtEqualCost} setAllowKiting={setAllowKiting}
+            setIsVersus={setIsVersus} setCount1={setCount1} setCount2={setCount2} setAllowKiting={setAllowKiting}
             setMultiUnitModelKey={setMultiUnitModelKey}
           />
           <div>
@@ -1244,10 +1342,13 @@ const Sandbox = () => {
                 id="tour-versus-options"
                 className={`${mobileOptionsOpen ? 'flex' : 'hidden'} sm:inline-flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto`}
               >
-                {(atEqualCost || allowKiting) && (
+                {((isMultiUnit || allowKiting) && count1 > 1 && count2 > 1) && (
                   <div id="tour-model" className="inline-flex items-center rounded-md border border-border overflow-hidden bg-card w-full sm:w-auto">
-                    <span className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-r border-border">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-r border-border">
                       Model
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-500 border border-amber-500/40 rounded px-1 py-0.5">
+                        approx.
+                      </span>
                     </span>
                     {([
                       { key: 'aggregated', label: 'Aggregated DPS', title: 'All units deal and take damage simultaneously as one pool', devOnly: true },
@@ -1270,49 +1371,22 @@ const Sandbox = () => {
                       ))}
                   </div>
                 )}
-                {(() => {
-                  const effectiveCost1 = modifiedVariation1 ? getTotalCost(modifiedVariation1) : (stats1?.cost ?? 0);
-                  const effectiveCost2 = modifiedVariation2 ? getTotalCost(modifiedVariation2) : (stats2?.cost ?? 0);
-                  const sameCost = unit1 && unit2 && effectiveCost1 > 0 && effectiveCost2 > 0 && effectiveCost1 === effectiveCost2;
-                  const zeroCost = (!!unit1 && effectiveCost1 === 0) || (!!unit2 && effectiveCost2 === 0);
-                  const isEqualCostDisabled = !!sameCost || zeroCost;
-                  const disabledTitle = sameCost ? 'Units have the same cost' : zeroCost ? 'A unit has no cost' : undefined;
-                  return (
-                    <div
-                      id="tour-atEqualCost"
-                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card w-full sm:w-auto ${isEqualCostDisabled ? 'opacity-50' : ''}`}
-                      title={disabledTitle ?? 'Compares equal-cost groups. Results may be less precise due to rounding and group-size approximations.'}
-                    >
-                      <input
-                        type="checkbox"
-                        id="atEqualCost"
-                        checked={atEqualCost}
-                        onChange={(e) => { if (!isEqualCostDisabled) { setAtEqualCost(e.target.checked); } }}
-                        disabled={isEqualCostDisabled}
-                        className="w-4 h-4 rounded border-border disabled:cursor-not-allowed"
-                      />
-                      <label htmlFor="atEqualCost" className={`text-sm font-medium ${isEqualCostDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
-                        At Equal Cost
-                      </label>
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-500 border border-amber-500/40 rounded px-1 py-0.5">
-                        approx.
-                      </span>
-                    </div>
-                  );
-                })()}
                 <div
                   id="tour-kiting"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card w-full sm:w-auto"
-                  title="Ranged units fire free shots during the approach phase, then contact is resolved. Multi-unit contact is stochastic (Monte Carlo) — results are approximate."
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card w-full sm:w-auto ${kitingDisabled ? "opacity-50" : ""}`}
+                  title={kitingDisabled
+                    ? "Kiting requires at least one ranged unit."
+                    : "Ranged units fire free shots during the approach phase, then contact is resolved. Multi-unit contact is stochastic (Monte Carlo) — results are approximate."}
                 >
                   <input
                     type="checkbox"
                     id="allowKiting"
                     checked={allowKiting}
+                    disabled={kitingDisabled}
                     onChange={(e) => { setAllowKiting(e.target.checked); }}
-                    className="w-4 h-4 rounded border-border"
+                    className="w-4 h-4 rounded border-border disabled:cursor-not-allowed"
                   />
-                  <label htmlFor="allowKiting" className="text-sm font-medium cursor-pointer">
+                  <label htmlFor="allowKiting" className={`text-sm font-medium ${kitingDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
                     Allow Kiting
                   </label>
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-500 border border-amber-500/40 rounded px-1 py-0.5">
@@ -1492,36 +1566,36 @@ const Sandbox = () => {
                   transition={{ duration: 0.3 }}
                   className="order-3 sm:order-2 min-w-0 w-full"
                 >
-                    <UnitCard
-                      className="w-full"
-                      variation={modifiedVariation1!}
-                      unit={modifiedUnit1 || unit1}
-                      side="left"
-                      isSelected={true}
-                      compareHp={stats2?.hp}
-                      compareAttack={stats2?.attack}
-                      compareMeleeArmor={stats2?.meleeArmor}
-                      compareRangedArmor={stats2?.rangedArmor}
-                      compareSpeed={stats2?.speed}
-                      compareAttackSpeed={stats2?.attackSpeed}
-                      compareMaxRange={stats2?.maxRange}
-                      bonusDamage={alignedBonuses1}
-                      compareBonusDamage={alignedBonuses2}
-                      maxBonusDamageLines={maxBonusDamageLines}
-                      chargeBonus={stats1?.chargeBonus}
-                      compareChargeBonus={stats2?.chargeBonus}
-                      compareCost={stats2?.cost}
-                      comparePopulation={stats2?.population}
-                      compareProductionTime={stats2?.productionTime}
-                      secondaryWeapons={modifiedVariation1?.secondaryWeapons ?? secondaryWeapons1}
-                      showSecondaryWeaponRow={secondaryWeapons1.length > 0 || secondaryWeapons2.length > 0}
-                      maxHpBonusFraction={modifiedStats1.maxHpBonusFraction ?? 0}
-                      opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
-                      opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
-                      opponentVersusDebuff={(modifiedStats2.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(variation1?.classes || unit1?.classes || [], [...activeAbilities2], [...activeTechnologies2], variation2?.baseId || unit2?.id)}
-                      opponentBonusDamageReduction={modifiedStats2.bonusDamageReduction ?? 0}
-                      opponentClasses={variation2?.classes || unit2?.classes || []}
-                    />
+                  <UnitCard
+                    className="w-full"
+                    variation={modifiedVariation1!}
+                    unit={modifiedUnit1 || unit1}
+                    side="left"
+                    isSelected={true}
+                    compareHp={stats2?.hp}
+                    compareAttack={stats2?.attack}
+                    compareMeleeArmor={stats2?.meleeArmor}
+                    compareRangedArmor={stats2?.rangedArmor}
+                    compareSpeed={stats2?.speed}
+                    compareAttackSpeed={stats2?.attackSpeed}
+                    compareMaxRange={stats2?.maxRange}
+                    bonusDamage={alignedBonuses1}
+                    compareBonusDamage={alignedBonuses2}
+                    maxBonusDamageLines={maxBonusDamageLines}
+                    chargeBonus={stats1?.chargeBonus}
+                    compareChargeBonus={stats2?.chargeBonus}
+                    compareCost={stats2?.cost}
+                    comparePopulation={stats2?.population}
+                    compareProductionTime={stats2?.productionTime}
+                    secondaryWeapons={modifiedVariation1?.secondaryWeapons ?? secondaryWeapons1}
+                    showSecondaryWeaponRow={secondaryWeapons1.length > 0 || secondaryWeapons2.length > 0}
+                    maxHpBonusFraction={modifiedStats1.maxHpBonusFraction ?? 0}
+                    opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
+                    opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
+                    opponentVersusDebuff={(modifiedStats2.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(variation1?.classes || unit1?.classes || [], [...activeAbilities2], [...activeTechnologies2], variation2?.baseId || unit2?.id)}
+                    opponentBonusDamageReduction={modifiedStats2.bonusDamageReduction ?? 0}
+                    opponentClasses={variation2?.classes || unit2?.classes || []}
+                  />
                 </motion.div>
               </>
             )}
@@ -1534,84 +1608,124 @@ const Sandbox = () => {
                   transition={{ duration: 0.3 }}
                   className="order-4 sm:order-3 min-w-0 w-full"
                 >
-                    <UnitCard
-                      className="w-full"
-                      variation={modifiedVariation2!}
-                      unit={modifiedUnit2 || unit2}
-                      side="right"
-                      isSelected={true}
-                      compareHp={stats1?.hp}
-                      compareAttack={stats1?.attack}
-                      compareMeleeArmor={stats1?.meleeArmor}
-                      compareRangedArmor={stats1?.rangedArmor}
-                      compareSpeed={stats1?.speed}
-                      compareAttackSpeed={stats1?.attackSpeed}
-                      compareMaxRange={stats1?.maxRange}
-                      bonusDamage={alignedBonuses2}
-                      compareBonusDamage={alignedBonuses1}
-                      maxBonusDamageLines={maxBonusDamageLines}
-                      chargeBonus={stats2?.chargeBonus}
-                      compareChargeBonus={stats1?.chargeBonus}
-                      compareCost={stats1?.cost}
-                      comparePopulation={stats1?.population}
-                      compareProductionTime={stats1?.productionTime}
-                      secondaryWeapons={modifiedVariation2?.secondaryWeapons ?? secondaryWeapons2}
-                      showSecondaryWeaponRow={secondaryWeapons1.length > 0 || secondaryWeapons2.length > 0}
-                      maxHpBonusFraction={modifiedStats2.maxHpBonusFraction ?? 0}
-                      opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
-                      opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
-                      opponentVersusDebuff={(modifiedStats1.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(variation2?.classes || unit2?.classes || [], [...activeAbilities1], [...activeTechnologies1], variation1?.baseId || unit1?.id)}
-                      opponentBonusDamageReduction={modifiedStats1.bonusDamageReduction ?? 0}
-                      opponentClasses={variation1?.classes || unit1?.classes || []}
-                    />
+                  <UnitCard
+                    className="w-full"
+                    variation={modifiedVariation2!}
+                    unit={modifiedUnit2 || unit2}
+                    side="right"
+                    isSelected={true}
+                    compareHp={stats1?.hp}
+                    compareAttack={stats1?.attack}
+                    compareMeleeArmor={stats1?.meleeArmor}
+                    compareRangedArmor={stats1?.rangedArmor}
+                    compareSpeed={stats1?.speed}
+                    compareAttackSpeed={stats1?.attackSpeed}
+                    compareMaxRange={stats1?.maxRange}
+                    bonusDamage={alignedBonuses2}
+                    compareBonusDamage={alignedBonuses1}
+                    maxBonusDamageLines={maxBonusDamageLines}
+                    chargeBonus={stats2?.chargeBonus}
+                    compareChargeBonus={stats1?.chargeBonus}
+                    compareCost={stats1?.cost}
+                    comparePopulation={stats1?.population}
+                    compareProductionTime={stats1?.productionTime}
+                    secondaryWeapons={modifiedVariation2?.secondaryWeapons ?? secondaryWeapons2}
+                    showSecondaryWeaponRow={secondaryWeapons1.length > 0 || secondaryWeapons2.length > 0}
+                    maxHpBonusFraction={modifiedStats2.maxHpBonusFraction ?? 0}
+                    opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
+                    opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
+                    opponentVersusDebuff={(modifiedStats1.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(variation2?.classes || unit2?.classes || [], [...activeAbilities1], [...activeTechnologies1], variation1?.baseId || unit1?.id)}
+                    opponentBonusDamageReduction={modifiedStats1.bonusDamageReduction ?? 0}
+                    opponentClasses={variation1?.classes || unit1?.classes || []}
+                  />
                 </motion.div>
                 <div className="order-2 sm:order-4 flex flex-col items-start sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
-                    <div id="tour-age2">
-                      <AgeSelector
-                        availableAges={getAvailableAges(unit2.id, selectedCiv2)}
-                        selectedAge={selectedAge2}
-                        onAgeChange={setSelectedAge2}
-                        orientation="right"
-                      />
-                    </div>
-                    <div id="tour-techs2">
-                      <TechnologySelector
-                        technologies={techs2}
-                        activeTechnologies={activeTechnologies2}
-                        orientation="right"
-                        onToggle={toggleTechnology2}
-                        selectedCiv={selectedCiv2}
-                        lockedTechnologies={lockedTechnologies2}
-                        unitId={variation2?.baseId ?? unit2?.id}
-                        selectedAge={selectedAge2}
-                        unitMinAge={unitMinAge2}
-                        fullUpgradeAge={fullUpgradeAge2}
-                        onApplyFullUpgrade={applyFullUpgrade2}
-                        onReset={resetTechnologies2}
-                      />
-                    </div>
-                    <div id="tour-abilities2">
-                      <AbilitySelector
-                        abilities={abilities2}
-                        activeAbilities={activeAbilities2}
-                        onToggle={toggleAbility2}
-                        orientation="right"
-                        selectedCiv={selectedCiv2}
-                        lockedAbilities={lockedAbilities2}
-                        abilityCounters={abilityCounters2}
-                        onIncrement={incrementAbility2}
-                        onDecrement={decrementAbility2}
-                        onSetCounter={setAbilityCounter2}
-                        unitId={variation2?.baseId ?? unit2?.id}
-                      />
-                    </div>
+                  <div id="tour-age2">
+                    <AgeSelector
+                      availableAges={getAvailableAges(unit2.id, selectedCiv2)}
+                      selectedAge={selectedAge2}
+                      onAgeChange={setSelectedAge2}
+                      orientation="right"
+                    />
+                  </div>
+                  <div id="tour-techs2">
+                    <TechnologySelector
+                      technologies={techs2}
+                      activeTechnologies={activeTechnologies2}
+                      orientation="right"
+                      onToggle={toggleTechnology2}
+                      selectedCiv={selectedCiv2}
+                      lockedTechnologies={lockedTechnologies2}
+                      unitId={variation2?.baseId ?? unit2?.id}
+                      selectedAge={selectedAge2}
+                      unitMinAge={unitMinAge2}
+                      fullUpgradeAge={fullUpgradeAge2}
+                      onApplyFullUpgrade={applyFullUpgrade2}
+                      onReset={resetTechnologies2}
+                    />
+                  </div>
+                  <div id="tour-abilities2">
+                    <AbilitySelector
+                      abilities={abilities2}
+                      activeAbilities={activeAbilities2}
+                      onToggle={toggleAbility2}
+                      orientation="right"
+                      selectedCiv={selectedCiv2}
+                      lockedAbilities={lockedAbilities2}
+                      abilityCounters={abilityCounters2}
+                      onIncrement={incrementAbility2}
+                      onDecrement={decrementAbility2}
+                      onSetCounter={setAbilityCounter2}
+                      unitId={variation2?.baseId ?? unit2?.id}
+                    />
+                  </div>
                 </div>
               </>
             )}
           </div>
         )}
+        {isVersus && unit1 && unit2 && (() => {
+          const effectiveCost1 = modifiedVariation1 ? getTotalCost(modifiedVariation1) : (stats1?.cost ?? 0);
+          const effectiveCost2 = modifiedVariation2 ? getTotalCost(modifiedVariation2) : (stats2?.cost ?? 0);
+          const pop1 = stats1?.population ?? 0;
+          const pop2 = stats2?.population ?? 0;
+          const costDisabled = effectiveCost1 <= 0 || effectiveCost2 <= 0;
+          const popDisabled = pop1 <= 0 || pop2 <= 0;
+          // Manual stepper edits drop any active preset selection.
+          const setManual1 = (n: number) => { setCount1(n); setActivePreset(null); };
+          const setManual2 = (n: number) => { setCount2(n); setActivePreset(null); };
+          // Toggle a preset: select it (apply its ratio) or, if already selected, revert to 1v1.
+          const togglePreset = (key: 'cost' | 'pop', costA: number, costB: number) => {
+            if (activePreset === key) { setCount1(1); setCount2(1); setActivePreset(null); return; }
+            const m = calculateEqualCostMultipliers(costA, costB);
+            setCount1(m.multA); setCount2(m.multB); setActivePreset(key);
+          };
+          return (
+            <div id="tour-unit-counts" className="flex flex-wrap items-center justify-center gap-x-4 gap-y-3 mt-8">
+              <CountStepper count={count1} onChange={setManual1} />
+              <div className="flex items-center gap-2">
+                <PresetButton
+                  id="tour-atEqualCost"
+                  label="⚖ Equal Cost"
+                  disabled={costDisabled}
+                  active={activePreset === 'cost'}
+                  title={costDisabled ? 'A unit has no cost' : activePreset === 'cost' ? 'Equal-cost ratio applied — click to reset to 1v1.' : 'Fills both unit counts to an equal-cost ratio. You can fine-tune the counts afterwards.'}
+                  onClick={() => togglePreset('cost', effectiveCost1, effectiveCost2)}
+                />
+                <PresetButton
+                  label="👥 Equal Pop"
+                  disabled={popDisabled}
+                  active={activePreset === 'pop'}
+                  title={popDisabled ? 'A unit has no population value' : activePreset === 'pop' ? 'Equal-population ratio applied — click to reset to 1v1.' : 'Fills both unit counts so each side uses the same total population (e.g. a 2-pop unit gets half the count of a 1-pop unit).'}
+                  onClick={() => togglePreset('pop', pop1, pop2)}
+                />
+              </div>
+              <CountStepper count={count2} onChange={setManual2} />
+            </div>
+          );
+        })()}
         {isVersus && (
-          <div className="grid grid-cols-2 sm:grid-cols-[auto_1fr_1fr_auto] gap-x-2 gap-y-3 sm:gap-6 mt-8 items-start">
+          <div className="grid grid-cols-2 sm:grid-cols-[auto_1fr_1fr_auto] gap-x-2 gap-y-3 sm:gap-6 mt-4 items-start">
             {(() => {
               if (!unit1 || !unit2) return null;
 
@@ -1629,21 +1743,19 @@ const Sandbox = () => {
               const noTimerData1 = modifiedVariation1NoTimer || modifiedUnit1NoTimer;
               const noTimerData2 = modifiedVariation2NoTimer || modifiedUnit2NoTimer;
 
-              const cost1 = modifiedVariation1 ? getTotalCost(modifiedVariation1) : (stats1?.cost ?? 0);
-              const cost2 = modifiedVariation2 ? getTotalCost(modifiedVariation2) : (stats2?.cost ?? 0);
-
-              if (atEqualCost && cost1 > 0 && cost2 > 0) {
+              if (isMultiUnit) {
                 const unit1 = modifiedVariation1 || modifiedUnit1!;
                 const unit2 = modifiedVariation2 || modifiedUnit2!;
+                const customMults = { multA: count1, multB: count2 };
                 if (allowKiting && multiUnitModelKey === 'focusFire') {
                   const result = computeVersusAtEqualCostKitingFocusFire(
-                    unit1, unit2, abilitiesArray1, abilitiesArray2, charge1, charge2, startDistance,
+                    unit1, unit2, abilitiesArray1, abilitiesArray2, charge1, charge2, startDistance, customMults,
                   );
                   versusData = result;
                   multipliers = result.multipliers;
                 } else if (allowKiting && multiUnitModelKey === 'focusFireBatchesMC') {
                   const result = computeVersusAtEqualCostKitingBatchesMC(
-                    unit1, unit2, abilitiesArray1, abilitiesArray2, charge1, charge2, startDistance,
+                    unit1, unit2, abilitiesArray1, abilitiesArray2, charge1, charge2, startDistance, customMults,
                   );
                   versusData = result;
                   multipliers = result.multipliers;
@@ -1656,7 +1768,7 @@ const Sandbox = () => {
                         aggregatedDPSModel;
                   const result = computeVersusAtEqualCost(
                     unit1, unit2, abilitiesArray1, abilitiesArray2, charge1, charge2,
-                    allowKiting, startDistance, multiUnitModel,
+                    allowKiting, startDistance, multiUnitModel, customMults,
                   );
                   versusData = result;
                   multipliers = result.multipliers;
@@ -1730,11 +1842,14 @@ const Sandbox = () => {
                 rightIsWinner = false;
               }
               let loserUnitsToWin: number | undefined;
-              if (!atEqualCost && versusData.winner !== 'draw') {
+              // Show "units to win" whenever one side is a lone unit (1v1, 1vN, Nv1).
+              if ((count1 === 1 || count2 === 1) && versusData.winner !== 'draw') {
                 loserUnitsToWin = computeLoserUnitsToWin(
                   versusData,
                   modifiedVariation1 || modifiedUnit1!,
                   modifiedVariation2 || modifiedUnit2!,
+                  count1,
+                  count2,
                 );
               }
 
@@ -1808,45 +1923,45 @@ const Sandbox = () => {
                 <>
                   <div className="order-1 sm:order-1 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
                     <div className="flex flex-col items-end gap-2 w-max ml-auto sm:w-auto sm:ml-0 sm:items-stretch sm:gap-3">
-                        <div id="tour-age1">
-                          <AgeSelector
-                            availableAges={getAvailableAges(unit1.id, selectedCiv1)}
-                            selectedAge={selectedAge1}
-                            onAgeChange={setSelectedAge1}
-                            orientation="left"
-                          />
-                        </div>
-                        <div id="tour-techs1">
-                          <TechnologySelector
-                            technologies={techs1}
-                            activeTechnologies={activeTechnologies1}
-                            onToggle={toggleTechnology1}
-                            orientation="left"
-                            selectedCiv={selectedCiv1}
-                            lockedTechnologies={lockedTechnologies1}
-                            unitId={variation1?.baseId ?? unit1?.id}
-                            selectedAge={selectedAge1}
-                            unitMinAge={unitMinAge1}
-                            fullUpgradeAge={fullUpgradeAge1}
-                            onApplyFullUpgrade={applyFullUpgrade1}
-                            onReset={resetTechnologies1}
-                          />
-                        </div>
-                        <div id="tour-abilities1">
-                          <AbilitySelector
-                            abilities={abilities1}
-                            activeAbilities={activeAbilities1}
-                            onToggle={toggleAbility1}
-                            orientation="left"
-                            selectedCiv={selectedCiv1}
-                            lockedAbilities={lockedAbilities1}
-                            abilityCounters={abilityCounters1}
-                            onIncrement={incrementAbility1}
-                            onDecrement={decrementAbility1}
-                            onSetCounter={setAbilityCounter1}
-                            unitId={variation1?.baseId ?? unit1?.id}
-                          />
-                        </div>
+                      <div id="tour-age1">
+                        <AgeSelector
+                          availableAges={getAvailableAges(unit1.id, selectedCiv1)}
+                          selectedAge={selectedAge1}
+                          onAgeChange={setSelectedAge1}
+                          orientation="left"
+                        />
+                      </div>
+                      <div id="tour-techs1">
+                        <TechnologySelector
+                          technologies={techs1}
+                          activeTechnologies={activeTechnologies1}
+                          onToggle={toggleTechnology1}
+                          orientation="left"
+                          selectedCiv={selectedCiv1}
+                          lockedTechnologies={lockedTechnologies1}
+                          unitId={variation1?.baseId ?? unit1?.id}
+                          selectedAge={selectedAge1}
+                          unitMinAge={unitMinAge1}
+                          fullUpgradeAge={fullUpgradeAge1}
+                          onApplyFullUpgrade={applyFullUpgrade1}
+                          onReset={resetTechnologies1}
+                        />
+                      </div>
+                      <div id="tour-abilities1">
+                        <AbilitySelector
+                          abilities={abilities1}
+                          activeAbilities={activeAbilities1}
+                          onToggle={toggleAbility1}
+                          orientation="left"
+                          selectedCiv={selectedCiv1}
+                          lockedAbilities={lockedAbilities1}
+                          abilityCounters={abilityCounters1}
+                          onIncrement={incrementAbility1}
+                          onDecrement={decrementAbility1}
+                          onSetCounter={setAbilityCounter1}
+                          unitId={variation1?.baseId ?? unit1?.id}
+                        />
+                      </div>
                     </div>
                   </div>
                   <motion.div
@@ -1855,21 +1970,21 @@ const Sandbox = () => {
                     transition={{ duration: 0.3 }}
                     className="order-3 sm:order-2 min-w-0 w-full"
                   >
-                        <UnitCard
-                          className="w-full"
-                          variation={modifiedVariation1!}
-                          unit={modifiedUnit1 || unit1}
-                          side="left"
-                          mode="versus"
-                          versusMetrics={leftMetrics}
-                          secondaryWeapons={modifiedVariation1?.secondaryWeapons ?? secondaryWeapons1}
-                          maxHpBonusFraction={modifiedStats1.maxHpBonusFraction ?? 0}
-                          opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
-                          opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
-                          opponentVersusDebuff={(modifiedStats2.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(unit1?.classes || [], [...activeAbilities2], [...activeTechnologies2], unit2?.id)}
-                          opponentBonusDamageReduction={modifiedStats2.bonusDamageReduction ?? 0}
-                          opponentClasses={modifiedVariation2?.classes || unit2?.classes || []}
-                        />
+                    <UnitCard
+                      className="w-full"
+                      variation={modifiedVariation1!}
+                      unit={modifiedUnit1 || unit1}
+                      side="left"
+                      mode="versus"
+                      versusMetrics={leftMetrics}
+                      secondaryWeapons={modifiedVariation1?.secondaryWeapons ?? secondaryWeapons1}
+                      maxHpBonusFraction={modifiedStats1.maxHpBonusFraction ?? 0}
+                      opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
+                      opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
+                      opponentVersusDebuff={(modifiedStats2.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(unit1?.classes || [], [...activeAbilities2], [...activeTechnologies2], unit2?.id)}
+                      opponentBonusDamageReduction={modifiedStats2.bonusDamageReduction ?? 0}
+                      opponentClasses={modifiedVariation2?.classes || unit2?.classes || []}
+                    />
                   </motion.div>
                   <motion.div
                     initial={{ opacity: 0, x: 50 }}
@@ -1877,62 +1992,62 @@ const Sandbox = () => {
                     transition={{ duration: 0.3 }}
                     className="order-4 sm:order-3 min-w-0 w-full"
                   >
-                        <UnitCard
-                          className="w-full"
-                          variation={modifiedVariation2!}
-                          unit={modifiedUnit2 || unit2}
-                          side="right"
-                          mode="versus"
-                          versusMetrics={rightMetrics}
-                          secondaryWeapons={modifiedVariation2?.secondaryWeapons ?? secondaryWeapons2}
-                          maxHpBonusFraction={modifiedStats2.maxHpBonusFraction ?? 0}
-                          opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
-                          opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
-                          opponentVersusDebuff={(modifiedStats1.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(unit2?.classes || [], [...activeAbilities1], [...activeTechnologies1], unit1?.id)}
-                          opponentBonusDamageReduction={modifiedStats1.bonusDamageReduction ?? 0}
-                          opponentClasses={modifiedVariation1?.classes || unit1?.classes || []}
-                        />
+                    <UnitCard
+                      className="w-full"
+                      variation={modifiedVariation2!}
+                      unit={modifiedUnit2 || unit2}
+                      side="right"
+                      mode="versus"
+                      versusMetrics={rightMetrics}
+                      secondaryWeapons={modifiedVariation2?.secondaryWeapons ?? secondaryWeapons2}
+                      maxHpBonusFraction={modifiedStats2.maxHpBonusFraction ?? 0}
+                      opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
+                      opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
+                      opponentVersusDebuff={(modifiedStats1.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(unit2?.classes || [], [...activeAbilities1], [...activeTechnologies1], unit1?.id)}
+                      opponentBonusDamageReduction={modifiedStats1.bonusDamageReduction ?? 0}
+                      opponentClasses={modifiedVariation1?.classes || unit1?.classes || []}
+                    />
                   </motion.div>
                   <div className="order-2 sm:order-4 flex flex-col items-start sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
-                        <div id="tour-age2">
-                          <AgeSelector
-                            availableAges={getAvailableAges(unit2.id, selectedCiv2)}
-                            selectedAge={selectedAge2}
-                            onAgeChange={setSelectedAge2}
-                            orientation="right"
-                          />
-                        </div>
-                        <div id="tour-techs2">
-                          <TechnologySelector
-                            technologies={techs2}
-                            activeTechnologies={activeTechnologies2}
-                            onToggle={toggleTechnology2}
-                            orientation="right"
-                            selectedCiv={selectedCiv2}
-                            lockedTechnologies={lockedTechnologies2}
-                            unitId={variation2?.baseId ?? unit2?.id}
-                            selectedAge={selectedAge2}
-                            unitMinAge={unitMinAge2}
-                            fullUpgradeAge={fullUpgradeAge2}
-                            onApplyFullUpgrade={applyFullUpgrade2}
-                            onReset={resetTechnologies2}
-                          />
-                        </div>
-                        <div id="tour-abilities2">
-                          <AbilitySelector
-                            abilities={abilities2}
-                            activeAbilities={activeAbilities2}
-                            onToggle={toggleAbility2}
-                            orientation="right"
-                            selectedCiv={selectedCiv2}
-                            lockedAbilities={lockedAbilities2}
-                            abilityCounters={abilityCounters2}
-                            onIncrement={incrementAbility2}
-                            onDecrement={decrementAbility2}
-                            onSetCounter={setAbilityCounter2}
-                            unitId={variation2?.baseId ?? unit2?.id}
-                          />
-                        </div>
+                    <div id="tour-age2">
+                      <AgeSelector
+                        availableAges={getAvailableAges(unit2.id, selectedCiv2)}
+                        selectedAge={selectedAge2}
+                        onAgeChange={setSelectedAge2}
+                        orientation="right"
+                      />
+                    </div>
+                    <div id="tour-techs2">
+                      <TechnologySelector
+                        technologies={techs2}
+                        activeTechnologies={activeTechnologies2}
+                        onToggle={toggleTechnology2}
+                        orientation="right"
+                        selectedCiv={selectedCiv2}
+                        lockedTechnologies={lockedTechnologies2}
+                        unitId={variation2?.baseId ?? unit2?.id}
+                        selectedAge={selectedAge2}
+                        unitMinAge={unitMinAge2}
+                        fullUpgradeAge={fullUpgradeAge2}
+                        onApplyFullUpgrade={applyFullUpgrade2}
+                        onReset={resetTechnologies2}
+                      />
+                    </div>
+                    <div id="tour-abilities2">
+                      <AbilitySelector
+                        abilities={abilities2}
+                        activeAbilities={activeAbilities2}
+                        onToggle={toggleAbility2}
+                        orientation="right"
+                        selectedCiv={selectedCiv2}
+                        lockedAbilities={lockedAbilities2}
+                        abilityCounters={abilityCounters2}
+                        onIncrement={incrementAbility2}
+                        onDecrement={decrementAbility2}
+                        onSetCounter={setAbilityCounter2}
+                        unitId={variation2?.baseId ?? unit2?.id}
+                      />
+                    </div>
                   </div>
                 </>
               );
