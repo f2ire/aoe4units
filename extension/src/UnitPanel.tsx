@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ChevronDown, ChevronRight, ChevronUp, GripHorizontal, Search, Settings2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, GripHorizontal, Lock, LockOpen, Search, Settings2 } from "lucide-react";
 import { getAvailableAges, getTotalCost } from "@/data/unified-units";
 import type { AoE4Unit } from "@/data/unified-units";
 import { getTechnologyTier, getTechnologyBaseName } from "@/data/unified-technologies";
@@ -9,6 +9,7 @@ import { useUnitSlot } from "@/hooks/useUnitSlot";
 import { buildModifiedVariation } from "@/lib/buildVariation";
 import { cn } from "@/lib/utils";
 import { CompactUnitCard, type CompareStats, type VSSlotInfo } from "./CompactUnitCard";
+import type { ResizeHandle } from "./useDraggablePanel";
 import { CompactLoadout } from "./CompactLoadout";
 import { assetUrl } from "./assetUrl";
 
@@ -156,6 +157,65 @@ export function ResizeGrip({ onPointerDown, title, className, gripRef }: {
   );
 }
 
+// Small lock toggle sitting just left of the resize grip. When active, both
+// unit panels are kept at the same size (resizing either one resizes both).
+export function SizeLockButton({ locked, onToggle, className }: {
+  locked: boolean;
+  onToggle: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={onToggle}
+      title={locked ? "Unlock panel sizes" : "Lock both unit panels to the same size"}
+      className={cn(
+        "absolute bottom-0 right-4 z-20 flex h-3 w-3 items-center justify-center rounded-sm border shadow-sm backdrop-blur-sm transition-colors",
+        locked
+          ? "border-amber-400/70 bg-amber-500/90 text-black"
+          : "border-amber-500/40 bg-zinc-900/85 text-amber-300/90 hover:border-amber-500/70 hover:bg-zinc-800/90",
+        className,
+      )}
+    >
+      {locked ? <Lock className="h-1.5 w-1.5" /> : <LockOpen className="h-1.5 w-1.5" />}
+    </button>
+  );
+}
+
+// Invisible resize hit areas along all four edges and corners — straddling the
+// panel border so they're easy to grab without covering much content. Edges
+// stop short of the corners so corner handles keep their diagonal cursor.
+const RESIZE_HANDLE_AREAS: Array<{ handle: ResizeHandle; className: string }> = [
+  { handle: "n", className: "-top-1 left-3 right-3 h-2 cursor-ns-resize" },
+  { handle: "w", className: "-left-1 top-3 bottom-3 w-2 cursor-ew-resize" },
+  { handle: "e", className: "-right-1 top-3 bottom-3 w-2 cursor-ew-resize" },
+  { handle: "nw", className: "-top-1 -left-1 h-4 w-4 cursor-nwse-resize" },
+  { handle: "ne", className: "-top-1 -right-1 h-4 w-4 cursor-nesw-resize" },
+  { handle: "sw", className: "-bottom-1 -left-1 h-4 w-4 cursor-nesw-resize" },
+  { handle: "se", className: "-bottom-1 -right-1 h-4 w-4 cursor-nwse-resize" },
+];
+
+// Resize hit areas on every edge/corner of a panel. Must be rendered inside a
+// `relative` container; forwards the grabbed handle to startResize.
+export function ResizeHandles({ onResizeStart, className }: {
+  onResizeStart: (e: React.PointerEvent, handle: ResizeHandle) => void;
+  className?: string;
+}) {
+  return (
+    <>
+      {RESIZE_HANDLE_AREAS.map(({ handle, className: pos }) => (
+        <div
+          key={handle}
+          onPointerDown={(e) => onResizeStart(e, handle)}
+          title="Resize panel"
+          className={cn("absolute z-20 touch-none", pos, className)}
+        />
+      ))}
+    </>
+  );
+}
+
 // Small amber soldier pictogram used to visualize unit counts.
 function SoldierChip({ size = 14 }: { size?: number }) {
   return (
@@ -174,18 +234,11 @@ function SoldierChip({ size = 14 }: { size?: number }) {
   );
 }
 
-// One side of the equal-cost unit-count display: big number + soldier pictograms.
+// One side of the equal-cost unit-count display: just the unit count.
 function UnitCountSide({ count }: { count: number }) {
-  const shown = Math.min(count, 4);
   return (
-    <div className="flex flex-col items-center gap-0.5">
+    <div className="flex flex-col items-center">
       <span className="text-base font-bold leading-none tabular-nums text-amber-300">{count}</span>
-      <div className="flex items-center gap-0.5">
-        {Array.from({ length: shown }).map((_, i) => (
-          <SoldierChip key={i} size={11} />
-        ))}
-        {count > shown && <span className="text-[9px] leading-none text-amber-500/70">+{count - shown}</span>}
-      </div>
     </div>
   );
 }
@@ -196,11 +249,11 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
   const dpcCols = vsStatColors(dpsPerCost1, dpsPerCost2, true);
   const ttkCols = vsStatColors(ttk1, ttk2, false);
 
-  const rows: Array<{ label: string; v1: string; v2: string; c1: string; c2: string }> = [
-    { label: "DPS", v1: fmtN(dps1), v2: fmtN(dps2), ...dpsCols },
-    { label: "HTK", v1: hitsToKill1 == null ? "—" : String(hitsToKill1), v2: hitsToKill2 == null ? "—" : String(hitsToKill2), ...htkCols },
-    { label: "DPS/Cost", v1: fmtN(dpsPerCost1, 3), v2: fmtN(dpsPerCost2, 3), ...dpcCols },
-    { label: "TTK", v1: ttk1 == null ? "—" : `${ttk1.toFixed(1)}s`, v2: ttk2 == null ? "—" : `${ttk2.toFixed(1)}s`, ...ttkCols },
+  const rows: Array<{ label: string; v1: string; v2: string; c1: string; c2: string; tip: string }> = [
+    { label: "DPS", v1: fmtN(dps1), v2: fmtN(dps2), ...dpsCols, tip: "Damage per second" },
+    { label: "HTK", v1: hitsToKill1 == null ? "—" : String(hitsToKill1), v2: hitsToKill2 == null ? "—" : String(hitsToKill2), ...htkCols, tip: "Hit to kill" },
+    { label: "DPS/Cost", v1: fmtN(dpsPerCost1, 3), v2: fmtN(dpsPerCost2, 3), ...dpcCols, tip: "Damage per second / cost" },
+    { label: "TTK", v1: ttk1 == null ? "—" : `${ttk1.toFixed(1)}s`, v2: ttk2 == null ? "—" : `${ttk2.toFixed(1)}s`, ...ttkCols, tip: "Time to kill" },
   ];
 
   const slot1Wins = winner === "attacker";
@@ -211,7 +264,7 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
 
   return (
     <div className="w-[185px] rounded-lg border border-amber-500/30 bg-zinc-950/65 text-zinc-100 shadow-2xl ring-1 ring-black/30 backdrop-blur-md">
-      <div className="border-b border-amber-500/15 bg-zinc-900/70 px-2 py-1 text-center text-[12px] font-bold uppercase tracking-widest text-amber-400/80">
+      <div className="border-b border-amber-500/15 bg-zinc-900/70 px-2 py-1 text-center font-serif text-[13px] font-semibold tracking-wide text-amber-400/80">
         ⚔ VS Stats
       </div>
       {controls && (
@@ -269,6 +322,12 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
               </div>
             </div>
           )}
+          {(controls.atEqualCost || controls.allowKiting) && (
+            <div className="flex items-center justify-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-300">
+              <span aria-hidden>⚠</span>
+              May be imprecise
+            </div>
+          )}
         </div>
       )}
       {multA != null && multB != null && (
@@ -283,29 +342,45 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
           </div>
         </div>
       )}
-      <div className="px-2 py-2 space-y-1.5">
-        {rows.map(({ label, v1, v2, c1, c2 }) => (
-          <div key={label} className="flex items-center gap-0.5 text-[12px]">
+      <div className="pointer-events-auto px-2 py-2 space-y-1.5">
+        {rows.map(({ label, v1, v2, c1, c2, tip }) => (
+          <div key={label} className="group relative flex cursor-help items-center gap-0.5 text-[12px]">
             <span className={cn("w-[44px] text-right tabular-nums leading-none", c1)}>{v1}</span>
-            <span className="mx-1 min-w-[56px] text-center text-[11px] uppercase tracking-wide text-zinc-400">{label}</span>
+            <span className="mx-1 min-w-[56px] text-center text-[11px] uppercase tracking-wide text-zinc-400 underline decoration-dotted decoration-zinc-600 underline-offset-2">{label}</span>
             <span className={cn("w-[44px] text-left tabular-nums leading-none", c2)}>{v2}</span>
+            <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-0.5 hidden -translate-x-1/2 whitespace-nowrap rounded border border-amber-500/40 bg-zinc-950/95 px-1.5 py-0.5 text-[10px] font-medium text-zinc-200 shadow-xl backdrop-blur group-hover:block">
+              {tip}
+            </span>
           </div>
         ))}
       </div>
       <div className="border-t border-amber-500/15 px-2 py-1.5 space-y-1">
         {winRateA != null && winRateB != null && (() => {
           const [pctA, pctDraw, pctB] = pctSplit([winRateA, drawRate ?? 0, winRateB]);
+          // Green = winner, orange = loser (neutral when the overall result is a draw).
+          const aTextColor = slot1Wins ? "text-green-400" : slot2Wins ? "text-orange-400" : "text-zinc-300";
+          const bTextColor = slot2Wins ? "text-green-400" : slot1Wins ? "text-orange-400" : "text-zinc-300";
+          const aBarColor = slot1Wins ? "bg-green-500/70" : slot2Wins ? "bg-orange-500/70" : "bg-zinc-500/70";
+          const bBarColor = slot2Wins ? "bg-green-500/70" : slot1Wins ? "bg-orange-500/70" : "bg-zinc-500/70";
           return (
             <>
-              <div className="flex items-center justify-between text-[11px] tabular-nums">
-                <span className="font-semibold text-green-400">{pctA}%</span>
-                <span className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">Win rate</span>
-                <span className="font-semibold text-orange-400">{pctB}%</span>
+              <div className="text-center text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
+                Win rate
               </div>
-              <div className="relative flex h-1.5 overflow-hidden rounded-full bg-zinc-800">
-                <div className="h-full bg-green-500/70" style={{ width: `${pctA}%` }} />
+              <div className="flex items-end justify-between gap-1 text-[11px]">
+                <span className="flex min-w-0 items-baseline gap-1">
+                  <span className={cn("font-bold tabular-nums", aTextColor)}>{pctA}%</span>
+                  <span className="truncate text-[10px] text-zinc-400">{unit1Name}</span>
+                </span>
+                <span className="flex min-w-0 items-baseline gap-1">
+                  <span className="truncate text-right text-[10px] text-zinc-400">{unit2Name}</span>
+                  <span className={cn("font-bold tabular-nums", bTextColor)}>{pctB}%</span>
+                </span>
+              </div>
+              <div className="relative flex h-2 overflow-hidden rounded-full bg-zinc-800">
+                <div className={cn("h-full", aBarColor)} style={{ width: `${pctA}%` }} />
                 <div className="h-full bg-zinc-600/70" style={{ width: `${pctDraw}%` }} />
-                <div className="h-full bg-orange-500/70" style={{ width: `${pctB}%` }} />
+                <div className={cn("h-full", bBarColor)} style={{ width: `${pctB}%` }} />
               </div>
               {pctDraw > 0 && (
                 <div className="text-center text-[9px] tabular-nums text-zinc-500">
@@ -321,10 +396,10 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
           <>
             <div className="flex items-center justify-between gap-1 text-[12px]">
               <span className={cn("truncate", slot1Wins ? "font-semibold text-green-400" : "text-zinc-400")}>
-                {slot1Wins && "★ "}{unit1Name}
+                {slot1Wins && "🏆 "}{unit1Name}
               </span>
               <span className={cn("truncate text-right", slot2Wins ? "font-semibold text-green-400" : "text-zinc-400")}>
-                {unit2Name}{slot2Wins && " ★"}
+                {unit2Name}{slot2Wins && " 🏆"}
               </span>
             </div>
             {winnerUnits != null && (
@@ -338,12 +413,27 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
             )}
             {hpPct != null && (
               <>
-                <div className="text-center text-[12px] text-green-400/80">
-                  {Math.round(winnerHp!)} HP · {hpPct}%
+                <div className="text-center text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
+                  HP remaining
                 </div>
-                <div className="relative h-1 overflow-hidden rounded-full bg-zinc-800">
+                <div className="flex items-end justify-between gap-1 text-[11px]">
+                  <span className="flex min-w-0 items-baseline gap-1">
+                    {slot1Wins && <>
+                      <span className="font-bold tabular-nums text-green-400">{hpPct}%</span>
+                      <span className="truncate text-[10px] text-zinc-400">{unit1Name}</span>
+                    </>}
+                  </span>
+                  <span className="font-bold tabular-nums text-green-400">{Math.round(winnerHp!)} HP</span>
+                  <span className="flex min-w-0 items-baseline gap-1">
+                    {slot2Wins && <>
+                      <span className="truncate text-right text-[10px] text-zinc-400">{unit2Name}</span>
+                      <span className="font-bold tabular-nums text-green-400">{hpPct}%</span>
+                    </>}
+                  </span>
+                </div>
+                <div className="relative flex h-2 overflow-hidden rounded-full bg-zinc-800">
                   <div
-                    className="absolute h-1 rounded-full bg-green-500/60"
+                    className="absolute h-full rounded-full bg-green-500/70"
                     style={{
                       width: `${hpPct}%`,
                       left: slot1Wins ? 0 : undefined,
@@ -356,7 +446,7 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
             {loserUnitsToWin != null && (
               <>
                 <div className="text-center text-[11px] text-zinc-400">
-                  <span className="text-amber-300/90 font-medium">{loserName}</span> needs <span className="text-amber-300/90 font-medium">×{loserUnitsToWin}</span>
+                  <span className="text-amber-300/90 font-medium">{loserUnitsToWin}</span> <span className="text-amber-300/90 font-medium">{loserName}</span> to win
                 </div>
                 <div className="flex items-center justify-center gap-1">
                   {Array.from({ length: Math.min(loserUnitsToWin, 7) }).map((_, i) => (
@@ -382,9 +472,6 @@ interface SlotPanelProps {
   onMovePointerDown?: (e: React.PointerEvent) => void;
   civLocked?: boolean;
   onToggleCivLock?: () => void;
-  /** Compar button — opens stat-comparison panel. */
-  onComparClick?: () => void;
-  comparActive?: boolean;
   /** VS button — triggers combat simulation mode. */
   onVsClick?: () => void;
   vsActive?: boolean;
@@ -424,8 +511,6 @@ export function SlotPanel({
   onMovePointerDown,
   civLocked = false,
   onToggleCivLock,
-  onComparClick,
-  comparActive = false,
   onVsClick,
   vsActive = false,
   drawerStorageKey = DRAWER_HEIGHT_KEY,
@@ -547,14 +632,14 @@ export function SlotPanel({
   const q = search.trim().toLowerCase();
 
   return (
-    <div ref={panelRef} className="relative w-[300px]">
+    <div ref={panelRef} className="relative w-[260px]">
       <div className="relative overflow-hidden rounded-lg border border-amber-500/30 bg-zinc-950/65 text-zinc-100 shadow-2xl ring-1 ring-black/30 backdrop-blur-md">
         {/* Header: drag handle when primary, static header when versus */}
         <div
           onPointerDown={onMovePointerDown}
           className={cn(
-            "flex touch-none select-none items-center gap-2 border-b border-amber-500/15 bg-zinc-900/70 px-2 py-1",
-            onMovePointerDown ? "cursor-move" : "cursor-default",
+            "flex touch-none select-none items-center gap-2 border-b border-amber-500/15 bg-zinc-900/70 px-2",
+            onMovePointerDown ? "cursor-move py-3" : "cursor-default py-1",
           )}
           title={onMovePointerDown ? "Move panel" : undefined}
         >
@@ -641,8 +726,6 @@ export function SlotPanel({
               bonusDamage={slot.modifiedStats.bonusDamage}
               secondaryWeapons={modified.secondaryWeapons ?? slot.secondaryWeapons}
               maxHpBonusFraction={slot.modifiedStats.maxHpBonusFraction ?? 0}
-              onComparClick={onComparClick}
-              comparActive={comparActive}
               onVsClick={onVsClick}
               vsActive={vsActive}
               compare={buildCompareStats(compareSlot)}
@@ -840,25 +923,24 @@ export default function UnitPanel({
   onResizePointerDown,
   civLocked = false,
   onToggleCivLock,
-  onComparClick,
-  comparActive,
   onVsClick,
   vsActive,
   compareSlot,
   vsResult,
+  sizeLock,
 }: {
   slot: Slot;
   scale?: number;
   onMovePointerDown?: (e: React.PointerEvent) => void;
-  onResizePointerDown?: (e: React.PointerEvent) => void;
+  onResizePointerDown?: (e: React.PointerEvent, handle?: ResizeHandle) => void;
   civLocked?: boolean;
   onToggleCivLock?: () => void;
-  onComparClick?: () => void;
-  comparActive?: boolean;
   onVsClick?: () => void;
   vsActive?: boolean;
   compareSlot?: Slot;
   vsResult?: VSResultData;
+  /** When provided, shows a lock toggle that ties both unit panels to one size. */
+  sizeLock?: { locked: boolean; onToggle: () => void };
 }) {
   const vsInfo1: VSSlotInfo | undefined = vsResult
     ? {
@@ -876,15 +958,17 @@ export default function UnitPanel({
         onMovePointerDown={onMovePointerDown}
         civLocked={civLocked}
         onToggleCivLock={onToggleCivLock}
-        onComparClick={onComparClick}
-        comparActive={comparActive}
         onVsClick={onVsClick}
         vsActive={vsActive}
         compareSlot={compareSlot}
         vsInfo={vsInfo1}
       />
       {onResizePointerDown && (
-        <ResizeGrip onPointerDown={onResizePointerDown} title="Resize panel" />
+        <>
+          <ResizeHandles onResizeStart={onResizePointerDown} />
+          <ResizeGrip onPointerDown={onResizePointerDown} title="Resize panel" />
+          {sizeLock && <SizeLockButton locked={sizeLock.locked} onToggle={sizeLock.onToggle} />}
+        </>
       )}
     </div>
   );

@@ -467,6 +467,14 @@ const Sandbox = () => {
   const startDistance = startDistancePreset === "max" ? maxRangeDistance
     : Math.max(0, Math.min(30, customDistance));
 
+  // Default multi-unit model: "Attack move" (focusFireBatchesMC) when both units are melee,
+  // but "Target focus" (focusFire) as soon as either unit is ranged. Re-applied only when the
+  // ranged makeup of the matchup changes, so a manual model choice persists within a given matchup.
+  const hasRangedUnit = (!!unit1 && getPrimaryWeapon(unit1)?.type === 'ranged') || (!!unit2 && getPrimaryWeapon(unit2)?.type === 'ranged');
+  useEffect(() => {
+    setMultiUnitModelKey(hasRangedUnit ? 'focusFire' : 'focusFireBatchesMC');
+  }, [hasRangedUnit]);
+
   // Filter bonusDamage entries by weapon type — prevents ranged bonuses (e.g. Howdahs) from
   // applying to melee weapons (e.g. Tusks) and vice-versa.
   const filterBonusForWeapon = (bonusDamage: any[], weaponType: string) => // eslint-disable-line @typescript-eslint/no-explicit-any

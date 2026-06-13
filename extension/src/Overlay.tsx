@@ -4,7 +4,7 @@ import { Swords } from "lucide-react";
 import "@/index.css";
 import { cn } from "@/lib/utils";
 import { useUnitSlot } from "@/hooks/useUnitSlot";
-import UnitPanel, { SlotPanel, VSCard, ResizeGrip, type VSResultData, type VSSlotInfo, type MultiUnitModelKey } from "./UnitPanel";
+import UnitPanel, { SlotPanel, VSCard, ResizeGrip, ResizeHandles, SizeLockButton, type VSResultData, type VSSlotInfo, type MultiUnitModelKey } from "./UnitPanel";
 import { useAoe4WorldDetection } from "./useAoe4WorldDetection";
 import { useDraggablePanel, DEFAULT_PANEL_X, PANEL_BASE_WIDTH, clampPanel } from "./useDraggablePanel";
 import {
@@ -31,6 +31,7 @@ const STORE_KEY_VS = "aoe4-overlay-panel-vs-v2";
 const STORE_KEY_VS_STATS = "aoe4-overlay-panel-vs-stats-v2";
 const CIV_LOCK_KEY = "aoe4-overlay-civ-locked";
 const OPP_CIV_LOCK_KEY = "aoe4-overlay-opp-civ-locked";
+const SIZE_LOCK_KEY = "aoe4-overlay-size-locked";
 
 const VS_CARD_BASE_WIDTH = 185;
 // Extra scale applied to the VS stats card so it renders larger than its
@@ -134,13 +135,21 @@ function Overlay() {
   const slot = useUnitSlot();
   const slot2 = useUnitSlot();
   const [open, setOpen] = useState(true);
-  const [panelMode, setPanelMode] = useState<null | "compare" | "versus">(null);
+  const [vsOpen, setVsOpen] = useState(false);
   // Versus options — mirror the Sandbox's atEqualCost / allowKiting / model selector.
   const [atEqualCost, setAtEqualCost] = useState(false);
   const [allowKiting, setAllowKiting] = useState(false);
   const [multiUnitModelKey, setMultiUnitModelKey] = useState<MultiUnitModelKey>("focusFire");
 
-  const panelOpen = panelMode !== null;
+  // Default multi-unit model: "Attack move" (focusFireBatchesMC) when both units are melee,
+  // but "Target focus" (focusFire) as soon as either unit is ranged. Re-applied only when the
+  // ranged makeup of the matchup changes, so a manual model choice persists within a given matchup.
+  const rangedSrc1 = slot.variation ?? slot.unit;
+  const rangedSrc2 = slot2.variation ?? slot2.unit;
+  const hasRangedUnit = (!!rangedSrc1 && getPrimaryWeapon(rangedSrc1)?.type === "ranged") || (!!rangedSrc2 && getPrimaryWeapon(rangedSrc2)?.type === "ranged");
+  useEffect(() => {
+    setMultiUnitModelKey(hasRangedUnit ? "focusFire" : "focusFireBatchesMC");
+  }, [hasRangedUnit]);
 
   const logo = useDraggableLogo();
   const primary = useDraggablePanel(STORE_KEY, DEFAULT_PANEL_X);
@@ -149,18 +158,42 @@ function Overlay() {
   // either unit card leaves it untouched (and vice versa).
   const vsStats = useDraggablePanel(STORE_KEY_VS_STATS, VS_DEFAULT_X);
 
+  // Size lock: when on, both unit panels render at the primary's scale and the
+  // versus panel's resize handle drives the primary — a single source of truth
+  // keeps them the same size with no bidirectional sync.
+  const [sizeLocked, setSizeLocked] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(SIZE_LOCK_KEY);
+      return raw === null ? false : JSON.parse(raw) === true;
+    } catch {
+      return false;
+    }
+  });
+  const primaryScaleRef = useRef(primary.panel.scale);
+  primaryScaleRef.current = primary.panel.scale;
+  const toggleSizeLock = useCallback(() => {
+    setSizeLocked((v) => {
+      const next = !v;
+      // On unlock, keep the versus panel at the size it's currently shown at so
+      // it doesn't snap back to a stale independent scale.
+      if (!next) versus.setScale(primaryScaleRef.current, true);
+      try { localStorage.setItem(SIZE_LOCK_KEY, JSON.stringify(next)); } catch { /* iframe */ }
+      return next;
+    });
+  }, [versus]);
+
   // On every open, reset the versus panel to its default position adjacent to
   // the primary panel. Captures primary position at open time — no live follow.
   const primaryPanel = primary.panel;
   useEffect(() => {
-    if (!panelOpen) return;
+    if (!vsOpen) return;
     versus.resetPanel({
       x: primaryPanel.x + Math.round((PANEL_BASE_WIDTH + VS_CARD_BASE_WIDTH) * primaryPanel.scale) + 16,
       y: primaryPanel.y,
       scale: primaryPanel.scale,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panelOpen]);
+  }, [vsOpen]);
 
   const { detectedCiv, detectedOpponentCiv } = useAoe4WorldDetection();
 
@@ -239,11 +272,11 @@ function Overlay() {
   // the versus panel's drag handle.
   const vsResizeRef = useRef<HTMLDivElement>(null);
 
-  // Combat VS result — computed only when panelMode === 'versus' and both units loaded.
+  // Combat VS result — computed only when the versus mode is open and both units loaded.
   let vsResult: VSResultData | undefined;
   let equalCostDisabled = false;
   let equalCostDisabledTitle: string | undefined;
-  if (panelMode === "versus" && slot.unit && slot2.unit) {
+  if (vsOpen && slot.unit && slot2.unit) {
     try {
       const src1 = (slot.variation ?? slot.unit) as any;
       const src2 = (slot2.variation ?? slot2.unit) as any;
@@ -359,15 +392,18 @@ function Overlay() {
   const vsCardX = primary.panel.x + Math.round(PANEL_BASE_WIDTH * primary.panel.scale) + 8;
   const vsCardY = primary.panel.y;
 
-  // In versus mode the versus panel is pinned at a fixed offset from the primary panel
+  // The versus panel is pinned at a fixed offset from the primary panel
   // (derived position, never independent). Dragging either handle moves the primary only.
   // The VS card has its own independent scale (vsStats) so resizing either unit card
   // leaves the vs stats untouched.
   const vsStatsScale = vsStats.panel.scale * VS_STATS_SCALE_FACTOR;
-  const versusRenderX = panelMode === "versus"
-    ? vsCardX + Math.round(VS_CARD_BASE_WIDTH * vsStatsScale) + 8
-    : versus.panel.x;
-  const versusRenderY = panelMode === "versus" ? primary.panel.y : versus.panel.y;
+  const versusRenderX = vsCardX + Math.round(VS_CARD_BASE_WIDTH * vsStatsScale) + 8;
+  const versusRenderY = primary.panel.y;
+
+  // When sizes are locked, the versus panel mirrors the primary's scale and its
+  // resize handle drives the primary instead of its own scale.
+  const versusScale = sizeLocked ? primary.panel.scale : versus.panel.scale;
+  const versusResize = sizeLocked ? primary.startResize : versus.startResize;
 
   const vsInfo2: VSSlotInfo | undefined = vsResult
     ? {
@@ -418,17 +454,16 @@ function Overlay() {
           onResizePointerDown={primary.startResize}
           civLocked={civLocked}
           onToggleCivLock={toggleCivLock}
-          onComparClick={() => setPanelMode((v) => (v === "compare" ? null : "compare"))}
-          comparActive={panelMode === "compare"}
-          onVsClick={() => setPanelMode((v) => (v === "versus" ? null : "versus"))}
-          vsActive={panelMode === "versus"}
-          compareSlot={panelOpen ? slot2 : undefined}
+          onVsClick={() => setVsOpen((v) => !v)}
+          vsActive={vsOpen}
+          compareSlot={vsOpen ? slot2 : undefined}
           vsResult={vsResult}
+          sizeLock={vsOpen ? { locked: sizeLocked, onToggle: toggleSizeLock } : undefined}
         />
       </div>
 
       {/* VS card — follows the primary panel, shown only in versus mode (and while the overlay is open) */}
-      {open && panelMode === "versus" && vsResult && (
+      {open && vsOpen && vsResult && (
         <div
           ref={vsStats.panelRef}
           className="pointer-events-none absolute"
@@ -453,7 +488,8 @@ function Overlay() {
                 onModelChange: setMultiUnitModelKey,
               }}
             />
-            {/* Resize grip for the VS stats card */}
+            {/* Resize handles + grip for the VS stats card */}
+            <ResizeHandles onResizeStart={vsStats.startResize} className="pointer-events-auto" />
             <ResizeGrip
               onPointerDown={vsStats.startResize}
               title="Resize VS stats"
@@ -463,23 +499,23 @@ function Overlay() {
         </div>
       )}
 
-      {/* Versus panel — independent position, independent drag/resize (hidden while the overlay is closed) */}
-      {open && panelOpen && (
+      {/* Versus panel — pinned next to the VS card (hidden while the overlay is closed) */}
+      {open && vsOpen && (
         <div
           ref={versus.panelRef}
           className="pointer-events-auto absolute"
           style={{
             left: versusRenderX,
             top: versusRenderY,
-            transform: `scale(${versus.panel.scale})`,
+            transform: `scale(${versusScale})`,
             transformOrigin: "top left",
           }}
         >
           <div className="relative">
             <SlotPanel
               slot={slot2}
-              scale={versus.panel.scale}
-              onMovePointerDown={panelMode === "versus" ? primary.startMove : versus.startMove}
+              scale={versusScale}
+              onMovePointerDown={primary.startMove}
               drawerStorageKey="aoe4-overlay-drawer-h-2"
               compareSlot={slot}
               civLocked={oppCivLocked}
@@ -487,12 +523,14 @@ function Overlay() {
               opponentMode
               vsInfo={vsInfo2}
             />
-            {/* Resize grip for the versus panel */}
+            {/* Resize handles + grip for the versus panel */}
+            <ResizeHandles onResizeStart={versusResize} />
             <ResizeGrip
               gripRef={vsResizeRef}
-              onPointerDown={versus.startResize}
+              onPointerDown={versusResize}
               title="Resize versus panel"
             />
+            <SizeLockButton locked={sizeLocked} onToggle={toggleSizeLock} />
           </div>
         </div>
       )}

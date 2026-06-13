@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback, useLayoutEffect } from "react";
 
-export const PANEL_BASE_WIDTH = 300;
+export const PANEL_BASE_WIDTH = 260;
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 4;
-const PANEL_WIDTH_FRACTION = 0.25;
+const PANEL_WIDTH_FRACTION = 0.22;
 const PANEL_HEIGHT_FRACTION = 0.9;
 // Floor for the default (auto) size only — keeps the card readable on small
 // players; manual resize can still go down to MIN_SCALE.
@@ -12,6 +12,21 @@ const DEFAULT_MIN_SCALE = 1;
 export const DEFAULT_PANEL_X = 52; // left-2 (8px) + h-9/w-9 (36px) + gap (8px)
 
 export type PanelState = { x: number; y: number; scale: number };
+
+export type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
+// Pointer direction that grows the panel for each handle (sx: +1 = right edge,
+// −1 = left edge; sy: +1 = bottom edge, −1 = top edge; 0 = axis not involved).
+const HANDLE_DIRS: Record<ResizeHandle, { sx: number; sy: number }> = {
+  n: { sx: 0, sy: -1 },
+  s: { sx: 0, sy: 1 },
+  e: { sx: 1, sy: 0 },
+  w: { sx: -1, sy: 0 },
+  ne: { sx: 1, sy: -1 },
+  nw: { sx: -1, sy: -1 },
+  se: { sx: 1, sy: 1 },
+  sw: { sx: -1, sy: 1 },
+};
 
 // Manual placements store fx/fy as fractions of the AVAILABLE space
 // (window minus the panel's rendered size), not of the raw window: with the
@@ -114,6 +129,8 @@ export function useDraggablePanel(storeKey: string, defaultX = DEFAULT_PANEL_X) 
   const gestureActive = useRef(false);
   const panelScaleRef = useRef(panel.scale);
   panelScaleRef.current = panel.scale;
+  const panelPosRef = useRef({ x: panel.x, y: panel.y });
+  panelPosRef.current = { x: panel.x, y: panel.y };
   // Auto mode fits the scale to the window once, then keeps it fixed so the
   // card no longer resizes when the window does.
   const autoScaleSettled = useRef(false);
@@ -195,13 +212,28 @@ export function useDraggablePanel(storeKey: string, defaultX = DEFAULT_PANEL_X) 
     [panel.x, panel.y, onMove, endMove],
   );
 
-  // Corner resize
-  const resizeGesture = useRef<{ px: number; py: number; base: number } | null>(null);
+  // Resize from any edge or corner (default: bottom-right). The scale tracks
+  // the pointer along the grabbed axis — corners average both axes — and
+  // west/north handles re-anchor x/y so the opposite edge stays fixed.
+  const resizeGesture = useRef<{
+    px: number; py: number; base: number;
+    sx: number; sy: number; naturalH: number; bx: number; by: number;
+  } | null>(null);
   const onResize = useCallback((e: PointerEvent) => {
     const g = resizeGesture.current;
     if (!g) return;
-    const delta = ((e.clientX - g.px) + (e.clientY - g.py)) / 2 / PANEL_BASE_WIDTH;
-    setPanel((p) => ({ ...p, scale: clampPanel(g.base + delta, MIN_SCALE, MAX_SCALE) }));
+    let delta = 0;
+    let axes = 0;
+    if (g.sx) { delta += (g.sx * (e.clientX - g.px)) / PANEL_BASE_WIDTH; axes++; }
+    if (g.sy) { delta += (g.sy * (e.clientY - g.py)) / g.naturalH; axes++; }
+    if (axes > 1) delta /= axes;
+    const scale = clampPanel(g.base + delta, MIN_SCALE, MAX_SCALE);
+    setPanel((p) => ({
+      ...p,
+      x: g.sx < 0 ? g.bx + Math.round(PANEL_BASE_WIDTH * (g.base - scale)) : p.x,
+      y: g.sy < 0 ? g.by + Math.round(g.naturalH * (g.base - scale)) : p.y,
+      scale,
+    }));
   }, []);
   const endResize = useCallback(() => {
     resizeGesture.current = null;
@@ -210,15 +242,22 @@ export function useDraggablePanel(storeKey: string, defaultX = DEFAULT_PANEL_X) 
     commitManual();
   }, [onResize, commitManual]);
   const startResize = useCallback(
-    (e: React.PointerEvent) => {
+    (e: React.PointerEvent, handle: ResizeHandle = "se") => {
       e.preventDefault();
       e.stopPropagation();
       gestureActive.current = true;
-      resizeGesture.current = { px: e.clientX, py: e.clientY, base: panel.scale };
+      const dir = HANDLE_DIRS[handle];
+      resizeGesture.current = {
+        px: e.clientX, py: e.clientY, base: panel.scale,
+        sx: dir.sx, sy: dir.sy,
+        // offsetHeight is the unscaled layout height (transform-independent).
+        naturalH: panelRef.current?.offsetHeight || PANEL_BASE_WIDTH,
+        bx: panel.x, by: panel.y,
+      };
       window.addEventListener("pointermove", onResize);
       window.addEventListener("pointerup", endResize, { once: true });
     },
-    [panel.scale, onResize, endResize],
+    [panel.scale, panel.x, panel.y, onResize, endResize],
   );
 
   // Force the panel to a given position and clear any persisted placement so
@@ -256,5 +295,15 @@ export function useDraggablePanel(storeKey: string, defaultX = DEFAULT_PANEL_X) 
     try { localStorage.setItem(storeKey, JSON.stringify(placement)); } catch { /* sandboxed iframe */ }
   }, [storeKey]);
 
-  return { panel, panelRef, startMove, startResize, resetPanel, moveTo, savePosition };
+  // Set just the scale (position unchanged). Used by the size-lock feature to
+  // keep a follower panel's own scale aligned with the displayed size. When
+  // persist is set, the new scale is written to storage (manual placement).
+  const setScale = useCallback((scale: number, persist = false) => {
+    const s = clampPanel(scale, MIN_SCALE, MAX_SCALE);
+    panelScaleRef.current = s;
+    setPanel((p) => ({ ...p, scale: s }));
+    if (persist) savePosition(panelPosRef.current.x, panelPosRef.current.y, s);
+  }, [savePosition]);
+
+  return { panel, panelRef, startMove, startResize, resetPanel, moveTo, savePosition, setScale };
 }

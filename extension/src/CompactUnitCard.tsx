@@ -61,9 +61,6 @@ interface CompactUnitCardProps {
   secondaryWeapons?: any[];
   /** Flat bonus = fraction × enemy max HP (e.g. kanabo) — shown on Attack hover. */
   maxHpBonusFraction?: number;
-  /** Open/close the stat comparison panel (Compar button). */
-  onComparClick?: () => void;
-  comparActive?: boolean;
   /** Open/close the combat versus mode (VS button). */
   onVsClick?: () => void;
   vsActive?: boolean;
@@ -164,8 +161,6 @@ export function CompactUnitCard({
   bonusDamage = [],
   secondaryWeapons = [],
   maxHpBonusFraction = 0,
-  onComparClick,
-  comparActive = false,
   onVsClick,
   vsActive = false,
   compare,
@@ -309,21 +304,6 @@ export function CompactUnitCard({
           />
         </div>
         <div className="flex items-center gap-1">
-          {onComparClick && (
-            <button
-              type="button"
-              onClick={onComparClick}
-              title={comparActive ? "Close stat comparison" : "Compare stats side by side"}
-              className={cn(
-                "rounded border px-2 py-1 text-xs font-bold transition-colors",
-                comparActive
-                  ? "border-sky-500 bg-sky-500 text-white"
-                  : "border-sky-500/40 bg-black/40 text-sky-400 hover:border-sky-400/70 hover:bg-sky-500/10",
-              )}
-            >
-              Compare
-            </button>
-          )}
           {onVsClick && (
             <button
               type="button"
@@ -408,7 +388,7 @@ export function CompactUnitCard({
           ))}
           <span className={cn("flex items-center gap-1 font-semibold", cmpCost?.color || "text-amber-300")}>
             {cmpCost?.symbol && <span className="text-[10px]">{cmpCost.symbol}</span>}
-            Σ {totalCost}
+= {totalCost}
           </span>
         </div>
         <div className="flex items-center gap-2.5 text-zinc-300">
