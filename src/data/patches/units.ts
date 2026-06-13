@@ -584,6 +584,18 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
   //_____________________
 
   {
+    id: 'earls-guard',
+    reason: 'earls-guard-1 is a stat-less dummy placeholder variation (no weapons/armor, null movement speed) — remove it so the unit has no invalid variation.',
+    after: (unit: unknown) => {
+      const u = unit as Record<string, unknown>;
+      return {
+        ...u,
+        variations: (u.variations as Record<string, unknown>[]).filter(v => v.id !== 'earls-guard-1'),
+      };
+    },
+  },
+
+  {
     id: 'lord-of-lancaster',
     reason: 'aoe4world only has the age-2 variation with wrong HP (170→178). Adding age-3 and age-4 variations. Stats per in-game: HP (178/210/247), attack (14/16/18), armor (2/3/4 melee+ranged).',
     after: (unit: unknown) => {

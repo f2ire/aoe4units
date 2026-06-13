@@ -519,7 +519,7 @@ export const UnitCard = ({
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Range</span>
                 <span className="flex items-center gap-1">
-                  {parseFloat(primaryWeapon.range.min.toFixed(2))} - <span className={getComparisonColor(primaryWeapon.range.max, compareMaxRange, true, 0.5, true).color}>{parseFloat(primaryWeapon.range.max.toFixed(2))}</span>
+                  {parseFloat(primaryWeapon.range.min.toFixed(2))} - <span className={getComparisonColor(primaryWeapon.range.max, compareMaxRange, true, 0.05, true).color}>{parseFloat(primaryWeapon.range.max.toFixed(2))}</span>
                 </span>
               </div>
             )}

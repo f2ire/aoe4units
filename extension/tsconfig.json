@@ -1,0 +1,19 @@
+{
+  // The extension reuses the app's `src/` via the `@/` alias (resolved by
+  // vite.extension.config.ts to the repo-root `src/`). Without this file the
+  // editor type-checks `extension/src/*` with an inferred default project that
+  // knows neither the alias, the JSX runtime, nor the DOM libs — producing a
+  // flood of phantom errors. Extend the app config and point `@/*` at ../src.
+  "extends": "../tsconfig.app.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": [
+        "../src/*"
+      ]
+    }
+  },
+  "include": [
+    "src",
+    "../src/vite-env.d.ts"
+  ]
+}
