@@ -24,6 +24,7 @@ function HomeHead() {
       <meta property="og:title" content={HOME_TITLE} />
       <meta property="og:description" content={HOME_DESC} />
       <meta property="og:type" content="website" />
+      <meta property="og:site_name" content="AoE4 Units" />
       <meta property="og:url" content="https://aoe4units.com/" />
       <meta property="og:image" content="https://aoe4units.com/ram-icon.png" />
       <meta name="twitter:card" content="summary" />
