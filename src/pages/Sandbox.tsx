@@ -393,11 +393,12 @@ const getChargeBonusBurst = (unitData: AoE4Unit | UnifiedVariation | undefined, 
 
 // Unit-count stepper shown above each card in versus mode. count > 1 routes the matchup
 // through the multi-unit combat engine and reveals the model selector.
-function CountStepper({ count, onChange }: { count: number; onChange: (n: number) => void }) {
+function CountStepper({ count, onChange, labelSide = 'left' }: { count: number; onChange: (n: number) => void; labelSide?: 'left' | 'right' }) {
   const set = (n: number) => onChange(Math.max(1, Math.min(99, Number.isFinite(n) ? n : 1)));
+  const label = <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Units</span>;
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Units</span>
+      {labelSide === 'left' && label}
       <div className="inline-flex items-center rounded-md border border-border overflow-hidden bg-card">
         <button
           type="button"
@@ -421,6 +422,7 @@ function CountStepper({ count, onChange }: { count: number; onChange: (n: number
           className="px-3 py-1.5 text-sm font-bold hover:bg-muted"
         >+</button>
       </div>
+      {labelSide === 'right' && label}
     </div>
   );
 }
@@ -1517,7 +1519,7 @@ const Sandbox = () => {
             {/* Civ 1 Unit */}
             {unit1 && (
               <>
-                <div className="order-1 sm:order-1 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
+                <div className="order-3 sm:order-1 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
                   <div className="flex flex-col items-end gap-2 w-max ml-auto sm:w-auto sm:ml-0 sm:items-stretch sm:gap-3">
                     <div id="tour-age1">
                       <AgeSelector
@@ -1564,7 +1566,7 @@ const Sandbox = () => {
                   initial={{ opacity: 0, x: -50 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.3 }}
-                  className="order-3 sm:order-2 min-w-0 w-full"
+                  className="order-1 sm:order-2 min-w-0 w-full"
                 >
                   <UnitCard
                     className="w-full"
@@ -1606,7 +1608,7 @@ const Sandbox = () => {
                   initial={{ opacity: 0, x: 50 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.3 }}
-                  className="order-4 sm:order-3 min-w-0 w-full"
+                  className="order-2 sm:order-3 min-w-0 w-full"
                 >
                   <UnitCard
                     className="w-full"
@@ -1639,7 +1641,7 @@ const Sandbox = () => {
                     opponentClasses={variation1?.classes || unit1?.classes || []}
                   />
                 </motion.div>
-                <div className="order-2 sm:order-4 flex flex-col items-start sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
+                <div className="order-4 sm:order-4 flex flex-col items-start sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
                   <div id="tour-age2">
                     <AgeSelector
                       availableAges={getAvailableAges(unit2.id, selectedCiv2)}
@@ -1702,7 +1704,7 @@ const Sandbox = () => {
           };
           return (
             <div id="tour-unit-counts" className="flex flex-wrap items-center justify-center gap-x-4 gap-y-3 mt-8">
-              <CountStepper count={count1} onChange={setManual1} />
+              <div className="hidden sm:block"><CountStepper count={count1} onChange={setManual1} /></div>
               <div className="flex items-center gap-2">
                 <PresetButton
                   id="tour-atEqualCost"
@@ -1720,7 +1722,7 @@ const Sandbox = () => {
                   onClick={() => togglePreset('pop', pop1, pop2)}
                 />
               </div>
-              <CountStepper count={count2} onChange={setManual2} />
+              <div className="hidden sm:block"><CountStepper count={count2} onChange={setManual2} labelSide="right" /></div>
             </div>
           );
         })()}
@@ -1931,7 +1933,14 @@ const Sandbox = () => {
               };
               return (
                 <>
-                  <div className="order-1 sm:order-1 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
+                  {/* Mobile-only: per-card unit count steppers above each card (desktop uses the centered strip) */}
+                  <div className="order-first sm:hidden flex justify-center">
+                    <CountStepper count={count1} onChange={(n) => { setCount1(n); setActivePreset(null); }} />
+                  </div>
+                  <div className="order-first sm:hidden flex justify-center">
+                    <CountStepper count={count2} onChange={(n) => { setCount2(n); setActivePreset(null); }} labelSide="right" />
+                  </div>
+                  <div className="order-3 sm:order-1 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
                     <div className="flex flex-col items-end gap-2 w-max ml-auto sm:w-auto sm:ml-0 sm:items-stretch sm:gap-3">
                       <div id="tour-age1">
                         <AgeSelector
@@ -1978,7 +1987,7 @@ const Sandbox = () => {
                     initial={{ opacity: 0, x: -50 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3 }}
-                    className="order-3 sm:order-2 min-w-0 w-full"
+                    className="order-1 sm:order-2 min-w-0 w-full"
                   >
                     <UnitCard
                       className="w-full"
@@ -2000,7 +2009,7 @@ const Sandbox = () => {
                     initial={{ opacity: 0, x: 50 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.3 }}
-                    className="order-4 sm:order-3 min-w-0 w-full"
+                    className="order-2 sm:order-3 min-w-0 w-full"
                   >
                     <UnitCard
                       className="w-full"
@@ -2018,7 +2027,7 @@ const Sandbox = () => {
                       opponentClasses={modifiedVariation1?.classes || unit1?.classes || []}
                     />
                   </motion.div>
-                  <div className="order-2 sm:order-4 flex flex-col items-start sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
+                  <div className="order-4 sm:order-4 flex flex-col items-start sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
                     <div id="tour-age2">
                       <AgeSelector
                         availableAges={getAvailableAges(unit2.id, selectedCiv2)}
