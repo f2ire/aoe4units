@@ -31,6 +31,21 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   }))),
 
   {
+    id: 'textiles',
+    reason: 'In-game Textiles increases Villager health by +25% (multiplicative). Raw data models it as a flat +50 HP change — corrected to a ×1.25 multiply.',
+    update: {
+      effects: [
+        {
+          property: 'hitpoints',
+          select: { id: ['villager'] },
+          effect: 'multiply',
+          value: 1.5,
+          type: 'passive'
+        }
+      ]
+    }
+  },
+  {
     id: 'adjustable-crossbars',
     reason: 'aoe4world does not model the burst projectile increase for Mangonel. This tech adds +1 projectile per volley in-game, represented here as a burst +1 effect.',
     update: {
@@ -1892,7 +1907,8 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     reason: 'Raw effects empty. +3 bonus melee damage vs infantry for Varangian Guard.',
     update: {
       effects: [
-        { property: 'meleeAttack', select: { id: ['varangian-guard', 'riddari', 'hippodrome-riddari'] }, effect: 'change', value: 3, type: 'bonus', target: { class: [['infantry']] } },
+        { property: 'meleeAttack', select: { id: ['varangian-guard',] }, effect: 'change', value: 3, type: 'bonus', target: { class: [['infantry']] } },
+        { property: 'meleeAttack', select: { id: ['riddari', 'hippodrome-riddari'] }, effect: 'change', value: 3 },
       ] as any
     }
   },

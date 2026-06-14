@@ -4,8 +4,8 @@ import { aoe4Units, AoE4Unit, getAvailableAges, getPrimaryWeapon, getTotalCost }
 import type { UnifiedVariation } from "@/data/unified-units";
 import { CIVILIZATIONS } from "@/data/civilizations";
 import { UnitCard } from "@/components/UnitCard";
-import { computeVersus, computeVersusAtEqualCost, computeVersusKitingFocusFire, computeVersusAtEqualCostKitingFocusFire, computeVersusKitingBatchesMC, computeVersusAtEqualCostKitingBatchesMC, getVersusDebuffMultiplier, aggregatedDPSModel, focusFireModel, focusFireBatchesMCModel, focusFireBatchesMCAsymmetricModel, focusFireAsymmetricModel, computeLoserUnitsToWin, calculateEqualCostMultipliers } from "@/lib/combat";
-import type { MultiUnitModel } from "@/lib/combat";
+import { computeVersus, computeVersusAtEqualCost, computeVersusKitingFocusFire, computeVersusAtEqualCostKitingFocusFire, computeVersusKitingBatchesMC, computeVersusAtEqualCostKitingBatchesMC, getVersusDebuffMultiplier, aggregatedDPSModel, focusFireModel, focusFireBatchesMCModel, focusFireBatchesMCAsymmetricModel, focusFireAsymmetricModel, calculateEqualCostMultipliers } from "@/lib/combat";
+import type { MultiUnitModel, VersusResult } from "@/lib/combat";
 import { AgeSelector } from "@/components/AgeSelector";
 import { TechnologySelector } from "@/components/TechnologySelector";
 import { AbilitySelector } from "@/components/AbilitySelector";
@@ -1743,74 +1743,57 @@ const Sandbox = () => {
               const noTimerData1 = modifiedVariation1NoTimer || modifiedUnit1NoTimer;
               const noTimerData2 = modifiedVariation2NoTimer || modifiedUnit2NoTimer;
 
-              if (isMultiUnit) {
-                const unit1 = modifiedVariation1 || modifiedUnit1!;
-                const unit2 = modifiedVariation2 || modifiedUnit2!;
-                const customMults = { multA: count1, multB: count2 };
-                if (allowKiting && multiUnitModelKey === 'focusFire') {
-                  const result = computeVersusAtEqualCostKitingFocusFire(
-                    unit1, unit2, abilitiesArray1, abilitiesArray2, charge1, charge2, startDistance, customMults,
-                  );
-                  versusData = result;
-                  multipliers = result.multipliers;
-                } else if (allowKiting && multiUnitModelKey === 'focusFireBatchesMC') {
-                  const result = computeVersusAtEqualCostKitingBatchesMC(
-                    unit1, unit2, abilitiesArray1, abilitiesArray2, charge1, charge2, startDistance, customMults,
-                  );
-                  versusData = result;
-                  multipliers = result.multipliers;
-                } else {
-                  const isRanged1 = getPrimaryWeapon(unit1)?.type === 'ranged';
-                  const isRanged2 = getPrimaryWeapon(unit2)?.type === 'ranged';
+              // Single source of truth for a matchup at arbitrary unit counts. Both the displayed
+              // result and the "units to win" search go through this, so the two can never disagree
+              // (approach phase, kiting and model selection are all reproduced identically).
+              const computeMatchup = (
+                n1: number,
+                n2: number,
+              ): VersusResult & { multipliers?: { multA: number; multB: number; totalCostA: number; totalCostB: number } } => {
+                const mv1 = modifiedVariation1 || modifiedUnit1!;
+                const mv2 = modifiedVariation2 || modifiedUnit2!;
+                if (n1 > 1 || n2 > 1) {
+                  const customMults = { multA: n1, multB: n2 };
+                  if (allowKiting && multiUnitModelKey === 'focusFire') {
+                    return computeVersusAtEqualCostKitingFocusFire(
+                      mv1, mv2, abilitiesArray1, abilitiesArray2, charge1, charge2, startDistance, customMults,
+                    );
+                  }
+                  if (allowKiting && multiUnitModelKey === 'focusFireBatchesMC') {
+                    return computeVersusAtEqualCostKitingBatchesMC(
+                      mv1, mv2, abilitiesArray1, abilitiesArray2, charge1, charge2, startDistance, customMults,
+                    );
+                  }
+                  const isRanged1 = getPrimaryWeapon(mv1)?.type === 'ranged';
+                  const isRanged2 = getPrimaryWeapon(mv2)?.type === 'ranged';
                   const multiUnitModel: MultiUnitModel =
                     multiUnitModelKey === 'focusFire' ? (isRanged1 !== isRanged2 ? focusFireAsymmetricModel : focusFireModel) :
                       multiUnitModelKey === 'focusFireBatchesMC' ? (isRanged1 !== isRanged2 ? focusFireBatchesMCAsymmetricModel : focusFireBatchesMCModel) :
                         aggregatedDPSModel;
-                  const result = computeVersusAtEqualCost(
-                    unit1, unit2, abilitiesArray1, abilitiesArray2, charge1, charge2,
+                  return computeVersusAtEqualCost(
+                    mv1, mv2, abilitiesArray1, abilitiesArray2, charge1, charge2,
                     allowKiting, startDistance, multiUnitModel, customMults,
                   );
-                  versusData = result;
-                  multipliers = result.multipliers;
                 }
-              } else {
                 if (allowKiting && multiUnitModelKey === 'focusFire') {
-                  versusData = computeVersusKitingFocusFire(
-                    modifiedVariation1 || modifiedUnit1!,
-                    modifiedVariation2 || modifiedUnit2!,
-                    abilitiesArray1,
-                    abilitiesArray2,
-                    charge1,
-                    charge2,
-                    startDistance,
-                  );
-                } else if (allowKiting && multiUnitModelKey === 'focusFireBatchesMC') {
-                  versusData = computeVersusKitingBatchesMC(
-                    modifiedVariation1 || modifiedUnit1!,
-                    modifiedVariation2 || modifiedUnit2!,
-                    abilitiesArray1,
-                    abilitiesArray2,
-                    charge1,
-                    charge2,
-                    startDistance,
-                  );
-                } else {
-                  versusData = computeVersus(
-                    modifiedVariation1 || modifiedUnit1!,
-                    modifiedVariation2 || modifiedUnit2!,
-                    abilitiesArray1,
-                    abilitiesArray2,
-                    charge1,
-                    charge2,
-                    allowKiting,
-                    startDistance,
-                    noTimerData1,
-                    noTimerData2,
-                    timedDuration1,
-                    timedDuration2,
+                  return computeVersusKitingFocusFire(
+                    mv1, mv2, abilitiesArray1, abilitiesArray2, charge1, charge2, startDistance,
                   );
                 }
-              }
+                if (allowKiting && multiUnitModelKey === 'focusFireBatchesMC') {
+                  return computeVersusKitingBatchesMC(
+                    mv1, mv2, abilitiesArray1, abilitiesArray2, charge1, charge2, startDistance,
+                  );
+                }
+                return computeVersus(
+                  mv1, mv2, abilitiesArray1, abilitiesArray2, charge1, charge2,
+                  allowKiting, startDistance, noTimerData1, noTimerData2, timedDuration1, timedDuration2,
+                );
+              };
+
+              const mainResult = computeMatchup(count1, count2);
+              versusData = mainResult;
+              multipliers = mainResult.multipliers;
 
               // Win/loss logic based on weapon ownership
               // A unit without a weapon always loses against a unit with a weapon
@@ -1842,16 +1825,37 @@ const Sandbox = () => {
                 rightIsWinner = false;
               }
               let loserUnitsToWin: number | undefined;
-              // Show "units to win" whenever one side is a lone unit (1v1, 1vN, Nv1).
-              if ((count1 === 1 || count2 === 1) && versusData.winner !== 'draw') {
-                loserUnitsToWin = computeLoserUnitsToWin(
-                  versusData,
-                  modifiedVariation1 || modifiedUnit1!,
-                  modifiedVariation2 || modifiedUnit2!,
-                  count1,
-                  count2,
-                );
+              let loserUnitsToWinExceeded = false;
+              // Always show "units to win" (1v1, 1vN, Nv1, and NvM). We search the smallest loser
+              // count that flips the outcome, re-running the SAME computeMatchup as the display (so
+              // approach/kiting/model all stay consistent — no drift vs. manually setting the count).
+              // For Monte Carlo ("Attack move") the loser is counted as winning once its win rate
+              // exceeds 50%; the deterministic models require an outright win. If the loser can't win
+              // within the cap, we flag it as "More than 100" rather than showing a misleading count.
+              if (versusData.winner !== 'draw') {
+                const loserIsLeft = versusData.winner === 'defender';
+                const winnerCount = loserIsLeft ? count2 : count1;
+                const loserCount = loserIsLeft ? count1 : count2;
+                const useWinRate = multiUnitModelKey === 'focusFireBatchesMC';
+                const maxUnitsToWin = 100;
+                for (let n = loserCount + 1; n <= maxUnitsToWin; n++) {
+                  const r = loserIsLeft ? computeMatchup(n, winnerCount) : computeMatchup(winnerCount, n);
+                  const loserWon = useWinRate && r.mcDistribution
+                    ? (loserIsLeft ? r.mcDistribution.winRateA : r.mcDistribution.winRateB) > 0.5
+                    : r.winner === (loserIsLeft ? 'attacker' : 'defender');
+                  if (loserWon) { loserUnitsToWin = n; break; }
+                }
+                if (loserUnitsToWin === undefined) loserUnitsToWinExceeded = true;
               }
+
+              // Units to one-shot (OS) a single opponent unit = ⌈opponent HP / per-unit first-hit
+              // damage⌉ (first hit includes charge bonus; falls back to steady damage per hit).
+              const osDmgLeft = versusData.attacker.firstHitDamage ?? versusData.attacker.effectiveDamagePerHit;
+              const osHpLeft = (modifiedVariation2 || modifiedUnit2)?.hitpoints ?? unit2?.hitpoints;
+              const unitsToOSLeft = osDmgLeft && osDmgLeft > 0 && osHpLeft ? Math.ceil(osHpLeft / osDmgLeft) : undefined;
+              const osDmgRight = versusData.defender.firstHitDamage ?? versusData.defender.effectiveDamagePerHit;
+              const osHpRight = (modifiedVariation1 || modifiedUnit1)?.hitpoints ?? unit1?.hitpoints;
+              const unitsToOSRight = osDmgRight && osDmgRight > 0 && osHpRight ? Math.ceil(osHpRight / osDmgRight) : undefined;
 
               const leftMetrics = {
                 dps: versusData.attacker.dps,
@@ -1883,7 +1887,10 @@ const Sandbox = () => {
                 resourceDifference: versusData.mcDistribution?.whenAWins?.resourceMedian ?? (leftIsWinner ? versusData.resourceDifference : undefined),
                 resourceStd: versusData.mcDistribution?.whenAWins?.resourceStd,
                 winRate: versusData.mcDistribution?.winRateA,
+                unitsToOS: unitsToOSLeft,
                 loserUnitsToWin: (!leftIsWinner && !isDraw) ? loserUnitsToWin : undefined,
+                loserUnitsToWinExceeded: (!leftIsWinner && !isDraw) ? loserUnitsToWinExceeded : undefined,
+                loserUnitsToWinApprox: (!leftIsWinner && !isDraw) ? (count1 > 1 && count2 > 1) : undefined,
                 opponentName: versusData.defender.name,
               };
               const rightMetrics = {
@@ -1916,7 +1923,10 @@ const Sandbox = () => {
                 resourceDifference: versusData.mcDistribution?.whenBWins?.resourceMedian ?? (rightIsWinner ? versusData.resourceDifference : undefined),
                 resourceStd: versusData.mcDistribution?.whenBWins?.resourceStd,
                 winRate: versusData.mcDistribution?.winRateB,
+                unitsToOS: unitsToOSRight,
                 loserUnitsToWin: (!rightIsWinner && !isDraw) ? loserUnitsToWin : undefined,
+                loserUnitsToWinExceeded: (!rightIsWinner && !isDraw) ? loserUnitsToWinExceeded : undefined,
+                loserUnitsToWinApprox: (!rightIsWinner && !isDraw) ? (count1 > 1 && count2 > 1) : undefined,
                 opponentName: versusData.attacker.name,
               };
               return (

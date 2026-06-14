@@ -37,6 +37,9 @@ interface VersusMetricsProps {
   resourceStd?: number;
   winRate?: number;
   loserUnitsToWin?: number;
+  loserUnitsToWinExceeded?: boolean;
+  loserUnitsToWinApprox?: boolean;
+  unitsToOS?: number;
   opponentName?: string;
 }
 
@@ -1060,6 +1063,17 @@ export const UnitCard = ({
                   {/* Error message removed - base stats always display */}
                 </div>
 
+                {versusMetrics.unitsToOS !== undefined && (
+                  <div
+                    className="mt-3 flex items-center gap-1.5 px-2.5 py-2 rounded-md border"
+                    style={{ borderColor: 'rgba(200,168,75,0.4)', background: 'rgba(200,168,75,0.08)' }}
+                    title="Number of your units needed to one-shot (kill in a single simultaneous volley) one opponent unit"
+                  >
+                    <span className="font-bold text-sm leading-none" style={{ color: '#c8a84b' }}>{versusMetrics.unitsToOS}</span>
+                    <span className="text-xs" style={{ color: '#c8a84b' }}>unit{versusMetrics.unitsToOS > 1 ? 's' : ''} to one-shot</span>
+                  </div>
+                )}
+
                 {/* Winner/loser stats — shown in both 1v1 and At Equal Cost modes */}
                 {versusMetrics.winnerHpRemaining !== undefined && (
                 <div id={side === 'left' ? 'tour-mc-stats' : undefined} className={`mt-3 p-2 rounded text-xs space-y-1 ${versusMetrics.isWinner ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-orange-500/10 border border-orange-500/20'}`}>
@@ -1103,15 +1117,21 @@ export const UnitCard = ({
               </div>
 
               {/* Loser units-to-win banner */}
-              {versusMetrics.isLoser && (versusMetrics.loserUnitsToWin ?? 0) >= 2 && (() => {
-                const n = versusMetrics.loserUnitsToWin!;
-                const shown = Math.min(n, 10);
-                const overflow = n - 10;
+              {versusMetrics.isLoser && (versusMetrics.loserUnitsToWinExceeded || (versusMetrics.loserUnitsToWin ?? 0) >= 2) && (() => {
+                const exceeded = !!versusMetrics.loserUnitsToWinExceeded;
+                const n = versusMetrics.loserUnitsToWin ?? 0;
+                const shown = exceeded ? 10 : Math.min(n, 10);
+                const overflow = exceeded ? 0 : n - 10;
                 return (
                   <div className="mt-3 pl-2.5 pr-2 py-1.5 rounded-r text-xs" style={{ borderLeft: '2px solid #c8a84b99', background: 'rgba(200,168,75,0.06)' }}>
-                    <div className="mb-1.5">
+                    <div className="mb-1.5 flex items-center gap-1.5">
                       <span className="text-muted-foreground">Units to win : </span>
-                      <span className="font-bold text-sm" style={{ color: '#c8a84b' }}>{n}</span>
+                      <span className="font-bold text-sm" style={{ color: '#c8a84b' }}>{exceeded ? 'More than 100' : n}</span>
+                      {versusMetrics.loserUnitsToWinApprox && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-500 border border-amber-500/40 rounded px-1 py-0.5">
+                          approx.
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
                       {Array.from({ length: shown }).map((_, i) => (
@@ -1131,6 +1151,9 @@ export const UnitCard = ({
                       ))}
                       {overflow > 0 && (
                         <span className="text-[10px]" style={{ color: '#c8a84b88' }}>+{overflow}</span>
+                      )}
+                      {exceeded && (
+                        <span className="text-[10px]" style={{ color: '#c8a84b88' }}>+…</span>
                       )}
                     </div>
                   </div>
