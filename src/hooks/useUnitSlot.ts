@@ -608,8 +608,9 @@ export function useUnitSlot(initialUnit?: AoE4Unit | null, initialCiv?: string) 
       unit.id === 'musofadi-warrior' ||
       unit.id === 'warrior-scout' ||
       unit.id === 'healer-elephant' ||
-      unit.id === 'militia-halberdier'
-
+      unit.id === 'militia-halberdier' ||
+      unit.id === 'sultans-elite-tower-elephant' ||
+      unit.id === 'tower-elephant'
     )
       ? all.filter(a => a.id !== 'charge-attack')
       : all;

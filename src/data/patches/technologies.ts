@@ -214,7 +214,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: "silk-bowstrings",
     reason: "Not implemented in data file.",
-    excludedUnits: ['batu-khan'],
+    excludedUnits: ['batu-khan', 'sultans-elite-tower-elephant', 'tower-elephant'],
     update: {
       effects: [
         {

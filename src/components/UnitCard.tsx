@@ -9,6 +9,12 @@ interface VersusMetricsProps {
   dps: number | null;
   dpsPerCost: number | null;
   hitsToKill: number | null;
+  secondaryHitsToKill?: number;
+  killByWeapon?: { name: string; count: number; cycle: number };
+  secondaryDamage?: number;
+  approachDamage?: number;
+  killTimeline?: { t: number; weapon: string; dmg: number; cum: number }[];
+  approachTimeline?: { t: number; weapon: string; dmg: number }[];
   approachShots?: number;
   timeToKill: number | null;
   effectiveDamagePerHit: number | null;
@@ -200,8 +206,9 @@ function parseFormula(formula: string): ParsedFormula {
   return result;
 }
 
-const round2 = (n: number | null | undefined): string =>
-  n == null ? '—' : (Math.round(n * 100) / 100).toString();
+// Format a number with up to 3 decimals, trailing zeros trimmed (e.g. 1.5 → "1.5", 1.2345 → "1.235", 12 → "12")
+const round3 = (n: number | null | undefined): string =>
+  n == null ? '—' : (Math.round(n * 1000) / 1000).toString();
 
 export const UnitCard = ({
   unit,
@@ -276,6 +283,9 @@ export const UnitCard = ({
   ) : null;
 
   // Build opponent class set for versus mode bonus matching
+  // "building" must only match when the class IS exactly "building" — not extracted from compound names
+  // like "golden_age_tier_3_building_abb" (Abbasid villager), which would falsely trigger building bonuses.
+  const EXACT_ONLY_OPP_TOKENS = new Set(['building']);
   const expandedOpp = new Set<string>();
   if (mode === 'versus' && versusMetrics?.opponentClasses) {
     const opp = versusMetrics.opponentClasses.map(c => c.toLowerCase());
@@ -288,7 +298,7 @@ export const UnitCard = ({
           if (parts[i] === 'non') negatedTokens.add(parts[i + 1]);
         }
         for (const part of parts) {
-          if (part && part !== 'non' && !negatedTokens.has(part)) {
+          if (part && part !== 'non' && !negatedTokens.has(part) && !EXACT_ONLY_OPP_TOKENS.has(part)) {
             expandedOpp.add(part);
           }
         }
@@ -507,12 +517,12 @@ export const UnitCard = ({
                 <span className="text-muted-foreground">Attack Speed</span>
                 <span className={cn('flex items-center gap-1', getComparisonColor(primaryWeapon.speed, compareAttackSpeed, false).color)}>
                   {getComparisonColor(primaryWeapon.speed, compareAttackSpeed, false).symbol && <span className="text-xs">{getComparisonColor(primaryWeapon.speed, compareAttackSpeed, false).symbol}</span>}
-                  {primaryWeapon.speed.toFixed(3)}s
+                  {round3(primaryWeapon.speed)}s
                   {effectiveAttackSpeed !== null && (
                     <span
                       className="text-orange-400 underline decoration-dotted cursor-help"
-                      title={`Effective attack speed vs opponent: ${primaryWeapon.speed.toFixed(3)}s × ${(1 + asDebuff).toFixed(2)} = ${effectiveAttackSpeed.toFixed(3)}s (opponent's Bludgeoning Attacks)`}>
-                      {' '}(→{effectiveAttackSpeed.toFixed(3)}s)
+                      title={`Effective attack speed vs opponent: ${round3(primaryWeapon.speed)}s × ${round3(1 + asDebuff)} = ${round3(effectiveAttackSpeed)}s (opponent's Bludgeoning Attacks)`}>
+                      {' '}(→{round3(effectiveAttackSpeed)}s)
                     </span>
                   )}
                 </span>
@@ -522,7 +532,7 @@ export const UnitCard = ({
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Range</span>
                 <span className="flex items-center gap-1">
-                  {parseFloat(primaryWeapon.range.min.toFixed(2))} - <span className={getComparisonColor(primaryWeapon.range.max, compareMaxRange, true, 0.05, true).color}>{parseFloat(primaryWeapon.range.max.toFixed(2))}</span>
+                  {round3(primaryWeapon.range.min)} - <span className={getComparisonColor(primaryWeapon.range.max, compareMaxRange, true, 0.05, true).color}>{round3(primaryWeapon.range.max)}</span>
                 </span>
               </div>
             )}
@@ -580,7 +590,7 @@ export const UnitCard = ({
                 <span className="text-muted-foreground">Speed</span>
                 <span className={cn('flex items-center gap-1', getComparisonColor(movement.speed, compareSpeed).color)}>
                   {getComparisonColor(movement.speed, compareSpeed).symbol && <span className="text-xs">{getComparisonColor(movement.speed, compareSpeed).symbol}</span>}
-                  {movement.speed.toFixed(3)}
+                  {round3(movement.speed)}
                 </span>
               </div>
             )}
@@ -642,9 +652,22 @@ export const UnitCard = ({
 
           const defenderTotalHp = (versusMetrics.opponentHp ?? effectiveHp) * (versusMetrics.opponentMultiplier || 1);
           const attackerTotalDmg = (versusMetrics.effectiveDamagePerHit || 0) * (versusMetrics.multiplier || 1);
-          const cycleStr = primaryWeapon?.speed != null ? round2(primaryWeapon.speed) + 's' : '—';
+          const cycleStr = primaryWeapon?.speed != null ? round3(primaryWeapon.speed) + 's' : '—';
           const approachShots = versusMetrics.approachShots ?? 0;
           const totalHitsToKill = (versusMetrics.hitsToKill ?? 0) + approachShots || null;
+          // Secondary weapon contributed to the kill (event-driven two-timeline TTK in combat.ts)
+          const secHitsToKill = versusMetrics.secondaryHitsToKill;
+          const killByWeapon = versusMetrics.killByWeapon;
+          // Damage breakdown for the Outcome (approach + primary contact + secondary contact)
+          const approachDmgTotal = versusMetrics.approachDamage;
+          const secondaryDmgTotal = versusMetrics.secondaryDamage;
+          const primaryDmgTotal = (versusMetrics.hitsToKill ?? 0) * (versusMetrics.effectiveDamagePerHit ?? 0);
+          const totalDmgDealt = primaryDmgTotal + (secondaryDmgTotal ?? 0) + (approachDmgTotal ?? 0);
+          // Event chronology (timeline) — contact events + approach pre-damage
+          const killTimeline = versusMetrics.killTimeline;
+          const approachTimeline = versusMetrics.approachTimeline;
+          // HP the defender enters contact with (full HP minus approach pre-damage)
+          const contactHp = defenderTotalHp - (approachDmgTotal ?? 0);
           return (
             <div className="space-y-2">
 
@@ -664,14 +687,14 @@ export const UnitCard = ({
                   {!isRangedSide && kitingData && (
                     dieBeforeContact
                       ? <span className="text-red-400">⛔ You die before reaching contact</span>
-                      : <span className="text-blue-400">⏱ Contact at t={round2(kitingData.contactTime)}s</span>
+                      : <span className="text-blue-400">⏱ Contact at t={round3(kitingData.contactTime)}s</span>
                   )}
                   {!isRangedSide && neverCatches && (
                     <span className="text-red-400">⛔ You cannot catch the ranged unit</span>
                   )}
                   {/* RvR: approach penalty on both sides */}
                   {movementData && !kitingData && !neverCatches && (
-                    <span className="text-blue-400">🏃 +{round2(movementData.approachTime)}s approach penalty</span>
+                    <span className="text-blue-400">🏃 +{round3(movementData.approachTime)}s approach penalty</span>
                   )}
                 </div>
               )}
@@ -698,11 +721,11 @@ export const UnitCard = ({
                         <div className="font-medium text-amber-400">1st hit — {parsed.chargeWeapon.name}</div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Damage</span>
-                          <span>{round2(parsed.chargeWeapon.damage)}</span>
+                          <span>{round3(parsed.chargeWeapon.damage)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Cycle</span>
-                          <span>{round2(parsed.chargeWeapon.speed)}s</span>
+                          <span>{round3(parsed.chargeWeapon.speed)}s</span>
                         </div>
                       </div>
                     )}
@@ -710,40 +733,40 @@ export const UnitCard = ({
                       <div className="pl-1 border-l-2 border-primary/40 space-y-0.5">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Base dmg</span>
-                          <span>{round2(parsed.base)}</span>
+                          <span>{round3(parsed.base)}</span>
                         </div>
                         {parsed.bonus !== null && parsed.bonus > 0 && (
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Bonus vs target</span>
-                            <span className="text-green-400">+{round2(parsed.bonus)}</span>
+                            <span className="text-green-400">+{round3(parsed.bonus)}</span>
                           </div>
                         )}
                         {parsed.armor !== null && parsed.armor > 0 && (
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Armor</span>
-                            <span className="text-red-400">−{round2(parsed.armor)}</span>
+                            <span className="text-red-400">−{round3(parsed.armor)}</span>
                           </div>
                         )}
                         {parsed.resistancePct !== null && (
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Resistance</span>
-                            <span className="text-red-400">×(1−{round2(parsed.resistancePct)}%)</span>
+                            <span className="text-red-400">×(1−{round3(parsed.resistancePct)}%)</span>
                           </div>
                         )}
                         <div className="flex justify-between border-t border-border/50 pt-0.5 font-medium">
                           <span>Effective dmg</span>
-                          <span>{parsed.effective !== null ? round2(parsed.effective) : '—'}</span>
+                          <span>{parsed.effective !== null ? round3(parsed.effective) : '—'}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Attack cycle</span>
                           <span>{cycleStr}</span>
                         </div>
-                        {versusMetrics.dps !== null && (
+                        {parsed.effective !== null && primaryWeapon?.speed ? (
                           <div className="flex justify-between font-medium">
                             <span>DPS</span>
-                            <span>{round2(versusMetrics.dps)}</span>
+                            <span>{round3(parsed.effective / primaryWeapon.speed)}</span>
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     )}
                   </div>
@@ -772,31 +795,31 @@ export const UnitCard = ({
                             </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Base dmg</span>
-                              <span>{round2(w.damage || 0)}{burstCount > 1 ? ` × ${burstCount}` : ''}</span>
+                              <span>{round3(w.damage || 0)}{burstCount > 1 ? ` × ${burstCount}` : ''}</span>
                             </div>
                             {applicableSecBonus > 0 && (
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Bonus vs target</span>
-                                <span className="text-green-400">+{round2(applicableSecBonus)}</span>
+                                <span className="text-green-400">+{round3(applicableSecBonus)}</span>
                               </div>
                             )}
                             {armorVal > 0 && (
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Armor</span>
-                                <span className="text-red-400">−{round2(armorVal)}</span>
+                                <span className="text-red-400">−{round3(armorVal)}</span>
                               </div>
                             )}
                             <div className="flex justify-between border-t border-border/50 pt-0.5">
                               <span className="text-muted-foreground">≈ Effective dmg</span>
-                              <span>{round2(effectiveDmg)}</span>
+                              <span>{round3(effectiveDmg)}</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Attack cycle</span>
-                              <span>{round2(cycle)}s</span>
+                              <span>{round3(cycle)}s</span>
                             </div>
                             <div className="flex justify-between font-medium">
                               <span>≈ DPS</span>
-                              <span>{round2(dpsContrib)}</span>
+                              <span>{round3(dpsContrib)}</span>
                             </div>
                           </div>
                         );
@@ -843,17 +866,17 @@ export const UnitCard = ({
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Base dmg</span>
-                            <span>{round2(decayDmg)}</span>
+                            <span>{round3(decayDmg)}</span>
                           </div>
                           {decayArmorVal > 0 && (
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Armor</span>
-                              <span className="text-red-400">−{round2(decayArmorVal)}</span>
+                              <span className="text-red-400">−{round3(decayArmorVal)}</span>
                             </div>
                           )}
                           <div className="flex justify-between border-t border-border/50 pt-0.5">
                             <span className="text-muted-foreground">≈ Effective dmg</span>
-                            <span>{round2(decayEffectiveDmg)}</span>
+                            <span>{round3(decayEffectiveDmg)}</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Attack cycle</span>
@@ -861,7 +884,7 @@ export const UnitCard = ({
                           </div>
                           <div className="flex justify-between font-medium">
                             <span>≈ DPS</span>
-                            <span>{round2(decayDps)}</span>
+                            <span>{round3(decayDps)}</span>
                           </div>
                         </div>
                       </div>
@@ -877,7 +900,7 @@ export const UnitCard = ({
                         <div className="pl-1 border-l-2 border-blue-400/60 space-y-0.5">
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Approach penalty</span>
-                            <span>+{round2(movementData.approachTime)}s</span>
+                            <span>+{round3(movementData.approachTime)}s</span>
                           </div>
                         </div>
                       )}
@@ -888,11 +911,11 @@ export const UnitCard = ({
                             <>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Melee speed</span>
-                                <span>{round2(neverCatches.meleeSpeed)} t/s</span>
+                                <span>{round3(neverCatches.meleeSpeed)} t/s</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-muted-foreground">Ranged kite speed</span>
-                                <span>{round2(neverCatches.rangedSpeed)} t/s</span>
+                                <span>{round3(neverCatches.rangedSpeed)} t/s</span>
                               </div>
                             </>
                           )}
@@ -907,19 +930,19 @@ export const UnitCard = ({
                           {kitingData.approachTime > 0 && (
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Approach phase</span>
-                              <span>{round2(kitingData.approachTime)}s (+{kitingData.freeHits} hits)</span>
+                              <span>{round3(kitingData.approachTime)}s (+{kitingData.freeHits} hits)</span>
                             </div>
                           )}
                           {kitingData.chargeSpeedBoost !== null && (
                             <div className="flex justify-between text-amber-400">
                               <span>Melee charge boost</span>
-                              <span>×{round2(kitingData.chargeSpeedBoost)}</span>
+                              <span>×{round3(kitingData.chargeSpeedBoost)}</span>
                             </div>
                           )}
                           {kitingData.kitingTime > 0 && (
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Kiting phase</span>
-                              <span>{round2(kitingData.kitingTime)}s (+{kitingData.kitingHits} hits)</span>
+                              <span>{round3(kitingData.kitingTime)}s (+{kitingData.kitingHits} hits)</span>
                             </div>
                           )}
                           <div className="flex justify-between border-t border-border/50 pt-0.5">
@@ -928,19 +951,19 @@ export const UnitCard = ({
                           </div>
                           <div className="flex justify-between font-medium">
                             <span>Contact at</span>
-                            <span>t={round2(kitingData.contactTime)}s</span>
+                            <span>t={round3(kitingData.contactTime)}s</span>
                           </div>
                           {isRangedSide ? (
                             dieBeforeContact
                               ? <div className="text-green-400">→ Melee dies before reaching you</div>
                               : meleeContactTime !== null
-                                ? <div className="flex justify-between"><span className="text-muted-foreground">Melee hits you at</span><span>t={round2(meleeContactTime)}s</span></div>
+                                ? <div className="flex justify-between"><span className="text-muted-foreground">Melee hits you at</span><span>t={round3(meleeContactTime)}s</span></div>
                                 : null
                           ) : (
                             dieBeforeContact
                               ? <div className="text-red-400">→ You die before reaching melee range</div>
                               : meleeContactTime !== null
-                                ? <div className="flex justify-between"><span className="text-muted-foreground">You start attacking at</span><span>t={round2(meleeContactTime)}s</span></div>
+                                ? <div className="flex justify-between"><span className="text-muted-foreground">You start attacking at</span><span>t={round3(meleeContactTime)}s</span></div>
                                 : null
                           )}
                         </div>
@@ -967,7 +990,7 @@ export const UnitCard = ({
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Total dmg/cycle</span>
-                          <span>{round2(versusMetrics.effectiveDamagePerHit)}×{versusMetrics.multiplier} = {round2(attackerTotalDmg)}</span>
+                          <span>{round3(versusMetrics.effectiveDamagePerHit)}×{versusMetrics.multiplier} = {round3(attackerTotalDmg)}</span>
                         </div>
                       </div>
                     </div>
@@ -977,23 +1000,67 @@ export const UnitCard = ({
                   <div className="space-y-1">
                     <div className="font-semibold text-primary uppercase tracking-wide text-[9px]">🎯 Outcome</div>
                     {totalHitsToKill !== null ? (
+                      killTimeline ? (
+                        /* ── Timeline (chronology) — two-weapon / approach breakdown ── */
+                        <div className="pl-1 border-l-2 border-primary/40 space-y-1.5">
+                          {approachTimeline && approachTimeline.length > 0 && (
+                            <div className="space-y-0.5">
+                              <div className="text-blue-400 font-medium">🏹 Approche (pré-contact)</div>
+                              {approachTimeline.map((e, i) => (
+                                <div key={`a${i}`} className="flex justify-between font-mono">
+                                  <span>t={round3(e.t)}s · {e.weapon}</span>
+                                  <span className="text-muted-foreground">+{round3(e.dmg)}</span>
+                                </div>
+                              ))}
+                              <div className="text-muted-foreground">→ cible {round3(defenderTotalHp)} → {round3(contactHp)} PV</div>
+                            </div>
+                          )}
+                          <div className="space-y-0.5">
+                            <div className="font-medium">⚔️ Contact</div>
+                            {killTimeline.map((e, i) => {
+                              const isKill = i === killTimeline.length - 1;
+                              return (
+                                <div key={`c${i}`} className={cn('flex justify-between font-mono', isKill && 'text-red-400 font-medium')}>
+                                  <span>t={round3(e.t)}s · {e.weapon}</span>
+                                  <span>+{round3(e.dmg)} → {round3(e.cum)}{isKill ? ` ☠ (${round3(contactHp)} PV)` : ''}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="flex justify-between font-medium border-t border-border/50 pt-0.5">
+                            <span>TTK{hasMovement && <span className="text-blue-400 font-normal"> (incl. mvt)</span>}{approachShots > 0 && <span className="text-blue-400 font-normal"> (contact)</span>}</span>
+                            <span>{round3(versusMetrics.timeToKill)}s{killByWeapon ? ` (${killByWeapon.count}×${round3(killByWeapon.cycle)}s ${killByWeapon.name})` : ''}</span>
+                          </div>
+                        </div>
+                      ) : (
                       <div className="pl-1 border-l-2 border-primary/40 space-y-0.5">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Hits to kill{approachShots > 0 && <span className="text-blue-400 font-normal"> (incl. approach)</span>}</span>
-                          <span>⌈{defenderTotalHp}/{round2(attackerTotalDmg || versusMetrics.effectiveDamagePerHit)}⌉ = {totalHitsToKill}</span>
+                          {secHitsToKill !== undefined ? (
+                            <span className="text-right">
+                              {approachShots > 0 && <>{approachShots} approach{approachDmgTotal != null ? ` (${round3(approachDmgTotal)})` : ''} + </>}
+                              {versusMetrics.hitsToKill} primary ({round3(primaryDmgTotal)}) + {secHitsToKill} secondary{secondaryDmgTotal != null ? ` (${round3(secondaryDmgTotal)})` : ''}
+                              <span className="block text-muted-foreground">= {round3(totalDmgDealt)} dmg ≥ {defenderTotalHp} HP</span>
+                            </span>
+                          ) : (
+                            <span>⌈{defenderTotalHp}/{round3(attackerTotalDmg || versusMetrics.effectiveDamagePerHit)}⌉ = {totalHitsToKill}</span>
+                          )}
                         </div>
                         <div className="flex justify-between font-medium">
                           <span>TTK{hasMovement && <span className="text-blue-400 font-normal"> (incl. mvt)</span>}{approachShots > 0 && <span className="text-blue-400 font-normal"> (contact)</span>}</span>
                           <span>
-                            {parsed.chargeWeapon && versusMetrics.hitsToKill !== null
-                              ? versusMetrics.hitsToKill > 1
-                                ? `${round2(parsed.chargeWeapon.speed)}s + ${versusMetrics.hitsToKill - 1}×${cycleStr}`
-                                : `${round2(parsed.chargeWeapon.speed)}s`
-                              : `${versusMetrics.hitsToKill}×${cycleStr}`
-                            } = {round2(versusMetrics.timeToKill)}s
+                            {killByWeapon
+                              ? `${killByWeapon.count}×${round3(killByWeapon.cycle)}s (${killByWeapon.name})`
+                              : parsed.chargeWeapon && versusMetrics.hitsToKill !== null
+                                ? versusMetrics.hitsToKill > 1
+                                  ? `${round3(parsed.chargeWeapon.speed)}s + ${versusMetrics.hitsToKill - 1}×${cycleStr}`
+                                  : `${round3(parsed.chargeWeapon.speed)}s`
+                                : `${versusMetrics.hitsToKill}×${cycleStr}`
+                            } = {round3(versusMetrics.timeToKill)}s
                           </span>
                         </div>
                       </div>
+                      )
                     ) : (
                       <div className="text-muted-foreground italic pl-1">Cannot deal damage</div>
                     )}
@@ -1189,8 +1256,8 @@ export const UnitCard = ({
                     {(maxHpBonusFraction ?? 0) > 0 && (
                       <div className="flex justify-between"><span className="text-muted-foreground">+HP bonus</span><span>+{Math.round((maxHpBonusFraction ?? 0) * 100)}%</span></div>
                     )}
-                    <div className="flex justify-between"><span className="text-muted-foreground">AS</span><span className={effectiveAttackSpeed !== null ? 'text-orange-400' : undefined}>{effectiveAttackSpeed !== null ? effectiveAttackSpeed.toFixed(3) + 's' : (primaryWeapon.speed ? primaryWeapon.speed.toFixed(3) + 's' : '—')}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Range</span><span>{primaryWeapon.range?.max != null ? parseFloat(primaryWeapon.range.max.toFixed(2)) : '—'}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">AS</span><span className={effectiveAttackSpeed !== null ? 'text-orange-400' : undefined}>{effectiveAttackSpeed !== null ? round3(effectiveAttackSpeed) + 's' : (primaryWeapon.speed ? round3(primaryWeapon.speed) + 's' : '—')}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Range</span><span>{primaryWeapon.range?.max != null ? round3(primaryWeapon.range.max) : '—'}</span></div>
                   </>
                 ) : (
                   <div className="text-muted-foreground italic">No weapon</div>
@@ -1225,7 +1292,7 @@ export const UnitCard = ({
                     <span className="text-muted-foreground">Speed</span>
                     <span className={cn('flex items-center gap-1', getComparisonColor(movement.speed, compareSpeed).color)}>
                       {getComparisonColor(movement.speed, compareSpeed).symbol && <span className="text-[10px]">{getComparisonColor(movement.speed, compareSpeed).symbol}</span>}
-                      {movement.speed.toFixed(2)}
+                      {round3(movement.speed)}
                     </span>
                   </div>
                 )}

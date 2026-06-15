@@ -57,6 +57,12 @@ export interface VersusMetrics {
   formula: string; // detailed description for tooltip
   dpsContact?: number; // DPS only active during contact (e.g. thorns from dpsVsMeleeASCoeff) — used by kiting to separate pre-contact vs contact phases
   approachShots?: number; // free shots fired by ranged unit during melee approach phase (not included in hitsToKill)
+  secondaryHitsToKill?: number; // total secondary-weapon hits landed by kill time (discrete two-timeline sim); hitsToKill stays the PRIMARY count
+  killByWeapon?: { name: string; count: number; cycle: number }; // set when a SECONDARY weapon lands the killing blow → TTK = count × cycle
+  secondaryDamage?: number; // total contact damage dealt by secondary weapons up to kill time (discrete sim) — for the Outcome breakdown
+  approachDamage?: number; // total damage dealt during the approach phase by this (ranged) unit's ranged weapon — for the Outcome breakdown
+  killTimeline?: { t: number; weapon: string; dmg: number; cum: number }[]; // contact-phase event chronology up to & incl. the killing blow (discrete two-timeline sim). cum is vs CONTACT HP (post-approach)
+  approachTimeline?: { t: number; weapon: string; dmg: number }[]; // approach-phase free-shot chronology (set on the ranged unit by computeVersus)
 }
 
 export interface VersusResult {
@@ -273,6 +279,9 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
     // Build a set containing all defender classes plus the individual parts of compound classes.
     // e.g. "light_melee_infantry" also adds "light", "melee", "infantry" so that raw modifier
     // targets encoded as [["light","melee","infantry"]] match correctly.
+    // Tokens that must match the full class name — not extracted from compound classes.
+    // "building" would otherwise falsely match units with class names like "golden_age_tier_3_building_abb".
+    const EXACT_ONLY_TOKENS = new Set(['building']);
     const expandedTokens = new Set<string>();
     for (const cls of defenderClassesLower) {
       expandedTokens.add(cls);
@@ -285,7 +294,7 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
           if (parts[i] === 'non') negatedTokens.add(parts[i + 1]);
         }
         for (const part of parts) {
-          if (part && part !== 'non' && !negatedTokens.has(part)) {
+          if (part && part !== 'non' && !negatedTokens.has(part) && !EXACT_ONLY_TOKENS.has(part)) {
             expandedTokens.add(part);
           }
         }
@@ -464,6 +473,21 @@ function getMaxRange(entity: CombatEntity): number {
   return Math.max(0, ...allWeapons.map(w => w.range?.max ?? 0));
 }
 
+// The weapon actually used at range during the approach/kiting phase = the longest-range weapon
+// (primary or secondary). For pure ranged units this is weapons[0] (so callers are unchanged);
+// for hybrid melee-primary + ranged-secondary units (e.g. melee weapon + bow) it returns the
+// ranged secondary, so approach free-shots use the bow's cadence/damage instead of the melee weapon.
+function getRangedWeapon(entity: CombatEntity): UnifiedWeapon | undefined {
+  const allWeapons = [...entity.weapons, ...(entity.secondaryWeapons ?? [])];
+  let best: UnifiedWeapon | undefined;
+  let bestRange = -1;
+  for (const w of allWeapons) {
+    const r = w.range?.max ?? 0;
+    if (r > bestRange) { bestRange = r; best = w; }
+  }
+  return best;
+}
+
 function getRetreatTime(entity: CombatEntity): number {
   // The unit can move during winddown (end of attack animation) AND reload.
   const d = entity.weapons[0]?.durations;
@@ -474,7 +498,7 @@ function canPermanentlyKite(ranged: CombatEntity, melee: CombatEntity): boolean 
   const hasMeleeCharge = melee.activeAbilities?.includes('charge-attack') ?? false;
   const effectiveMeleeSpeed = hasMeleeCharge ? melee.moveSpeed * 1.2 : melee.moveSpeed;
   if (ranged.continuousMovement && ranged.moveSpeed > effectiveMeleeSpeed) return true;
-  const attackCycle = (ranged.weapons[0]?.speed ?? 0) * (1 + (melee.opponentAttackSpeedDebuff ?? 0));
+  const attackCycle = (getRangedWeapon(ranged)?.speed ?? ranged.weapons[0]?.speed ?? 0) * (1 + (melee.opponentAttackSpeedDebuff ?? 0));
   if (attackCycle <= 0 || effectiveMeleeSpeed <= 0) return false;
   const delta = ranged.moveSpeed * getRetreatTime(ranged) - effectiveMeleeSpeed * attackCycle;
   return delta >= 0;
@@ -563,7 +587,7 @@ function applyKitingToMetrics(
   const retreatTime = getRetreatTime(ranged); // winddown + reload: phases where the unit can move
   const speedRanged = ranged.moveSpeed;
   const speedMelee = melee.moveSpeed;
-  const attackCycle = (ranged.weapons[0]?.speed ?? 0) * (1 + (melee.opponentAttackSpeedDebuff ?? 0));
+  const attackCycle = (getRangedWeapon(ranged)?.speed ?? ranged.weapons[0]?.speed ?? 0) * (1 + (melee.opponentAttackSpeedDebuff ?? 0));
 
   // All melee units with charge ability active get a 20% speed boost until their first attack
   const hasMeleeCharge = melee.activeAbilities?.includes('charge-attack') ?? false;
@@ -638,7 +662,7 @@ function applyKitingToMetrics(
   } else {
     t_approach = d_approach / effectiveMeleeSpeed;
   }
-  const wRangedApproach = ranged.weapons[0]?.durations?.windup ?? 0;
+  const wRangedApproach = getRangedWeapon(ranged)?.durations?.windup ?? 0;
   const approachTravelTimeKite = isArcher(ranged) ? ARCHER_TRAVEL_TIME : 0;
   const shotsDeadlineKite = t_approach - approachTravelTimeKite;
   const freeHits = attackCycle > 0 && shotsDeadlineKite >= wRangedApproach
@@ -747,6 +771,10 @@ function computeMetrics(
   let exactTimeToKill: number | null = null;
   let dpsPerCost: number | null = null;
   let thornsDPS = 0;
+  let secondaryHitsToKill: number | undefined;
+  let killByWeapon: { name: string; count: number; cycle: number } | undefined;
+  let secondaryDamage: number | undefined;
+  let killTimeline: { t: number; weapon: string; dmg: number; cum: number }[] | undefined;
 
   // First-hit block (Deflective Armor): defender absorbs first attack completely (0 damage).
   // The charge still executes — post-charge buff activates normally from hit 2 onward.
@@ -857,35 +885,77 @@ function computeMetrics(
 
     // Secondary weapons
     if (attacker.secondaryWeapons && attacker.secondaryWeapons.length > 0 && attackSpeed > 0) {
-      let totalSecDPS = 0;
-      for (const secWeapon of attacker.secondaryWeapons) {
-        if (!secWeapon.speed || secWeapon.speed <= 0) continue;
-        const secData = computeEffectiveDamage(attacker, defender, 0, false, secWeapon);
-        totalSecDPS += secData.value / secWeapon.speed;
-      }
+      const secStreams = attacker.secondaryWeapons
+        .filter(w => !!w.speed && w.speed > 0)
+        .map((w) => ({
+          name: w.name ?? 'Secondary',
+          cycle: w.speed as number,
+          dmg: computeEffectiveDamage(attacker, defender, 0, false, w).value * attackerMultiplier,
+          nextTime: w.speed as number, // first secondary hit lands after one full cycle
+          hits: 0,
+        }));
+      const totalSecDPS = secStreams.reduce((s, w) => s + w.dmg / w.cycle, 0);
       if (totalSecDPS > 0) {
         if (discreteTTK) {
-          // Discrete model (versus): secondary damage per primary cycle → recompute HTK then TTK = HTK × AS.
-          // First cycle may differ when a charge weapon has a different speed.
-          // firstAttackData already includes charge/bleed bonus, so the first-hit reduction is preserved.
+          // Discrete model (versus): event-driven two-timeline simulation. The primary weapon and
+          // each secondary weapon fire on their own cadence; the killing blow is the first hit (from
+          // ANY weapon) whose cumulative damage reaches the defender's HP. So TTK can be a multiple
+          // of the PRIMARY cycle OR a SECONDARY cycle — whichever lands the kill first.
+          // firstAttackData already includes charge/bleed bonus, so the first primary hit is preserved.
           const totalDefHP = defender.hitpoints * (defender.hpStartFraction ?? 1) * defenderMultiplier;
-          const secPerFirstCycle = totalSecDPS * firstHitSpeed;
-          const secPerNormalCycle = totalSecDPS * attackSpeed;
-          const effectiveFirstCycle = firstAttackData.value * attackerMultiplier + secPerFirstCycle;
-          const effectiveNormalCycle = normalAttackData.value * attackerMultiplier + secPerNormalCycle;
-          if (effectiveFirstCycle >= totalDefHP) {
-            hitsToKill = 1;
-            exactTimeToKill = firstHitSpeed;
-            timeToKill = round(exactTimeToKill, 1);
-          } else {
-            const additionalHits = Math.ceil((totalDefHP - effectiveFirstCycle) / effectiveNormalCycle);
-            hitsToKill = 1 + additionalHits;
-            exactTimeToKill = firstHitSpeed + additionalHits * attackSpeed;
-            timeToKill = round(exactTimeToKill, 1);
+          const firstCycleDamage = firstAttackData.value * attackerMultiplier;
+          const normalCycleDamage = normalAttackData.value * attackerMultiplier;
+          const primaryName = weapon?.name ?? 'Primary';
+          const timeline: { t: number; weapon: string; dmg: number; cum: number }[] = [];
+          let priHitsFired = 0;
+          let priNextTime = firstHitSpeed;
+          let cum = 0;
+          let killTime: number | null = null;
+          const MAX_EVENTS = 100000;
+          for (let i = 0; i < MAX_EVENTS; i++) {
+            // Next event = earliest pending hit across primary + secondaries (ties → primary)
+            let nextT = priNextTime;
+            let nextSec = -1;
+            for (let s = 0; s < secStreams.length; s++) {
+              if (secStreams[s].nextTime < nextT) { nextT = secStreams[s].nextTime; nextSec = s; }
+            }
+            let evtWeapon: string;
+            let evtDmg: number;
+            if (nextSec === -1) {
+              evtDmg = priHitsFired === 0 ? firstCycleDamage : normalCycleDamage;
+              evtWeapon = primaryName;
+              cum += evtDmg;
+              priHitsFired++;
+              priNextTime = firstHitSpeed + priHitsFired * attackSpeed;
+            } else {
+              const sw = secStreams[nextSec];
+              evtDmg = sw.dmg;
+              evtWeapon = sw.name;
+              cum += sw.dmg;
+              sw.hits++;
+              sw.nextTime += sw.cycle;
+            }
+            timeline.push({ t: nextT, weapon: evtWeapon, dmg: evtDmg, cum });
+            if (cum >= totalDefHP) {
+              killTime = nextT;
+              if (nextSec !== -1) {
+                const sw = secStreams[nextSec];
+                killByWeapon = { name: sw.name, count: sw.hits, cycle: sw.cycle };
+              }
+              break;
+            }
           }
-          const totalDmg = effectiveFirstCycle + (hitsToKill - 1) * effectiveNormalCycle;
-          const totalTime = firstHitSpeed + (hitsToKill - 1) * attackSpeed;
-          dps = round(totalDmg / totalTime, 2);
+          if (killTime !== null) {
+            exactTimeToKill = killTime;
+            timeToKill = round(killTime, 1);
+            // hitsToKill stays the PRIMARY hit count (downstream: kiting phase detection, per-hit healing)
+            hitsToKill = priHitsFired;
+            secondaryHitsToKill = secStreams.reduce((n, w) => n + w.hits, 0);
+            secondaryDamage = secStreams.reduce((n, w) => n + w.hits * w.dmg, 0);
+            dps = round((normalCycleDamage / attackSpeed) + totalSecDPS, 2);
+            // Cap stored events so a high-HP grind doesn't bloat the payload (card truncates anyway)
+            killTimeline = timeline.length > 24 ? [...timeline.slice(0, 12), ...timeline.slice(-12)] : timeline;
+          }
         } else {
           // Continuous model (equal cost): add secondary DPS then TTK = HP / combinedDPS.
           dps = round((dps ?? 0) + totalSecDPS, 2);
@@ -945,9 +1015,8 @@ function computeMetrics(
       }
     }
 
-    const unitDPS = round(normalAttackData.value / attackSpeed, 2);
     const cost = totalCost(attacker);
-    dpsPerCost = cost > 0 ? round(unitDPS / cost, 2) : null;
+    dpsPerCost = cost > 0 && dps !== null ? round(dps / cost, 2) : null;
   }
 
   // Special case: self-destructing unit (e.g. demolition ship) — only kills if hitsToKill === 1
@@ -1099,6 +1168,10 @@ function computeMetrics(
     cannotAttackUnits: false,
     formula,
     ...(thornsDPS > 0 ? { dpsContact: thornsDPS } : {}),
+    ...(secondaryHitsToKill !== undefined ? { secondaryHitsToKill } : {}),
+    ...(killByWeapon ? { killByWeapon } : {}),
+    ...(secondaryDamage !== undefined ? { secondaryDamage } : {}),
+    ...(killTimeline ? { killTimeline } : {}),
   };
 }
 
@@ -1243,15 +1316,16 @@ export function computeVersus(
   const isMeleeA_approach = getMaxRange(A) < 1;
   const isMeleeB_approach = getMaxRange(B) < 1;
   let approachShotsForRanged = 0;
+  let approachDamageForRanged = 0;
+  const approachTimelineForRanged: { t: number; weapon: string; dmg: number }[] = [];
   if (isMeleeA_approach !== isMeleeB_approach && startDistance > 0) {
     const meleeEnt = isMeleeA_approach ? A : B;
     const rangedEnt = isMeleeA_approach ? B : A;
-    const chargeBonusRanged = isMeleeA_approach ? chargeBonusB : chargeBonusA;
-    const prelimMetrics = computeMetrics(rangedEnt, meleeEnt, chargeBonusRanged, 1, 1, false);
+    const rangedWeapon = getRangedWeapon(rangedEnt);
     const rangedRange = getMaxRange(rangedEnt);
     const T_free = Math.min(startDistance, rangedRange) / Math.max(0.1, meleeEnt.moveSpeed);
-    const asRanged = (rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
-    const wRanged = rangedEnt.weapons[0]?.durations?.windup ?? 0;
+    const asRanged = (rangedWeapon?.speed ?? rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
+    const wRanged = rangedWeapon?.durations?.windup ?? 0;
     // Subtract projectile travel time: only shots whose projectile lands ≤ T_free count as
     // approach damage. Mirrors the ARCHER_TRAVEL_TIME subtraction in computeDamageInTime.
     const approachTravelTime = isArcher(rangedEnt) ? ARCHER_TRAVEL_TIME : 0;
@@ -1259,23 +1333,32 @@ export function computeVersus(
     const shots = asRanged > 0 && shotsDeadline >= wRanged
       ? Math.floor((shotsDeadline - wRanged) / asRanged) + 1
       : 0;
-    if (shots > 0 && prelimMetrics.effectiveDamagePerHit !== null) {
-      const approachDmg = shots * prelimMetrics.effectiveDamagePerHit;
+    // Free shots use the RANGED weapon (bow for hybrids), not weapons[0] (which may be melee).
+    const approachDmgPerShot = computeEffectiveDamage(rangedEnt, meleeEnt, 0, false, rangedWeapon).value;
+    if (shots > 0 && approachDmgPerShot > 0) {
+      const approachDmg = shots * approachDmgPerShot;
       const currentHp = meleeEnt.hitpoints * (meleeEnt.hpStartFraction ?? 1);
       const newFraction = Math.max(1 / meleeEnt.hitpoints, (currentHp - approachDmg) / meleeEnt.hitpoints);
       if (isMeleeA_approach) A = { ...A, hpStartFraction: newFraction };
       else B = { ...B, hpStartFraction: newFraction };
       approachShotsForRanged = shots;
+      approachDamageForRanged = approachDmg;
+      // Land times of the free shots (windup + i·cadence + projectile travel), capped for display
+      const wName = rangedWeapon?.name ?? 'Ranged';
+      const nShown = Math.min(shots, 12);
+      for (let i = 0; i < nShown; i++) {
+        approachTimelineForRanged.push({ t: wRanged + i * asRanged + approachTravelTime, weapon: wName, dmg: approachDmgPerShot });
+      }
     }
   }
 
   let metricsA = computeMetrics(A, B, chargeBonusA, 1, 1, true, AnoTimer, timedDurationA, BnoTimer, timedDurationB);
   let metricsB = computeMetrics(B, A, chargeBonusB, 1, 1, true, BnoTimer, timedDurationB, AnoTimer, timedDurationA);
 
-  // Annotate the ranged unit's metrics with approach shots for display purposes
+  // Annotate the ranged unit's metrics with approach shots + damage + timeline for display purposes
   if (approachShotsForRanged > 0) {
-    if (isMeleeA_approach) metricsB = { ...metricsB, approachShots: approachShotsForRanged };
-    else metricsA = { ...metricsA, approachShots: approachShotsForRanged };
+    if (isMeleeA_approach) metricsB = { ...metricsB, approachShots: approachShotsForRanged, approachDamage: approachDamageForRanged, approachTimeline: approachTimelineForRanged };
+    else metricsA = { ...metricsA, approachShots: approachShotsForRanged, approachDamage: approachDamageForRanged, approachTimeline: approachTimelineForRanged };
   }
 
   // Apply movement / kiting adjustments (only when enabled)
@@ -1434,22 +1517,24 @@ export function computeVersusAtEqualCost(
   if (isMeleeA_approach !== isMeleeB_approach && startDistance > 0) {
     const meleeEnt = isMeleeA_approach ? A : B;
     const rangedEnt = isMeleeA_approach ? B : A;
-    const metRanged = isMeleeA_approach ? metricsB : metricsA;
     const multMelee = isMeleeA_approach ? multipliers.multA : multipliers.multB;
     const multRanged = isMeleeA_approach ? multipliers.multB : multipliers.multA;
 
+    const rangedWeapon = getRangedWeapon(rangedEnt);
     const rangedRange = getMaxRange(rangedEnt);
     const T_free = Math.min(startDistance, rangedRange) / Math.max(0.1, meleeEnt.moveSpeed ?? 1.5);
-    const asRanged = (rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
-    const wRanged = rangedEnt.weapons[0]?.durations?.windup ?? 0;
+    const asRanged = (rangedWeapon?.speed ?? rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
+    const wRanged = rangedWeapon?.durations?.windup ?? 0;
     const approachTravelTimeEc = isArcher(rangedEnt) ? ARCHER_TRAVEL_TIME : 0;
     const shotsDeadlineEc = T_free - approachTravelTimeEc;
     const shots = asRanged > 0 && shotsDeadlineEc >= wRanged
       ? Math.floor((shotsDeadlineEc - wRanged) / asRanged) + 1
       : 0;
+    // Free shots use the RANGED weapon (bow for hybrids), not weapons[0] (which may be melee).
+    const approachDmgPerShot = computeEffectiveDamage(rangedEnt, meleeEnt, 0, false, rangedWeapon).value;
 
     if (shots > 0) {
-      const totalApproachDmg = multRanged * shots * metRanged.effectiveDamagePerHit;
+      const totalApproachDmg = multRanged * shots * approachDmgPerShot;
       const dmgPerMelee = totalApproachDmg / multMelee;
       const currentHp = meleeEnt.hitpoints * (meleeEnt.hpStartFraction ?? 1);
       const newFraction = Math.max(1 / meleeEnt.hitpoints, (currentHp - dmgPerMelee) / meleeEnt.hitpoints);
@@ -2505,12 +2590,12 @@ export function computeVersusKitingFocusFire(
   // Full kiting model: approach + kiting cycles (mirrors applyKitingToMetrics)
   const prelimMetrics = computeMetrics(rangedEnt, meleeEnt, chargeBonusRanged, 1, 1, false);
   const rangedRange = getMaxRange(rangedEnt);
-  const asRanged = (rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
+  const asRanged = (getRangedWeapon(rangedEnt)?.speed ?? rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
   const hasMeleeCharge = meleeEnt.activeAbilities?.includes('charge-attack') ?? false;
   const effectiveMeleeSpeed = hasMeleeCharge ? meleeEnt.moveSpeed * 1.2 : meleeEnt.moveSpeed;
   const d_approach = Math.max(0, startDistance - rangedRange);
   const t_approach = effectiveMeleeSpeed > 0 ? d_approach / effectiveMeleeSpeed : 0;
-  const wRangedFF = rangedEnt.weapons[0]?.durations?.windup ?? 0;
+  const wRangedFF = getRangedWeapon(rangedEnt)?.durations?.windup ?? 0;
   const approachTravelTimeFF = isArcher(rangedEnt) ? ARCHER_TRAVEL_TIME : 0;
   const shotsDeadlineFF = t_approach - approachTravelTimeFF;
   const freeHits = asRanged > 0 && shotsDeadlineFF >= wRangedFF
@@ -2626,8 +2711,8 @@ export function computeVersusAtEqualCostKitingFocusFire(
   // Approach shots
   const rangedRange = getMaxRange(rangedEnt);
   const T_free = Math.min(startDistance, rangedRange) / Math.max(0.1, meleeEnt.moveSpeed);
-  const asRanged = (rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
-  const wRanged = rangedEnt.weapons[0]?.durations?.windup ?? 0;
+  const asRanged = (getRangedWeapon(rangedEnt)?.speed ?? rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
+  const wRanged = getRangedWeapon(rangedEnt)?.durations?.windup ?? 0;
   const shotsDeadline = T_free - (isArcher(rangedEnt) ? ARCHER_TRAVEL_TIME : 0);
   const shots = asRanged > 0 && shotsDeadline >= wRanged
     ? Math.floor((shotsDeadline - wRanged) / asRanged) + 1
@@ -2739,12 +2824,12 @@ export function computeVersusKitingBatchesMC(
   // Full kiting model: approach + kiting cycles (mirrors applyKitingToMetrics)
   const prelimMetrics = computeMetrics(rangedEnt, meleeEnt, chargeBonusRanged, 1, 1, false);
   const rangedRange = getMaxRange(rangedEnt);
-  const asRanged = (rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
+  const asRanged = (getRangedWeapon(rangedEnt)?.speed ?? rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
   const hasMeleeCharge = meleeEnt.activeAbilities?.includes('charge-attack') ?? false;
   const effectiveMeleeSpeed = hasMeleeCharge ? meleeEnt.moveSpeed * 1.2 : meleeEnt.moveSpeed;
   const d_approach = Math.max(0, startDistance - rangedRange);
   const t_approach = effectiveMeleeSpeed > 0 ? d_approach / effectiveMeleeSpeed : 0;
-  const wRangedFF = rangedEnt.weapons[0]?.durations?.windup ?? 0;
+  const wRangedFF = getRangedWeapon(rangedEnt)?.durations?.windup ?? 0;
   const approachTravelTimeFF = isArcher(rangedEnt) ? ARCHER_TRAVEL_TIME : 0;
   const shotsDeadlineFF = t_approach - approachTravelTimeFF;
   const freeHits = asRanged > 0 && shotsDeadlineFF >= wRangedFF
@@ -2856,8 +2941,8 @@ export function computeVersusAtEqualCostKitingBatchesMC(
 
   const rangedRange = getMaxRange(rangedEnt);
   const T_free = Math.min(startDistance, rangedRange) / Math.max(0.1, meleeEnt.moveSpeed);
-  const asRangedApproach = (rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
-  const wRangedApproach = rangedEnt.weapons[0]?.durations?.windup ?? 0;
+  const asRangedApproach = (getRangedWeapon(rangedEnt)?.speed ?? rangedEnt.weapons[0]?.speed ?? 0) * (1 + (meleeEnt.opponentAttackSpeedDebuff ?? 0));
+  const wRangedApproach = getRangedWeapon(rangedEnt)?.durations?.windup ?? 0;
   const shotsDeadline = T_free - (isArcher(rangedEnt) ? ARCHER_TRAVEL_TIME : 0);
   const shots = asRangedApproach > 0 && shotsDeadline >= wRangedApproach
     ? Math.floor((shotsDeadline - wRangedApproach) / asRangedApproach) + 1
