@@ -16,7 +16,7 @@ export const ABILITY_ROW_GROUPS: readonly { label: string; ids: readonly string[
   { label: 'MEHT', ids: ['ability-attack-drums', 'ability-ranged-defense-drums', 'ability-melee-defense-drums'] },
   { label: 'DYN', ids: ['ability-dynasty-yuan', 'ability-dynasty-ming'] },
   { label: 'AURA', ids: ['ability-network-of-castles', 'ability-network-of-citadels', 'ability-daimyo-aura-2', 'ability-daimyo-aura-3', 'ability-daimyo-aura-4'] },
-  { label: 'AGE', ids: ['ability-high-armory-production-bonus', 'ability-abbey-of-the-trinity', 'ability-kurultai-aura', 'ability-tower-of-victory-aura', 'ability-burgrave-palace'] },
+  { label: 'AGE', ids: ['ability-high-armory-production-bonus', 'ability-abbey-of-the-trinity', 'ability-kurultai-aura', 'ability-tower-of-victory-aura'] },
   { label: 'CHAR', ids: ['charge-attack', 'ability-royal-knight-charge-damage'] },
   { label: 'AKRI', ids: ['ability-akritoi-defense-1', 'ability-akritoi-defense-2', 'ability-akritoi-defense-3', 'ability-akritoi-defense-4'] }
 ];
@@ -3343,44 +3343,6 @@ function createJavelinThrow(): Ability {
 //
 //___________
 
-function createBurgravePalaceAbility(): Ability {
-  return {
-    id: 'ability-burgrave-palace',
-    name: 'Burgrave Palace',
-    type: 'ability',
-    civs: ['od'],
-    displayClasses: [],
-    classes: [],
-    minAge: 3,
-    icon: 'https://data.aoe4world.com/images/buildings/burgrave-palace-2.png',
-    description: 'The Burgrave Palace produces units at a 35% discount.',
-    unique: true,
-    effects: [{
-      property: 'costReduction',
-      select: { class: [['melee', 'infantry']] },
-      effect: 'multiply',
-      value: 0.65,
-      type: 'ability',
-    }],
-    variations: [{
-      id: 'ability-burgrave-palace-3',
-      baseId: 'ability-burgrave-palace',
-      type: 'ability',
-      name: 'Burgrave Palace',
-      pbgid: 999302,
-      attribName: 'ability_burgrave_palace',
-      age: 3,
-      civs: ['od'],
-      description: 'The Burgrave Palace produces units at a 35% discount.',
-      classes: [], displayClasses: [], unique: false,
-      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
-      producedBy: [],
-      effects: [],
-    }],
-    shared: {}
-  } as Ability;
-}
-
 //_______________
 //
 // SENGOKU DAIMYO
@@ -4021,7 +3983,6 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createLocalKnowledgeAbility(),
     createFarimaLeadershipAbility(),
     createKhanHunterRangeAura(),
-    createBurgravePalaceAbility(),
     createHardCasedBombs(),
     createHojoClanDaimyoEstate(),
     createOdaClanDaimyoEstate(),

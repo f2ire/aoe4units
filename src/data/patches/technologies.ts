@@ -2764,6 +2764,7 @@ function createBurgravePalaceAgeUp(): Technology {
 }
 
 
+
 function createCrusaderFleets(): Technology {
   return {
     id: 'crusader-fleets',
@@ -2906,7 +2907,47 @@ function createEnlistMansaJavelineers(): Technology {
   } as Technology;
 }
 
+//___________
+//
+// ORDER OF THE DRAGON
+//
+//___________
 
+function createBurgravePalaceAgeUpOd(): Technology {
+  return {
+    id: 'burgrave-palace-age-up-od',
+    name: 'Burgrave Palace',
+    type: 'technology',
+    civs: ['od'],
+    classes: ['age_up_upgrade'],
+    displayClasses: [],
+    minAge: 3,
+    icon: 'https://data.aoe4world.com/images/buildings/burgrave-palace-2.png',
+    description: 'The Burgrave Palace produces units at a 35% discount.',
+    unique: true,
+    effects: [
+      {
+        property: 'costReduction',
+        select: { class: [['melee', 'infantry']] },
+        effect: 'multiply',
+        value: 0.65,
+        type: 'passive'
+      }
+    ] as TechnologyEffect[],
+    variations: [
+      {
+        id: 'burgrave-palace-age-up-od-3',
+        baseId: 'burgrave-palace-age-up-od',
+        pbgid: 0,
+        attribName: '',
+        civs: ['od'],
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        effects: [] as TechnologyEffect[],
+      }
+    ],
+    shared: {}
+  } as Technology;
+}
 //__________________
 //
 // TUGHLAQ
@@ -3037,6 +3078,42 @@ function createTempleOfEqualityAgeUp(): Technology {
   } as Technology;
 }
 
+function createPalatineSchoolAgeUp(): Technology {
+  return {
+    id: 'palatine-school-age-up',
+    name: 'Palatine School',
+    type: 'technology',
+    civs: ['by'],
+    classes: ['age_up_upgrade'],
+    displayClasses: [],
+    minAge: 4,
+    icon: 'https://data.aoe4world.com/images/buildings/palatine-school-3.png',
+    description: 'When training Limitanei, Varangian Guards, Cataphracts, or Cheirosiphons there is a 30% chance to also spawn one at this Landmark.',
+    unique: true,
+    effects: [
+      {
+        property: 'costReduction',
+        select: { id: ['cataphract', 'varangian-guard', 'limitanei', 'cheirosiphon'] },
+        effect: 'multiply',
+        value: 0.7692,
+        type: 'passive'
+      }
+    ] as TechnologyEffect[],
+    variations: [
+      {
+        id: 'palatine-school-age-up-4',
+        baseId: 'palatine-school-age-up',
+        pbgid: 0,
+        attribName: '',
+        civs: ['by'],
+        costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+        effects: [] as TechnologyEffect[],
+      }
+    ],
+    shared: {}
+  } as Technology;
+}
+
 // Maps tech ID → { unitId, weaponIndex, damageMultiplier?, burstCount? } for secondary weapon injection
 export const weaponInjectionMap: Map<string, { unitId: string; weaponIndex: number; damageMultiplier?: number; burstCount?: number; maxDamage?: number }> = new Map(
   technologyPatches
@@ -3074,12 +3151,14 @@ export function applyTechnologyPatches(allTechs: Technology[]): Technology[] {
   const allWithSynthetic = [
     ...allTechs,
     createBurgravePalaceAgeUp(),
+    createBurgravePalaceAgeUpOd(),
     createSwordHuntStatueAgeUp(),
     createCrusaderFleets(),
     createEnlistMansaMusofadi(),
     createEnlistMansaJavelineers(),
     createTempleOfEqualityAgeUp(),
     createAjmerBenefactor(),
+    createPalatineSchoolAgeUp(),
   ];
 
   return allWithSynthetic.map((tech) => {
