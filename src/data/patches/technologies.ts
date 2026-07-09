@@ -1093,6 +1093,36 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     }
   },
 
+  {
+    id: 'barracks-reinforcements',
+    reason: 'Raw effects empty. Melee infantry cost −1/3 (batch production bonus does not increase resource cost, so this models the effective per-unit discount).',
+    update: {
+      effects: [
+        { property: 'costReduction', select: { class: [['melee', 'infantry']] }, effect: 'multiply', value: 2 / 3, type: 'passive' },
+      ],
+    }
+  },
+
+  {
+    id: 'archery-range-reinforcements',
+    reason: 'Raw effects empty. Melee infantry cost −1/3 (batch production bonus does not increase resource cost, so this models the effective per-unit discount).',
+    update: {
+      effects: [
+        { property: 'costReduction', select: { class: [['ranged', 'infantry'], ['ranged', 'cavalry']] }, effect: 'multiply', value: 2 / 3, type: 'passive' },
+      ],
+    }
+  },
+
+  {
+    id: 'stables-reinforcements',
+    reason: 'Raw effects empty. Melee cavalry cost −1/3 (batch production bonus does not increase resource cost, so this models the effective per-unit discount). Ranged cavalry excluded — already covered by archery-range-reinforcements.',
+    update: {
+      effects: [
+        { property: 'costReduction', select: { class: [['melee', 'cavalry']] }, effect: 'multiply', value: 2 / 3, type: 'passive' },
+      ],
+    }
+  },
+
   //___________
   //
   // HOLY ROMAN EMPIRE
