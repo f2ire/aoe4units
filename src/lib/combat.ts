@@ -1280,7 +1280,7 @@ function computeDamageInTime(
         const secData = computeEffectiveDamage(attacker, defender, 0, false, secWeapon);
         total += (secData.value / secWeapon.speed) * duration;
       }
-      return total;
+      return total + (attacker.opponentHealingRateDebuff ?? 0) * duration;
     }
   }
 
@@ -1290,7 +1290,7 @@ function computeDamageInTime(
     const secData = computeEffectiveDamage(attacker, defender, 0, false, secWeapon);
     total += (secData.value / secWeapon.speed) * duration;
   }
-  return total;
+  return total + (attacker.opponentHealingRateDebuff ?? 0) * duration;
 }
 
 export function computeVersus(
@@ -1589,23 +1589,91 @@ function resolveFocusFireSingleBatch(
   });
 }
 
+// ─── Time-based mechanics for the hit-based simulators ───────────────────────
+// computeMetrics folds poison/bleed, thorns, per-second regen and per-hit healing into dps /
+// hitsToKill / TTK. The focus-fire & batch models bypass those outputs and re-simulate from
+// effectiveDamagePerHit, so without the helpers below every one of those mechanics reads as 0.
+// They do NOT all scale the same way, which is why they are injected at two different levels:
+//   - attacker-owned (bleed, thorns) → folded into per-unit per-cycle damage, so the sims'
+//     `dmg * attackerCount` scales them correctly (N archers ⇒ N poison stacks).
+//   - defender-owned (regen, per-hit healing) → passed separately to the sim loops, which know
+//     the unit counts; folding them into `dmg` would scale healing by the attacker count.
+
+// Attacker-owned DPS inflicted on the defender, independent of hit damage.
+// Mirrors the bleed + thorns blocks of computeMetrics.
+function timeBasedDps(attacker: CombatEntity, defender: CombatEntity): number {
+  const bleed = attacker.opponentHealingRateDebuff ?? 0;
+  let thorns = 0;
+  const coeff = attacker.dpsVsMeleeASCoeff ?? 0;
+  if (coeff > 0 && defender.classes.some(c => c.toLowerCase() === 'melee')) {
+    const defenderAS = (defender.weapons[0]?.speed ?? 0) * (1 + (attacker.opponentAttackSpeedDebuff ?? 0));
+    if (defenderAS > 0) thorns = coeff / defenderAS;
+  }
+  return bleed + thorns;
+}
+
+// A unit's own sustained regen, in HP/s. healingRate is per hit the unit LANDS, so it converts
+// to a rate through the unit's own attack cycle — equivalent to computeMetrics' per-hit block in
+// the sustained regime. Negative values (e.g. Militia −1 HP/s) stay negative and drain the unit.
+function selfRegenPerSec(ent: CombatEntity, ownAttackSpeed: number): number {
+  const perSec = ent.healingRatePerSecond ?? 0;
+  const perHit = ownAttackSpeed > 0 ? (ent.healingRate ?? 0) / ownAttackSpeed : 0;
+  return perSec + perHit;
+}
+
+// Net HP one ranged shot removes from the melee unit it is focused on during an approach/kiting
+// phase: direct hit + attacker-owned poison/thorns over the cycle, minus the target's own regen.
+// Only the focused unit is both taking damage and healing — the rest of the melee side is
+// untouched and therefore already at full HP, so its regen is a no-op.
+// rangedPerCycle = shots landing per attack cycle (the ranged unit count): poison scales with it,
+// regen does NOT, so regen is divided back out before being folded into a per-shot figure.
+// May return ≤ 0 when the target out-heals the volley — callers treat that as "can't kill".
+function approachDamagePerShot(
+  ranged: CombatEntity, melee: CombatEntity,
+  hitDmg: number, asRanged: number, rangedPerCycle = 1,
+): number {
+  const regen = selfRegenPerSec(melee, melee.weapons[0]?.speed ?? 0);
+  const net = timeBasedDps(ranged, melee) - regen / Math.max(1, rangedPerCycle);
+  return hitDmg + net * asRanged;
+}
+
+// Per-cycle damage one unit of each side deals, with attacker-owned time-based DPS folded in.
+// Replaces the preamble every focus-fire / batch model used to duplicate.
+// null ⇒ the matchup can't be simulated hit-by-hit; caller falls back to aggregatedDPSModel.
+function foldedCycleDamage(
+  A: CombatEntity, B: CombatEntity, metricsA: VersusMetrics, metricsB: VersusMetrics,
+): { dmgA: number; dmgB: number; fDmgA: number; fDmgB: number; asA: number; asB: number; regenA: number; regenB: number } | null {
+  const hitA = metricsA.effectiveDamagePerHit;
+  const hitB = metricsB.effectiveDamagePerHit;
+  const asA = (A.weapons[0]?.speed ?? 0) * (1 + (B.opponentAttackSpeedDebuff ?? 0));
+  const asB = (B.weapons[0]?.speed ?? 0) * (1 + (A.opponentAttackSpeedDebuff ?? 0));
+  if (!hitA || !hitB || hitA <= 0 || hitB <= 0 || asA <= 0 || asB <= 0) return null;
+  // Poison/thorns credited at each shot rather than ticking over its real duration — same
+  // approximation computeMetrics already makes, so the models stay mutually consistent.
+  const contA = timeBasedDps(A, B) * asA;
+  const contB = timeBasedDps(B, A) * asB;
+  return {
+    dmgA: hitA + contA,
+    dmgB: hitB + contB,
+    fDmgA: (metricsA.firstHitDamage ?? hitA) + contA,
+    fDmgB: (metricsB.firstHitDamage ?? hitB) + contB,
+    asA, asB,
+    regenA: selfRegenPerSec(A, asA),
+    regenB: selfRegenPerSec(B, asB),
+  };
+}
+
 // Deterministic focus-fire: every unit on a side concentrates on a single shared target.
 function resolveFocusFireDeterministic(
   A: CombatEntity, B: CombatEntity,
   metricsA: VersusMetrics, metricsB: VersusMetrics,
   { multA, multB, totalCostA, totalCostB }: { multA: number; multB: number; totalCostA: number; totalCostB: number },
 ): Pick<VersusResult, 'winner' | 'winnerHpRemaining' | 'winnerUnitsRemaining' | 'resourceDifference'> {
-    const dmgA = metricsA.effectiveDamagePerHit;
-    const dmgB = metricsB.effectiveDamagePerHit;
-    const asA = (A.weapons[0]?.speed ?? 0) * (1 + (B.opponentAttackSpeedDebuff ?? 0));
-    const asB = (B.weapons[0]?.speed ?? 0) * (1 + (A.opponentAttackSpeedDebuff ?? 0));
-
-    if (!dmgA || !dmgB || dmgA <= 0 || dmgB <= 0 || asA <= 0 || asB <= 0) {
+    const folded = foldedCycleDamage(A, B, metricsA, metricsB);
+    if (!folded) {
       return aggregatedDPSModel.resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB });
     }
-
-    const firstDmgA = metricsA.firstHitDamage ?? dmgA;
-    const firstDmgB = metricsB.firstHitDamage ?? dmgB;
+    const { dmgA, dmgB, fDmgA: firstDmgA, fDmgB: firstDmgB, asA, asB, regenA, regenB } = folded;
 
     // Travel time: ranged projectiles keep flying even if the shooter dies.
     // When A fires alone and kills B, if B's next shot falls within A's travel time window,
@@ -1644,6 +1712,8 @@ function resolveFocusFireDeterministic(
 
     // Upper bound: at most (multA + multB) kills, each requiring at most ~200 shots
     const MAX_ITER = (multA + multB) * 200 + 500;
+    // Time of the previous volley — regen accrues on the focused targets between events.
+    let tPrev = 0;
     for (let iter = 0; iter < MAX_ITER; iter++) {
       if (remA <= 0 || remB <= 0) break;
 
@@ -1651,6 +1721,14 @@ function resolveFocusFireDeterministic(
       const tB_adj = tB + windupB;
       const fireA = tA_adj <= tB_adj;
       const fireB = tB_adj <= tA_adj;
+
+      // Self-regen since the previous volley, on the two currently-focused units (the rest of
+      // each side is untouched and therefore already at full HP). Applied before the volley lands.
+      const tNow = Math.min(tA_adj, tB_adj);
+      const dt = Math.max(0, tNow - tPrev);
+      tPrev = tNow;
+      if (regenA !== 0 && dt > 0) hpTargetA = Math.min(A.hitpoints, hpTargetA + regenA * dt);
+      if (regenB !== 0 && dt > 0) hpTargetB = Math.min(B.hitpoints, hpTargetB + regenB * dt);
 
       // Both fire simultaneously when damage lands at the same time; applied before resolving deaths
       if (fireA) hpTargetB -= remA * (kA === 0 ? firstDmgA : dmgA);
@@ -1815,16 +1893,11 @@ function resolveBatchEngine(
   { multA, multB, totalCostA, totalCostB }: { multA: number; multB: number; totalCostA: number; totalCostB: number },
   { formBatches, bRetargets, capped, iterations }: BatchEngineConfig,
 ): Pick<VersusResult, 'winner' | 'winnerHpRemaining' | 'winnerUnitsRemaining' | 'resourceDifference' | 'mcDistribution'> {
-  const dmgA = metricsA.effectiveDamagePerHit;
-  const dmgB = metricsB.effectiveDamagePerHit;
-  const asA = (A.weapons[0]?.speed ?? 0) * (1 + (B.opponentAttackSpeedDebuff ?? 0));
-  const asB = (B.weapons[0]?.speed ?? 0) * (1 + (A.opponentAttackSpeedDebuff ?? 0));
-
-  if (!dmgA || !dmgB || dmgA <= 0 || dmgB <= 0 || asA <= 0 || asB <= 0)
+  const folded = foldedCycleDamage(A, B, metricsA, metricsB);
+  if (!folded)
     return aggregatedDPSModel.resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB });
+  const { dmgA, dmgB, fDmgA, fDmgB, asA, asB, regenA, regenB } = folded;
 
-  const fDmgA = metricsA.firstHitDamage ?? dmgA;
-  const fDmgB = metricsB.firstHitDamage ?? dmgB;
   const startHpA = A.hitpoints * (A.hpStartFraction ?? 1);
   const startHpB = B.hitpoints * (B.hpStartFraction ?? 1);
   const wA = A.weapons[0]?.durations?.windup ?? 0;
@@ -1858,7 +1931,7 @@ function resolveBatchEngine(
       const T = Math.min(...active.map(b => {
         const cFA = b.firstShotUsed ? dmgA : fDmgA;
         const cFB = b.firstShotUsed ? dmgB : fDmgB;
-        return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB);
+        return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB, regenA, regenB);
       }));
       if (!isFinite(T)) break;
       timeElapsed += T;
@@ -1867,7 +1940,7 @@ function resolveBatchEngine(
       for (const b of active) {
         const cFA = b.firstShotUsed ? dmgA : fDmgA;
         const cFB = b.firstShotUsed ? dmgB : fDmgB;
-        const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB, bRetargets);
+        const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB, bRetargets, regenA, regenB, A.hitpoints, B.hitpoints);
         const nA = r.hpA.filter(h => h > 0);
         const nB = r.hpB.filter(h => h > 0);
         if (nA.length > 0 && nB.length > 0) {
@@ -2005,23 +2078,32 @@ function createBatchesGrouped(hpA: number[], hpB: number[]): Array<{ hpA: number
 
 // Returns time of first death in this batch (either side).
 // A side fires as a volley of aC units; B side as a volley of bC units.
+// regenA/regenB = HP/s each unit of that side heals on its own. Net progress per attack cycle can
+// go ≤ 0 once a target out-heals the incoming volley, in which case it never dies → Infinity
+// (callers treat a non-finite T as "batch can't resolve" and stop).
 function batchFirstDeathTime(
   hpA: number[], hpB: number[],
   dmgA: number, dmgB: number,
   fDmgA: number, fDmgB: number,
   asA: number, asB: number,
   wA: number, wB: number,
+  regenA = 0, regenB = 0,
 ): number {
   const aC = hpA.length, bC = hpB.length;
   const remB = hpB[0] - aC * fDmgA;
-  const T_B = remB <= 0 ? wA : wA + Math.ceil(remB / (aC * dmgA)) * asA;
+  const netB = aC * dmgA - regenB * asA; // HP actually removed from the focused B unit per A cycle
+  const T_B = remB <= 0 ? wA : (netB <= 0 ? Infinity : wA + Math.ceil(remB / netB) * asA);
   const remA = hpA[0] - bC * fDmgB;
-  const T_A = remA <= 0 ? wB : wB + Math.ceil(remA / (bC * dmgB)) * asB;
+  const netA = bC * dmgB - regenA * asB;
+  const T_A = remA <= 0 ? wB : (netA <= 0 ? Infinity : wB + Math.ceil(remA / netA) * asB);
   return Math.min(T_A, T_B);
 }
 
 // Advances a batch to time T: returns HP after T seconds of combat.
 // Units that die (HP <= 0) are included — caller filters them out.
+// regenA/regenB (HP/s per unit) are applied to every surviving unit over T, capped at maxHpA/maxHpB
+// — per-unit, never scaled by the opposing count. Applied after the volleys: a unit brought to 0 by
+// this step stays dead rather than being regenerated back above 0.
 function advanceBatchFF(
   hpA: number[], hpB: number[],
   T: number,
@@ -2030,6 +2112,8 @@ function advanceBatchFF(
   asA: number, asB: number,
   wA: number, wB: number,
   bRetargets = false,
+  regenA = 0, regenB = 0,
+  maxHpA = Infinity, maxHpB = Infinity,
 ): { hpA: number[]; hpB: number[] } {
   const aC = hpA.length, bC = hpB.length;
   const sA = T >= wA ? Math.floor((T - wA) / asA) + 1 : 0;
@@ -2054,6 +2138,17 @@ function advanceBatchFF(
   } else {
     const dToA = sB > 0 ? bC * (fDmgB + Math.max(0, sB - 1) * dmgB) : 0;
     newHpA[0] -= dToA;
+  }
+  // Self-regen over the step, per surviving unit (survivors only — no resurrecting a corpse).
+  if (regenA !== 0) {
+    for (let i = 0; i < newHpA.length; i++) {
+      if (newHpA[i] > 0) newHpA[i] = Math.min(maxHpA, newHpA[i] + regenA * T);
+    }
+  }
+  if (regenB !== 0) {
+    for (let i = 0; i < newHpB.length; i++) {
+      if (newHpB[i] > 0) newHpB[i] = Math.min(maxHpB, newHpB[i] + regenB * T);
+    }
   }
   return { hpA: newHpA, hpB: newHpB };
 }
@@ -2085,75 +2180,20 @@ function buildBatchResult(
 // Asymmetric simulation: ranged side (conc) concentrates all fire on one melee target at a
 // time; melee side (dist) distributes — each unit independently attacks a different ranged
 // target (round-robin initial assignment, retargets to next alive on death).
+// Thin wrapper: identical to simulateAsymmetricFFMixed with uniform full-HP arrays.
 function simulateAsymmetricFF(
   nConc: number, startHpConc: number,
   dmgConc: number, fDmgConc: number, asConc: number, wConc: number,
   nDist: number, startHpDist: number,
   dmgDist: number, fDmgDist: number, asDist: number, wDist: number,
+  regenConc = 0, maxHpConc = Infinity,
+  regenDist = 0, maxHpDist = Infinity,
 ): { hpConc: number[]; hpDist: number[] } {
-  const hpConc: number[] = Array(nConc).fill(startHpConc);
-  const hpDist: number[] = Array(nDist).fill(startHpDist);
-  const aliveConc: boolean[] = Array(nConc).fill(true);
-  const aliveDist: boolean[] = Array(nDist).fill(true);
-  const distTargets: number[] = Array.from({ length: nDist }, (_, i) => i % nConc);
-
-  let concFocus = 0;
-  let remConc = nConc, remDist = nDist;
-  let tConc = wConc, tDist = wDist;
-  let kConc = 0, kDist = 0;
-
-  function nextAliveConc(fromIdx: number): number {
-    for (let c = 1; c <= nConc; c++) {
-      const idx = (fromIdx + c) % nConc;
-      if (aliveConc[idx]) return idx;
-    }
-    return -1;
-  }
-
-  while (concFocus < nDist && !aliveDist[concFocus]) concFocus++;
-
-  const MAX_ITER = (nConc + nDist) * 300 + 100;
-  for (let iter = 0; iter < MAX_ITER; iter++) {
-    if (concFocus >= nDist || remConc <= 0) break;
-
-    const fireConc = tConc <= tDist;
-    const fireDist = tDist <= tConc;
-
-    if (fireConc) {
-      hpDist[concFocus] -= remConc * (kConc === 0 ? fDmgConc : dmgConc);
-      kConc++; tConc = wConc + kConc * asConc;
-    }
-
-    if (fireDist) {
-      const dmg = kDist === 0 ? fDmgDist : dmgDist;
-      for (let i = 0; i < nDist; i++) {
-        if (!aliveDist[i]) continue;
-        const t = distTargets[i];
-        if (t >= 0 && aliveConc[t]) hpConc[t] -= dmg;
-      }
-      kDist++; tDist = wDist + kDist * asDist;
-    }
-
-    // Resolve focused dist death
-    if (aliveDist[concFocus] && hpDist[concFocus] <= 0) {
-      aliveDist[concFocus] = false; remDist--;
-      concFocus++;
-      while (concFocus < nDist && !aliveDist[concFocus]) concFocus++;
-    }
-
-    // Resolve conc deaths and retarget orphaned dist units
-    for (let i = 0; i < nConc; i++) {
-      if (aliveConc[i] && hpConc[i] <= 0) {
-        aliveConc[i] = false; remConc--;
-        const next = nextAliveConc(i);
-        for (let j = 0; j < nDist; j++) {
-          if (distTargets[j] === i) distTargets[j] = next;
-        }
-      }
-    }
-  }
-
-  return { hpConc, hpDist };
+  return simulateAsymmetricFFMixed(
+    Array(nConc).fill(startHpConc), dmgConc, fDmgConc, asConc, wConc,
+    Array(nDist).fill(startHpDist), dmgDist, fDmgDist, asDist, wDist,
+    regenConc, maxHpConc, regenDist, maxHpDist,
+  );
 }
 
 
@@ -2187,19 +2227,14 @@ function computeMCWinnerStats(
 // Returns the median representative result + mcDistribution with win rates.
 export const focusFireBatchesMCModel: MultiUnitModel = {
   resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB }) {
-    const dmgA = metricsA.effectiveDamagePerHit;
-    const dmgB = metricsB.effectiveDamagePerHit;
-    const asA = (A.weapons[0]?.speed ?? 0) * (1 + (B.opponentAttackSpeedDebuff ?? 0));
-    const asB = (B.weapons[0]?.speed ?? 0) * (1 + (A.opponentAttackSpeedDebuff ?? 0));
-
-    if (!dmgA || !dmgB || dmgA <= 0 || dmgB <= 0 || asA <= 0 || asB <= 0)
+    const folded = foldedCycleDamage(A, B, metricsA, metricsB);
+    if (!folded)
       return aggregatedDPSModel.resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB });
+    const { dmgA, dmgB, fDmgA, fDmgB, asA, asB, regenA, regenB } = folded;
 
     const isMeleeA = getMaxRange(A) < 1;
     const isMeleeB = getMaxRange(B) < 1;
 
-    const fDmgA = metricsA.firstHitDamage ?? dmgA;
-    const fDmgB = metricsB.firstHitDamage ?? dmgB;
     const startHpA = A.hitpoints * (A.hpStartFraction ?? 1);
     const startHpB = B.hitpoints * (B.hpStartFraction ?? 1);
     const wA = A.weapons[0]?.durations?.windup ?? 0;
@@ -2217,12 +2252,12 @@ export const focusFireBatchesMCModel: MultiUnitModel = {
         const cFB = phase === 0 ? fDmgB : dmgB;
         const batches = createBatchesFF(hpA, hpB);
         const T = Math.min(...batches.map(b =>
-          batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, phase === 0 ? wA : 0, phase === 0 ? wB : 0)
+          batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, phase === 0 ? wA : 0, phase === 0 ? wB : 0, regenA, regenB)
         ));
         if (!isFinite(T)) break;
         const nHA: number[] = [], nHB: number[] = [];
         for (const b of batches) {
-          const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, phase === 0 ? wA : 0, phase === 0 ? wB : 0);
+          const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, phase === 0 ? wA : 0, phase === 0 ? wB : 0, false, regenA, regenB, A.hitpoints, B.hitpoints);
           nHA.push(...r.hpA); nHB.push(...r.hpB);
         }
         hpA = nHA.filter(h => h > 0);
@@ -2260,13 +2295,10 @@ export const focusFireBatchesMCModel: MultiUnitModel = {
 // Symmetric cases fall back to focusFireBatchesMCModel.
 export const focusFireBatchesMCAsymmetricModel: MultiUnitModel = {
   resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB }) {
-    const dmgA = metricsA.effectiveDamagePerHit;
-    const dmgB = metricsB.effectiveDamagePerHit;
-    const asA = (A.weapons[0]?.speed ?? 0) * (1 + (B.opponentAttackSpeedDebuff ?? 0));
-    const asB = (B.weapons[0]?.speed ?? 0) * (1 + (A.opponentAttackSpeedDebuff ?? 0));
-
-    if (!dmgA || !dmgB || dmgA <= 0 || dmgB <= 0 || asA <= 0 || asB <= 0)
+    const folded = foldedCycleDamage(A, B, metricsA, metricsB);
+    if (!folded)
       return aggregatedDPSModel.resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB });
+    const { dmgA, dmgB, fDmgA, fDmgB, asA, asB, regenA, regenB } = folded;
 
     const isMeleeA = getMaxRange(A) < 1;
     const isMeleeB = getMaxRange(B) < 1;
@@ -2280,8 +2312,6 @@ export const focusFireBatchesMCAsymmetricModel: MultiUnitModel = {
     if (Math.min(multA, multB) <= 1)
       return resolveFocusFireSingleBatch(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB });
 
-    const fDmgA = metricsA.firstHitDamage ?? dmgA;
-    const fDmgB = metricsB.firstHitDamage ?? dmgB;
     const startHpA = A.hitpoints * (A.hpStartFraction ?? 1);
     const startHpB = B.hitpoints * (B.hpStartFraction ?? 1);
     const wA = A.weapons[0]?.durations?.windup ?? 0;
@@ -2316,7 +2346,7 @@ export const focusFireBatchesMCAsymmetricModel: MultiUnitModel = {
         const T = Math.min(...active.map(b => {
           const cFA = b.firstShotUsed ? dmgA : fDmgA;
           const cFB = b.firstShotUsed ? dmgB : fDmgB;
-          return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB);
+          return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB, regenA, regenB);
         }));
         if (!isFinite(T)) break;
         timeElapsed += T;
@@ -2325,7 +2355,7 @@ export const focusFireBatchesMCAsymmetricModel: MultiUnitModel = {
         for (const b of active) {
           const cFA = b.firstShotUsed ? dmgA : fDmgA;
           const cFB = b.firstShotUsed ? dmgB : fDmgB;
-          const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB);
+          const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB, false, regenA, regenB, A.hitpoints, B.hitpoints);
           const nA = r.hpA.filter(h => h > 0);
           const nB = r.hpB.filter(h => h > 0);
           if (nA.length > 0 && nB.length > 0) {
@@ -2404,13 +2434,10 @@ export const focusFireBatchesMCAsymmetricModel: MultiUnitModel = {
 // Symmetric cases (both ranged or both melee) fall back to focusFireModel.
 export const focusFireAsymmetricModel: MultiUnitModel = {
   resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB }) {
-    const dmgA = metricsA.effectiveDamagePerHit;
-    const dmgB = metricsB.effectiveDamagePerHit;
-    const asA = (A.weapons[0]?.speed ?? 0) * (1 + (B.opponentAttackSpeedDebuff ?? 0));
-    const asB = (B.weapons[0]?.speed ?? 0) * (1 + (A.opponentAttackSpeedDebuff ?? 0));
-
-    if (!dmgA || !dmgB || dmgA <= 0 || dmgB <= 0 || asA <= 0 || asB <= 0)
+    const folded = foldedCycleDamage(A, B, metricsA, metricsB);
+    if (!folded)
       return aggregatedDPSModel.resolve(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB });
+    const { dmgA, dmgB, fDmgA, fDmgB, asA, asB, regenA, regenB } = folded;
 
     const isMeleeA = getMaxRange(A) < 1;
     const isMeleeB = getMaxRange(B) < 1;
@@ -2424,8 +2451,6 @@ export const focusFireAsymmetricModel: MultiUnitModel = {
     if (Math.min(multA, multB) <= 1)
       return resolveFocusFireSingleBatch(A, B, metricsA, metricsB, { multA, multB, totalCostA, totalCostB });
 
-    const fDmgA = metricsA.firstHitDamage ?? dmgA;
-    const fDmgB = metricsB.firstHitDamage ?? dmgB;
     const wA = A.weapons[0]?.durations?.windup ?? 0;
     const wB = B.weapons[0]?.durations?.windup ?? 0;
     const startHpA = A.hitpoints * (A.hpStartFraction ?? 1);
@@ -2439,6 +2464,8 @@ export const focusFireAsymmetricModel: MultiUnitModel = {
       concIsA ? multB : multA, concIsA ? startHpB : startHpA,
       concIsA ? dmgB : dmgA, concIsA ? fDmgB : fDmgA,
       concIsA ? asB : asA, concIsA ? wB : wA,
+      concIsA ? regenA : regenB, concIsA ? A.hitpoints : B.hitpoints,
+      concIsA ? regenB : regenA, concIsA ? B.hitpoints : A.hitpoints,
     );
     const rC = hpConc.filter(h => h > 0).length;
     const rD = hpDist.filter(h => h > 0).length;
@@ -2483,6 +2510,8 @@ function simulateAsymmetricFFMixed(
   dmgConc: number, fDmgConc: number, asConc: number, wConc: number,
   hpDistArr: number[],
   dmgDist: number, fDmgDist: number, asDist: number, wDist: number,
+  regenConc = 0, maxHpConc = Infinity,
+  regenDist = 0, maxHpDist = Infinity,
 ): { hpConc: number[]; hpDist: number[] } {
   const nConc = hpConcArr.length;
   const nDist = hpDistArr.length;
@@ -2508,11 +2537,26 @@ function simulateAsymmetricFFMixed(
   while (concFocus < nDist && !aliveDist[concFocus]) concFocus++;
 
   const MAX_ITER = (nConc + nDist) * 300 + 100;
+  let tPrev = 0;
   for (let iter = 0; iter < MAX_ITER; iter++) {
     if (concFocus >= nDist || remConc <= 0) break;
 
     const fireConc = tConc <= tDist;
     const fireDist = tDist <= tConc;
+
+    // Self-regen since the previous event, on every unit still alive (per-unit, never scaled by
+    // the opposing count). Applied before this event's volleys land.
+    const tNow = Math.min(tConc, tDist);
+    const dt = Math.max(0, tNow - tPrev);
+    tPrev = tNow;
+    if (dt > 0) {
+      if (regenConc !== 0) {
+        for (let i = 0; i < nConc; i++) if (aliveConc[i]) hpConc[i] = Math.min(maxHpConc, hpConc[i] + regenConc * dt);
+      }
+      if (regenDist !== 0) {
+        for (let i = 0; i < nDist; i++) if (aliveDist[i]) hpDist[i] = Math.min(maxHpDist, hpDist[i] + regenDist * dt);
+      }
+    }
 
     if (fireConc) {
       hpDist[concFocus] -= remConc * (kConc === 0 ? fDmgConc : dmgConc);
@@ -2615,9 +2659,12 @@ export function computeVersusKitingFocusFire(
   let contactMeleeEnt = meleeEnt;
   let effectiveShots = 0;
 
-  if (preContactShots > 0 && prelimMetrics.effectiveDamagePerHit !== null && prelimMetrics.effectiveDamagePerHit > 0) {
+  const approachDmg = prelimMetrics.effectiveDamagePerHit !== null
+    ? approachDamagePerShot(rangedEnt, meleeEnt, prelimMetrics.effectiveDamagePerHit, asRanged)
+    : null;
+  if (preContactShots > 0 && approachDmg !== null && approachDmg > 0) {
     const { survivingMelee, lastTargetHp } = computeApproachFocusFirePhase(
-      1, meleeHpStart, preContactShots, prelimMetrics.effectiveDamagePerHit,
+      1, meleeHpStart, preContactShots, approachDmg,
     );
     if (survivingMelee === 0) {
       const kitingNote = `approach ${round(t_approach, 1)}s (+${freeHits} free hits) · kiting ${round(t_kite, 1)}s (+${n_kite} hits) · contact t=${round(contactTimeFull, 1)}s`;
@@ -2722,7 +2769,10 @@ export function computeVersusAtEqualCostKitingFocusFire(
   const meleeHpStart = meleeHpFull * (meleeEnt.hpStartFraction ?? 1);
   const rangedHpStart = rangedEnt.hitpoints * (rangedEnt.hpStartFraction ?? 1);
 
-  const dmgPerShot = metRanged.effectiveDamagePerHit;
+  const hitPerShot = metRanged.effectiveDamagePerHit;
+  const dmgPerShot = hitPerShot !== null
+    ? approachDamagePerShot(rangedEnt, meleeEnt, hitPerShot, asRanged, multRanged)
+    : null;
   if (shots <= 0 || dmgPerShot === null || dmgPerShot <= 0) {
     return { attacker: metricsA, defender: metricsB, multipliers, ...focusFireAsymmetricModel.resolve(A, B, metricsA, metricsB, multipliers) };
   }
@@ -2746,16 +2796,20 @@ export function computeVersusAtEqualCostKitingFocusFire(
   const rangedHpArr = Array(multRanged).fill(rangedHpStart);
 
   const concIsA = !meleeIsA; // ranged = conc (concentrates fire)
-  const dmgConc = concIsA ? (metricsA.effectiveDamagePerHit ?? 0) : (metricsB.effectiveDamagePerHit ?? 0);
-  const dmgDist = concIsA ? (metricsB.effectiveDamagePerHit ?? 0) : (metricsA.effectiveDamagePerHit ?? 0);
-  const fDmgConc = concIsA ? (metricsA.firstHitDamage ?? dmgConc) : (metricsB.firstHitDamage ?? dmgConc);
-  const fDmgDist = concIsA ? (metricsB.firstHitDamage ?? dmgDist) : (metricsA.firstHitDamage ?? dmgDist);
   const asConc = concIsA
     ? (A.weapons[0]?.speed ?? 0) * (1 + (B.opponentAttackSpeedDebuff ?? 0))
     : (B.weapons[0]?.speed ?? 0) * (1 + (A.opponentAttackSpeedDebuff ?? 0));
   const asDist = concIsA
     ? (B.weapons[0]?.speed ?? 0) * (1 + (A.opponentAttackSpeedDebuff ?? 0))
     : (A.weapons[0]?.speed ?? 0) * (1 + (B.opponentAttackSpeedDebuff ?? 0));
+  // Attacker-owned poison/thorns folded into each side's cycle — same rule as foldedCycleDamage,
+  // spelled out here because this block is already mapped to ranged/melee rather than A/B.
+  const contConc = timeBasedDps(rangedEnt, meleeEnt) * asConc;
+  const contDist = timeBasedDps(meleeEnt, rangedEnt) * asDist;
+  const dmgConc = (concIsA ? (metricsA.effectiveDamagePerHit ?? 0) : (metricsB.effectiveDamagePerHit ?? 0)) + contConc;
+  const dmgDist = (concIsA ? (metricsB.effectiveDamagePerHit ?? 0) : (metricsA.effectiveDamagePerHit ?? 0)) + contDist;
+  const fDmgConc = (concIsA ? (metricsA.firstHitDamage ?? dmgConc - contConc) : (metricsB.firstHitDamage ?? dmgConc - contConc)) + contConc;
+  const fDmgDist = (concIsA ? (metricsB.firstHitDamage ?? dmgDist - contDist) : (metricsA.firstHitDamage ?? dmgDist - contDist)) + contDist;
   const wConc = concIsA ? (A.weapons[0]?.durations?.windup ?? 0) : (B.weapons[0]?.durations?.windup ?? 0);
   const wDist = concIsA ? (B.weapons[0]?.durations?.windup ?? 0) : (A.weapons[0]?.durations?.windup ?? 0);
 
@@ -2764,6 +2818,8 @@ export function computeVersusAtEqualCostKitingFocusFire(
   const { hpConc, hpDist } = simulateAsymmetricFFMixed(
     rangedHpArr, dmgConc, fDmgConc, asConc, wConc,
     meleeHpArr, dmgDist, fDmgDist, asDist, wDist,
+    selfRegenPerSec(rangedEnt, asConc), rangedEnt.hitpoints,
+    selfRegenPerSec(meleeEnt, asDist), meleeEnt.hitpoints,
   );
 
   const rC = hpConc.filter(h => h > 0).length;
@@ -2849,9 +2905,12 @@ export function computeVersusKitingBatchesMC(
   let contactMeleeEnt = meleeEnt;
   let effectiveShots = 0;
 
-  if (preContactShots > 0 && prelimMetrics.effectiveDamagePerHit !== null && prelimMetrics.effectiveDamagePerHit > 0) {
+  const approachDmg = prelimMetrics.effectiveDamagePerHit !== null
+    ? approachDamagePerShot(rangedEnt, meleeEnt, prelimMetrics.effectiveDamagePerHit, asRanged)
+    : null;
+  if (preContactShots > 0 && approachDmg !== null && approachDmg > 0) {
     const { survivingMelee, lastTargetHp } = computeApproachFocusFirePhase(
-      1, meleeHpStart, preContactShots, prelimMetrics.effectiveDamagePerHit,
+      1, meleeHpStart, preContactShots, approachDmg,
     );
     if (survivingMelee === 0) {
       const kitingNote = `approach ${round(t_approach, 1)}s (+${freeHits} free hits) · kiting ${round(t_kite, 1)}s (+${n_kite} hits) · contact t=${round(contactTimeFull, 1)}s`;
@@ -2952,7 +3011,10 @@ export function computeVersusAtEqualCostKitingBatchesMC(
   const meleeHpStart = meleeHpFull * (meleeEnt.hpStartFraction ?? 1);
   const rangedHpStart = rangedEnt.hitpoints * (rangedEnt.hpStartFraction ?? 1);
 
-  const dmgPerShot = metRanged.effectiveDamagePerHit;
+  const hitPerShot = metRanged.effectiveDamagePerHit;
+  const dmgPerShot = hitPerShot !== null
+    ? approachDamagePerShot(rangedEnt, meleeEnt, hitPerShot, asRangedApproach, multRanged)
+    : null;
   if (shots <= 0 || dmgPerShot === null || dmgPerShot <= 0) {
     return { attacker: metricsA, defender: metricsB, multipliers, ...focusFireBatchesMCAsymmetricModel.resolve(A, B, metricsA, metricsB, multipliers) };
   }
@@ -2979,18 +3041,13 @@ export function computeVersusAtEqualCostKitingBatchesMC(
   const adjMultB = meleeIsA ? multRanged : survivingMelee;
 
   // Contact phase: MC batch loop with mixed-HP melee array
-  const dmgA = metricsA.effectiveDamagePerHit;
-  const dmgB = metricsB.effectiveDamagePerHit;
-  const asA = (A.weapons[0]?.speed ?? 0) * (1 + (B.opponentAttackSpeedDebuff ?? 0));
-  const asB = (B.weapons[0]?.speed ?? 0) * (1 + (A.opponentAttackSpeedDebuff ?? 0));
-
-  if (!dmgA || !dmgB || dmgA <= 0 || dmgB <= 0 || asA <= 0 || asB <= 0) {
+  const folded = foldedCycleDamage(A, B, metricsA, metricsB);
+  if (!folded) {
     const resolved = buildBatchResult(0, 0, 0, 0, adjMultA, adjMultB, adjMultA * costA, adjMultB * costB);
     return { attacker: metricsA, defender: metricsB, multipliers, ...resolved };
   }
+  const { dmgA, dmgB, fDmgA, fDmgB, asA, asB, regenA, regenB } = folded;
 
-  const fDmgA = metricsA.firstHitDamage ?? dmgA;
-  const fDmgB = metricsB.firstHitDamage ?? dmgB;
   const wA = A.weapons[0]?.durations?.windup ?? 0;
   const wB = B.weapons[0]?.durations?.windup ?? 0;
 
@@ -3017,7 +3074,7 @@ export function computeVersusAtEqualCostKitingBatchesMC(
       const T = Math.min(...active.map(b => {
         const cFA = b.firstShotUsed ? dmgA : fDmgA;
         const cFB = b.firstShotUsed ? dmgB : fDmgB;
-        return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB);
+        return batchFirstDeathTime(b.hpA, b.hpB, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB, regenA, regenB);
       }));
       if (!isFinite(T)) break;
       timeElapsed += T;
@@ -3026,7 +3083,7 @@ export function computeVersusAtEqualCostKitingBatchesMC(
       for (const b of active) {
         const cFA = b.firstShotUsed ? dmgA : fDmgA;
         const cFB = b.firstShotUsed ? dmgB : fDmgB;
-        const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB);
+        const r = advanceBatchFF(b.hpA, b.hpB, T, dmgA, dmgB, cFA, cFB, asA, asB, b.firstShotUsed ? 0 : wA, b.firstShotUsed ? 0 : wB, false, regenA, regenB, A.hitpoints, B.hitpoints);
         const nA = r.hpA.filter(h => h > 0);
         const nB = r.hpB.filter(h => h > 0);
         if (nA.length > 0 && nB.length > 0) {
