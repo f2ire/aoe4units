@@ -948,11 +948,13 @@ export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
 
   {
     id: 'condottiero',
-    reason: 'Condottiero takes 50% less damage from gunpowder/siege attacks per in-game stats.',
+    reason: 'Condottiero takes 50% less damage from gunpowder/siege attacks per in-game stats. Also strip the misleading "infantry_light" class: it is Heavy Melee Infantry (displayClasses), but the raw class tags it light, which made archers falsely apply their "light melee infantry" bonus.',
     after: (unit: any) => ({
       ...unit,
+      classes: (unit.classes || []).filter((c: string) => c !== 'infantry_light'),
       variations: unit.variations.map((v: any) => ({
         ...v,
+        classes: (v.classes || []).filter((c: string) => c !== 'infantry_light'),
         resistance: [...(v.resistance || []), { type: 'gunpowder', value: 50 }],
       })),
     }),
