@@ -1,0 +1,6 @@
+# Abilities Icons
+
+Place ability icons from aoe4world.com here.
+Example: `ability-camel-support-1.png`
+
+The icons will be loaded from this directory by the AbilitySelector component.
