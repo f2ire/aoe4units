@@ -7,20 +7,20 @@
     "file": "assets/vendor-DB0Q8XAf.css",
     "src": "_vendor-DB0Q8XAf.css"
   },
-  "_vendor-DbOajlWa.js": {
-    "file": "assets/vendor-DbOajlWa.js",
+  "_vendor-kz5tR5v1.js": {
+    "file": "assets/vendor-kz5tR5v1.js",
     "name": "vendor",
     "css": [
       "assets/vendor-DB0Q8XAf.css"
     ]
   },
   "index.html": {
-    "file": "assets/app-DfldFivX.js",
+    "file": "assets/app-Io1haB05.js",
     "name": "app",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "_vendor-DbOajlWa.js",
+      "_vendor-kz5tR5v1.js",
       "_data-BKOJdm1z.js"
     ],
     "css": [
