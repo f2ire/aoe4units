@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Github, ChevronDown } from "lucide-react";
+import { Github, ChevronDown, Coffee } from "lucide-react";
 import { aoe4Units, AoE4Unit, getAvailableAges, getPrimaryWeapon, getTotalCost } from "@/data/unified-units";
 import type { UnifiedVariation } from "@/data/unified-units";
 import { CIVILIZATIONS } from "@/data/civilizations";
@@ -2108,9 +2108,18 @@ const Sandbox = () => {
               <Github className="h-4 w-4" />
               Bug report
             </a>
+            <a
+              href="https://ko-fi.com/aoe4units"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground hover:border-foreground/40"
+            >
+              <Coffee className="h-4 w-4" />
+              Support the project
+            </a>
           </div>
           <span className="text-xs text-muted-foreground">
-            Found a bug or a wrong stat? Report it on Discord. Code issues can go to GitHub.
+            Found a bug or a wrong stat? Report it on Discord. Code issues can go to GitHub. Enjoying the tool? Support it on Ko-fi.
           </span>
         </footer>
 
