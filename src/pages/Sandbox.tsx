@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Github, ChevronDown, Coffee } from "lucide-react";
+import { Github, ChevronDown, Coffee, Share2, Check } from "lucide-react";
+import { toast } from "sonner";
 import { aoe4Units, AoE4Unit, getAvailableAges, getPrimaryWeapon, getTotalCost } from "@/data/unified-units";
 import type { UnifiedVariation } from "@/data/unified-units";
 import { CIVILIZATIONS } from "@/data/civilizations";
@@ -14,6 +15,8 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { motion } from "framer-motion";
 import { useUnitSlot } from "@/hooks/useUnitSlot";
 import { getChargeBonus } from "@/lib/buildVariation";
+import { buildShareUrl, parseShareState } from "@/lib/shareUrl";
+import type { ShareSlot, ShareState } from "@/lib/shareUrl";
 import { JeanneFormSelector, isJeanneUnit } from "@/components/JeanneFormSelector";
 import { GuidedTour } from "@/components/GuidedTour";
 import { unitNameMatchScore, cn } from "@/lib/utils";
@@ -558,6 +561,131 @@ const Sandbox = () => {
   useEffect(() => {
     setMultiUnitModelKey(hasRangedUnit ? 'focusFire' : 'focusFireBatchesMC');
   }, [hasRangedUnit]);
+
+  // ---- Share link ---------------------------------------------------------
+  // A share link carries the whole matchup in the query string. The app never
+  // writes those params itself (the browsing URL stays `/`), so this only runs
+  // when the user arrives from a shared link. Restore is staged because
+  // `setUnit` clears techs/abilities and a hook effect forces max age on unit
+  // change: the loadout can only be applied once units AND ages have settled,
+  // which is also when the tech/ability lists match the shared age.
+  const [shareRestore] = useState<ShareState | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const parsed = parseShareState(window.location.search);
+    if (!parsed) return null;
+    // Drop slots whose unit no longer exists so a stale link still restores the rest.
+    const keep = (s: ShareSlot | null) => (s && aoe4Units.some(u => u.id === s.unitId) ? s : null);
+    const state = { ...parsed, slot1: keep(parsed.slot1), slot2: keep(parsed.slot2) };
+    return state.slot1 || state.slot2 ? state : null;
+  });
+  const [sharePhase, setSharePhase] = useState<0 | 1 | 2 | 3>(shareRestore ? 1 : 0);
+
+  useEffect(() => {
+    if (!shareRestore || sharePhase === 0) return;
+    const { slot1: s1, slot2: s2 } = shareRestore;
+
+    // Phase 1 — select civ + unit on each slot.
+    if (sharePhase === 1) {
+      setIsVersus(shareRestore.versus);
+      const applyUnit = (s: ShareSlot | null, setCiv: (c: string) => void, setU: (u: AoE4Unit | null) => void) => {
+        if (!s) return;
+        const u = aoe4Units.find(x => x.id === s.unitId);
+        if (!u) return;
+        setCiv(u.civs.includes(s.civ) ? s.civ : u.civs[0]);
+        setU(u);
+      };
+      applyUnit(s1, setSelectedCiv1, setUnit1);
+      applyUnit(s2, setSelectedCiv2, setUnit2);
+      setSharePhase(2);
+      return;
+    }
+
+    const unitReady = (s: ShareSlot | null, u: AoE4Unit | null) => !s || u?.id === s.unitId;
+    if (!unitReady(s1, unit1) || !unitReady(s2, unit2)) return;
+
+    // Phase 2 — the hook has just forced max age; write the shared age over it.
+    if (sharePhase === 2) {
+      if (s1) setSelectedAge1(s1.age);
+      if (s2) setSelectedAge2(s2.age);
+      setSharePhase(3);
+      return;
+    }
+
+    if ((s1 && selectedAge1 !== s1.age) || (s2 && selectedAge2 !== s2.age)) return;
+
+    // Phase 3 — loadout + global options. Ids the current patch no longer knows
+    // are filtered out rather than failing the whole restore.
+    const applyLoadout = (
+      s: ShareSlot | null,
+      slotTechs: { id: string }[],
+      slotAbilities: { id: string }[],
+      setTechs: (t: Set<string>) => void,
+      setAbilities: (a: Set<string>) => void,
+      setCounter: (id: string, value: number) => void,
+    ) => {
+      if (!s) return;
+      setTechs(new Set(s.techs.filter(id => slotTechs.some(t => t.id === id))));
+      setAbilities(new Set(s.abilities.filter(id => slotAbilities.some(a => a.id === id))));
+      Object.entries(s.counters).forEach(([id, value]) => {
+        if (slotAbilities.some(a => a.id === id)) setCounter(id, value);
+      });
+    };
+    applyLoadout(s1, techs1, abilities1, civ1.setActiveTechnologies, civ1.setActiveAbilities, setAbilityCounter1);
+    applyLoadout(s2, techs2, abilities2, civ2.setActiveTechnologies, civ2.setActiveAbilities, setAbilityCounter2);
+    setCount1(s1?.count ?? 1);
+    setCount2(s2?.count ?? 1);
+    setActivePreset(shareRestore.preset);
+    setAllowKiting(shareRestore.kiting);
+    setStartDistancePreset(shareRestore.distancePreset);
+    setCustomDistance(shareRestore.customDistance);
+    setMultiUnitModelKey(shareRestore.model);
+    setSharePhase(0);
+  }, [shareRestore, sharePhase, unit1, unit2, selectedAge1, selectedAge2, techs1, techs2, abilities1, abilities2,
+    civ1, civ2, setSelectedCiv1, setSelectedCiv2, setUnit1, setUnit2, setSelectedAge1, setSelectedAge2,
+    setAbilityCounter1, setAbilityCounter2]);
+
+  const [shareCopied, setShareCopied] = useState(false);
+
+  const handleShare = async () => {
+    const buildSlot = (
+      unit: AoE4Unit | null, civ: string, age: number,
+      activeTechs: Set<string>, activeAbis: Set<string>, counters: Map<string, number>, count: number,
+    ): ShareSlot | null => {
+      if (!unit) return null;
+      const abilities = [...activeAbis];
+      const counterEntries = abilities
+        .map(id => [id, counters.get(id) ?? 0] as const)
+        .filter(([, value]) => value > 0);
+      return {
+        civ, unitId: unit.id, age,
+        techs: [...activeTechs],
+        abilities,
+        counters: Object.fromEntries(counterEntries),
+        count,
+      };
+    };
+
+    const url = buildShareUrl({
+      versus: isVersus,
+      slot1: buildSlot(unit1, selectedCiv1, selectedAge1, activeTechnologies1, activeAbilities1, abilityCounters1, count1),
+      slot2: buildSlot(unit2, selectedCiv2, selectedAge2, activeTechnologies2, activeAbilities2, abilityCounters2, count2),
+      kiting: allowKiting,
+      distancePreset: startDistancePreset,
+      customDistance,
+      model: multiUnitModelKey,
+      preset: activePreset,
+    }, window.location.origin);
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+      toast.success("Link copied", { description: "Anyone opening it gets this exact matchup." });
+    } catch {
+      toast.error("Could not copy automatically", { description: url });
+    }
+  };
+
 
   // Filter bonusDamage entries by weapon type — prevents ranged bonuses (e.g. Howdahs) from
   // applying to melee weapons (e.g. Tusks) and vice-versa.
@@ -2083,6 +2211,20 @@ const Sandbox = () => {
                 </>
               );
             })()}
+          </div>
+        )}
+
+        {(unit1 || unit2) && (
+          <div className="flex justify-center mt-8">
+            <button
+              type="button"
+              onClick={handleShare}
+              title="Copy a link that reopens this exact setup (units, techs, abilities and options)"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground transition-colors hover:bg-muted w-full sm:w-auto"
+            >
+              {shareCopied ? <Check className="w-4 h-4 text-primary" /> : <Share2 className="w-4 h-4" />}
+              {shareCopied ? "Copied!" : "Share the matchup"}
+            </button>
           </div>
         )}
 
