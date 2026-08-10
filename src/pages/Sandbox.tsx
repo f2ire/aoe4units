@@ -1216,6 +1216,26 @@ const Sandbox = () => {
     productionTime: 'costs' in (variation2 || unit2 || {}) ? (variation2 || unit2 as any)?.costs?.time : undefined // eslint-disable-line @typescript-eslint/no-explicit-any
   } : null;
 
+  // Comparative-mode DPS: effective damage per second against the OPPOSING unit (its armor,
+  // resistances, bonus-damage matching and debuffs), computed with the same engine as versus mode.
+  // startDistance 0 disables the approach phase (it only shifts hpStartFraction — DPS is unaffected —
+  // but skipping it keeps this purely a stat comparison).
+  const comparativeDps = (!isVersus && unit1 && unit2) ? (() => {
+    const mv1 = modifiedVariation1 || modifiedUnit1;
+    const mv2 = modifiedVariation2 || modifiedUnit2;
+    if (!mv1 || !mv2) return null;
+    const res = computeVersus(
+      mv1, mv2,
+      Array.from(activeAbilities1), Array.from(activeAbilities2),
+      stats1?.chargeBonus ?? 0, stats2?.chargeBonus ?? 0,
+      false, 0,
+      modifiedVariation1NoTimer || modifiedUnit1NoTimer,
+      modifiedVariation2NoTimer || modifiedUnit2NoTimer,
+      timedDuration1, timedDuration2,
+    );
+    return { dps1: res.attacker.dps ?? undefined, dps2: res.defender.dps ?? undefined };
+  })() : null;
+
   // Build aligned bonus lists for each unit
   // 1. First the shared bonuses (same target)
   // 2. Then the unique bonuses for each side
@@ -1709,6 +1729,8 @@ const Sandbox = () => {
                     compareSpeed={stats2?.speed}
                     compareAttackSpeed={stats2?.attackSpeed}
                     compareMaxRange={stats2?.maxRange}
+                    dps={comparativeDps?.dps1}
+                    compareDps={comparativeDps?.dps2}
                     bonusDamage={alignedBonuses1}
                     compareBonusDamage={alignedBonuses2}
                     maxBonusDamageLines={maxBonusDamageLines}
@@ -1751,6 +1773,8 @@ const Sandbox = () => {
                     compareSpeed={stats1?.speed}
                     compareAttackSpeed={stats1?.attackSpeed}
                     compareMaxRange={stats1?.maxRange}
+                    dps={comparativeDps?.dps2}
+                    compareDps={comparativeDps?.dps1}
                     bonusDamage={alignedBonuses2}
                     compareBonusDamage={alignedBonuses1}
                     maxBonusDamageLines={maxBonusDamageLines}

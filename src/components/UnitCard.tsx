@@ -66,6 +66,8 @@ interface UnitCardProps {
   compareSpeed?: number;
   compareAttackSpeed?: number;
   compareMaxRange?: number;
+  dps?: number; // comparative mode: DPS against the opposing unit (its armor/resistances applied)
+  compareDps?: number;
   bonusDamage?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   compareBonusDamage?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   maxBonusDamageLines?: number; // Maximum number of bonus lines for alignment
@@ -222,6 +224,8 @@ export const UnitCard = ({
   compareSpeed,
   compareAttackSpeed,
   compareMaxRange,
+  dps,
+  compareDps,
   bonusDamage,
   compareBonusDamage,
   maxBonusDamageLines,
@@ -525,6 +529,19 @@ export const UnitCard = ({
                       {' '}(→{round3(effectiveAttackSpeed)}s)
                     </span>
                   )}
+                </span>
+              </div>
+            )}
+            {dps !== undefined && (
+              <div className="flex justify-between">
+                <span
+                  className="text-muted-foreground underline decoration-dotted cursor-help"
+                  title="Damage per second against the opposing unit (its armor, resistances and bonus-damage matching applied)">
+                  DPS
+                </span>
+                <span className={cn('flex items-center gap-1', getComparisonColor(dps, compareDps).color)}>
+                  {getComparisonColor(dps, compareDps).symbol && <span className="text-xs">{getComparisonColor(dps, compareDps).symbol}</span>}
+                  {round3(dps)}
                 </span>
               </div>
             )}
