@@ -1522,6 +1522,33 @@ const Sandbox = () => {
     />
   ) : null;
 
+  // Share buttons row — declared once, rendered inside the card grids (directly under the
+  // cards, so it doesn't wait for the taller tech/ability columns) with a standalone
+  // fallback for versus mode when only one unit is picked and the grid stays empty.
+  const shareRow = (
+    <div className="flex flex-col sm:flex-row justify-center items-stretch sm:items-center gap-2">
+      <button
+        type="button"
+        onClick={handleShare}
+        title="Copy a link that reopens this exact setup (units, techs, abilities and options)"
+        className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground transition-colors hover:bg-muted w-full sm:w-auto"
+      >
+        {shareCopied ? <Check className="w-4 h-4 text-primary" /> : <Share2 className="w-4 h-4" />}
+        {shareCopied ? "Copied!" : "Share the matchup"}
+      </button>
+      <button
+        type="button"
+        onClick={handleCopyImage}
+        disabled={imageBusy}
+        title="Copy a PNG recap card of this matchup (cards, techs and abilities) to the clipboard"
+        className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-wait w-full sm:w-auto"
+      >
+        {imageCopied ? <Check className="w-4 h-4 text-primary" /> : <ImageIcon className="w-4 h-4" />}
+        {imageBusy ? "Rendering…" : imageCopied ? "Copied!" : "Copy matchup card"}
+      </button>
+    </div>
+  );
+
   // If no units are loaded, display a message
   if (!aoe4Units || aoe4Units.length === 0) {
     return (
@@ -1807,113 +1834,120 @@ const Sandbox = () => {
           <div className="grid grid-cols-2 sm:grid-cols-[auto_1fr_1fr_auto] gap-x-2 gap-y-3 sm:gap-6 mt-8 items-start">
             {/* Civ 1 Unit */}
             {unit1 && (
-              <>
-                <div className="order-3 sm:order-1 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
-                  <div className="flex flex-col items-end gap-2 w-max ml-auto sm:w-auto sm:ml-0 sm:items-stretch sm:gap-3">
-                    <div id="tour-age1">
-                      <AgeSelector
-                        availableAges={getAvailableAges(unit1.id, selectedCiv1)}
-                        selectedAge={selectedAge1}
-                        onAgeChange={setSelectedAge1}
-                        orientation="left"
-                      />
-                    </div>
-                    <div id="tour-techs1">
-                      <TechnologySelector
-                        technologies={techs1}
-                        activeTechnologies={activeTechnologies1}
-                        onToggle={toggleTechnology1}
-                        unitMinAge={unitMinAge1}
-                        fullUpgradeAge={fullUpgradeAge1}
-                        onApplyFullUpgrade={applyFullUpgrade1}
-                        onReset={resetTechnologies1}
-                        orientation="left"
-                        selectedCiv={selectedCiv1}
-                        lockedTechnologies={lockedTechnologies1}
-                        unitId={variation1?.baseId ?? unit1?.id}
-                        selectedAge={selectedAge1}
-                      />
-                    </div>
-                    <div id="tour-abilities1">
-                      <AbilitySelector
-                        abilities={abilities1}
-                        activeAbilities={activeAbilities1}
-                        onToggle={toggleAbility1}
-                        orientation="left"
-                        selectedCiv={selectedCiv1}
-                        lockedAbilities={lockedAbilities1}
-                        abilityCounters={abilityCounters1}
-                        onIncrement={incrementAbility1}
-                        onDecrement={decrementAbility1}
-                        onSetCounter={setAbilityCounter1}
-                        unitId={variation1?.baseId ?? unit1?.id}
-                      />
-                    </div>
+              <div className="order-3 sm:order-1 sm:col-start-1 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
+                <div className="flex flex-col items-end gap-2 w-max ml-auto sm:w-auto sm:ml-0 sm:items-stretch sm:gap-3">
+                  <div id="tour-age1">
+                    <AgeSelector
+                      availableAges={getAvailableAges(unit1.id, selectedCiv1)}
+                      selectedAge={selectedAge1}
+                      onAgeChange={setSelectedAge1}
+                      orientation="left"
+                    />
+                  </div>
+                  <div id="tour-techs1">
+                    <TechnologySelector
+                      technologies={techs1}
+                      activeTechnologies={activeTechnologies1}
+                      onToggle={toggleTechnology1}
+                      unitMinAge={unitMinAge1}
+                      fullUpgradeAge={fullUpgradeAge1}
+                      onApplyFullUpgrade={applyFullUpgrade1}
+                      onReset={resetTechnologies1}
+                      orientation="left"
+                      selectedCiv={selectedCiv1}
+                      lockedTechnologies={lockedTechnologies1}
+                      unitId={variation1?.baseId ?? unit1?.id}
+                      selectedAge={selectedAge1}
+                    />
+                  </div>
+                  <div id="tour-abilities1">
+                    <AbilitySelector
+                      abilities={abilities1}
+                      activeAbilities={activeAbilities1}
+                      onToggle={toggleAbility1}
+                      orientation="left"
+                      selectedCiv={selectedCiv1}
+                      lockedAbilities={lockedAbilities1}
+                      abilityCounters={abilityCounters1}
+                      onIncrement={incrementAbility1}
+                      onDecrement={decrementAbility1}
+                      onSetCounter={setAbilityCounter1}
+                      unitId={variation1?.baseId ?? unit1?.id}
+                    />
                   </div>
                 </div>
-                <motion.div
-                  initial={{ opacity: 0, x: -50 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="order-1 sm:order-2 min-w-0 w-full"
-                >
-                  {comparativeCard1}
-                </motion.div>
-              </>
+              </div>
+            )}
+            {/* Cards + share row share one grid cell so the buttons sit right under the
+                cards instead of below the taller tech/ability columns. */}
+            {(unit1 || unit2) && (
+              <div className="order-1 sm:order-2 col-span-2 sm:col-start-2 min-w-0 grid grid-cols-2 gap-x-2 sm:gap-6 gap-y-3 items-start">
+                {unit1 && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -50 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="col-start-1 min-w-0 w-full"
+                  >
+                    {comparativeCard1}
+                  </motion.div>
+                )}
+                {unit2 && (
+                  <motion.div
+                    initial={{ opacity: 0, x: 50 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="col-start-2 min-w-0 w-full"
+                  >
+                    {comparativeCard2}
+                  </motion.div>
+                )}
+                <div className="col-span-2 mt-2">{shareRow}</div>
+              </div>
             )}
             {/* Civ 2 Unit */}
             {unit2 && (
-              <>
-                <motion.div
-                  initial={{ opacity: 0, x: 50 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="order-2 sm:order-3 min-w-0 w-full"
-                >
-                  {comparativeCard2}
-                </motion.div>
-                <div className="order-4 sm:order-4 flex flex-col items-start sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
-                  <div id="tour-age2">
-                    <AgeSelector
-                      availableAges={getAvailableAges(unit2.id, selectedCiv2)}
-                      selectedAge={selectedAge2}
-                      onAgeChange={setSelectedAge2}
-                      orientation="right"
-                    />
-                  </div>
-                  <div id="tour-techs2">
-                    <TechnologySelector
-                      technologies={techs2}
-                      activeTechnologies={activeTechnologies2}
-                      orientation="right"
-                      onToggle={toggleTechnology2}
-                      selectedCiv={selectedCiv2}
-                      lockedTechnologies={lockedTechnologies2}
-                      unitId={variation2?.baseId ?? unit2?.id}
-                      selectedAge={selectedAge2}
-                      unitMinAge={unitMinAge2}
-                      fullUpgradeAge={fullUpgradeAge2}
-                      onApplyFullUpgrade={applyFullUpgrade2}
-                      onReset={resetTechnologies2}
-                    />
-                  </div>
-                  <div id="tour-abilities2">
-                    <AbilitySelector
-                      abilities={abilities2}
-                      activeAbilities={activeAbilities2}
-                      onToggle={toggleAbility2}
-                      orientation="right"
-                      selectedCiv={selectedCiv2}
-                      lockedAbilities={lockedAbilities2}
-                      abilityCounters={abilityCounters2}
-                      onIncrement={incrementAbility2}
-                      onDecrement={decrementAbility2}
-                      onSetCounter={setAbilityCounter2}
-                      unitId={variation2?.baseId ?? unit2?.id}
-                    />
-                  </div>
+              <div className="order-4 sm:order-4 sm:col-start-4 flex flex-col items-start sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
+                <div id="tour-age2">
+                  <AgeSelector
+                    availableAges={getAvailableAges(unit2.id, selectedCiv2)}
+                    selectedAge={selectedAge2}
+                    onAgeChange={setSelectedAge2}
+                    orientation="right"
+                  />
                 </div>
-              </>
+                <div id="tour-techs2">
+                  <TechnologySelector
+                    technologies={techs2}
+                    activeTechnologies={activeTechnologies2}
+                    orientation="right"
+                    onToggle={toggleTechnology2}
+                    selectedCiv={selectedCiv2}
+                    lockedTechnologies={lockedTechnologies2}
+                    unitId={variation2?.baseId ?? unit2?.id}
+                    selectedAge={selectedAge2}
+                    unitMinAge={unitMinAge2}
+                    fullUpgradeAge={fullUpgradeAge2}
+                    onApplyFullUpgrade={applyFullUpgrade2}
+                    onReset={resetTechnologies2}
+                  />
+                </div>
+                <div id="tour-abilities2">
+                  <AbilitySelector
+                    abilities={abilities2}
+                    activeAbilities={activeAbilities2}
+                    onToggle={toggleAbility2}
+                    orientation="right"
+                    selectedCiv={selectedCiv2}
+                    lockedAbilities={lockedAbilities2}
+                    abilityCounters={abilityCounters2}
+                    onIncrement={incrementAbility2}
+                    onDecrement={decrementAbility2}
+                    onSetCounter={setAbilityCounter2}
+                    unitId={variation2?.baseId ?? unit2?.id}
+                  />
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -2221,7 +2255,7 @@ const Sandbox = () => {
                   <div className="order-first sm:hidden flex justify-center">
                     <CountStepper count={count2} onChange={(n) => { setCount2(n); setActivePreset(null); }} labelSide="right" />
                   </div>
-                  <div className="order-3 sm:order-1 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
+                  <div className="order-3 sm:order-1 sm:col-start-1 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
                     <div className="flex flex-col items-end gap-2 w-max ml-auto sm:w-auto sm:ml-0 sm:items-stretch sm:gap-3">
                       <div id="tour-age1">
                         <AgeSelector
@@ -2264,23 +2298,28 @@ const Sandbox = () => {
                       </div>
                     </div>
                   </div>
-                  <motion.div
-                    initial={{ opacity: 0, x: -50 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="order-1 sm:order-2 min-w-0 w-full"
-                  >
-                    {versusCard1}
-                  </motion.div>
-                  <motion.div
-                    initial={{ opacity: 0, x: 50 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="order-2 sm:order-3 min-w-0 w-full"
-                  >
-                    {versusCard2}
-                  </motion.div>
-                  <div className="order-4 sm:order-4 flex flex-col items-start sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
+                  {/* Cards + share row share one grid cell so the buttons sit right under the
+                      cards instead of below the taller tech/ability columns. */}
+                  <div className="order-1 sm:order-2 col-span-2 sm:col-start-2 min-w-0 grid grid-cols-2 gap-x-2 sm:gap-6 gap-y-3 items-start">
+                    <motion.div
+                      initial={{ opacity: 0, x: -50 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="col-start-1 min-w-0 w-full"
+                    >
+                      {versusCard1}
+                    </motion.div>
+                    <motion.div
+                      initial={{ opacity: 0, x: 50 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="col-start-2 min-w-0 w-full"
+                    >
+                      {versusCard2}
+                    </motion.div>
+                    <div className="col-span-2 mt-2">{shareRow}</div>
+                  </div>
+                  <div className="order-4 sm:order-4 sm:col-start-4 flex flex-col items-start sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
                     <div id="tour-age2">
                       <AgeSelector
                         availableAges={getAvailableAges(unit2.id, selectedCiv2)}
@@ -2353,31 +2392,12 @@ const Sandbox = () => {
           </div>
         )}
 
-        {(unit1 || unit2) && (
-          <div className="flex flex-col sm:flex-row justify-center items-stretch sm:items-center gap-2 mt-8">
-            <button
-              type="button"
-              onClick={handleShare}
-              title="Copy a link that reopens this exact setup (units, techs, abilities and options)"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground transition-colors hover:bg-muted w-full sm:w-auto"
-            >
-              {shareCopied ? <Check className="w-4 h-4 text-primary" /> : <Share2 className="w-4 h-4" />}
-              {shareCopied ? "Copied!" : "Share the matchup"}
-            </button>
-            <button
-              type="button"
-              onClick={handleCopyImage}
-              disabled={imageBusy}
-              title="Copy a PNG recap card of this matchup (cards, techs and abilities) to the clipboard"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-wait w-full sm:w-auto"
-            >
-              {imageCopied ? <Check className="w-4 h-4 text-primary" /> : <ImageIcon className="w-4 h-4" />}
-              {imageBusy ? "Rendering…" : imageCopied ? "Copied!" : "Copy matchup card"}
-            </button>
-          </div>
+        {/* Versus mode renders no grid until both units are picked — keep the buttons reachable. */}
+        {isVersus && !(unit1 && unit2) && (unit1 || unit2) && (
+          <div className="mt-8">{shareRow}</div>
         )}
 
-        <footer className="mt-12 mb-4 flex flex-col items-center gap-2 text-center">
+        <footer className="mt-8 mb-4 flex flex-col items-center gap-2 text-center">
           <div className="flex flex-wrap items-center justify-center gap-2">
             <a
               href="https://discord.gg/VpCwYfRSXp"
