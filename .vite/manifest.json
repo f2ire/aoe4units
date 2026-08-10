@@ -3,32 +3,32 @@
     "file": "assets/data-BKOJdm1z.js",
     "name": "data"
   },
-  "_vendor-Ah06G87g.js": {
-    "file": "assets/vendor-Ah06G87g.js",
+  "_vendor-DB0Q8XAf.css": {
+    "file": "assets/vendor-DB0Q8XAf.css",
+    "src": "_vendor-DB0Q8XAf.css"
+  },
+  "_vendor-DseYP-fN.js": {
+    "file": "assets/vendor-DseYP-fN.js",
     "name": "vendor",
     "isDynamicEntry": true,
     "css": [
       "assets/vendor-DB0Q8XAf.css"
     ]
   },
-  "_vendor-DB0Q8XAf.css": {
-    "file": "assets/vendor-DB0Q8XAf.css",
-    "src": "_vendor-DB0Q8XAf.css"
-  },
   "index.html": {
-    "file": "assets/app-DaeTbr4M.js",
+    "file": "assets/app-Dl6r3s08.js",
     "name": "app",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "_vendor-Ah06G87g.js",
+      "_vendor-DseYP-fN.js",
       "_data-BKOJdm1z.js"
     ],
     "dynamicImports": [
-      "_vendor-Ah06G87g.js"
+      "_vendor-DseYP-fN.js"
     ],
     "css": [
-      "assets/app-DyHCt3sc.css"
+      "assets/app-DHhylonN.css"
     ]
   }
 }
