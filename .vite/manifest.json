@@ -3,9 +3,10 @@
     "file": "assets/data-BKOJdm1z.js",
     "name": "data"
   },
-  "_vendor-2MmMf-cS.js": {
-    "file": "assets/vendor-2MmMf-cS.js",
+  "_vendor-Ah06G87g.js": {
+    "file": "assets/vendor-Ah06G87g.js",
     "name": "vendor",
+    "isDynamicEntry": true,
     "css": [
       "assets/vendor-DB0Q8XAf.css"
     ]
@@ -15,16 +16,19 @@
     "src": "_vendor-DB0Q8XAf.css"
   },
   "index.html": {
-    "file": "assets/app-Bi-xyOd-.js",
+    "file": "assets/app-cnD7O3VZ.js",
     "name": "app",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "_vendor-2MmMf-cS.js",
+      "_vendor-Ah06G87g.js",
       "_data-BKOJdm1z.js"
     ],
+    "dynamicImports": [
+      "_vendor-Ah06G87g.js"
+    ],
     "css": [
-      "assets/app-CHapbmWq.css"
+      "assets/app-C6ol1azJ.css"
     ]
   }
 }
