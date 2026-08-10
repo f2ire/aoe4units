@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Github, ChevronDown, Coffee, Share2, Check } from "lucide-react";
+import { Github, ChevronDown, Coffee, Share2, Check, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { aoe4Units, AoE4Unit, getAvailableAges, getPrimaryWeapon, getTotalCost } from "@/data/unified-units";
 import type { UnifiedVariation } from "@/data/unified-units";
@@ -17,6 +17,7 @@ import { useUnitSlot } from "@/hooks/useUnitSlot";
 import { getChargeBonus } from "@/lib/buildVariation";
 import { buildShareUrl, parseShareState } from "@/lib/shareUrl";
 import type { ShareSlot, ShareState } from "@/lib/shareUrl";
+import { ShareImageCard } from "@/components/ShareImageCard";
 import { JeanneFormSelector, isJeanneUnit } from "@/components/JeanneFormSelector";
 import { GuidedTour } from "@/components/GuidedTour";
 import { unitNameMatchScore, cn } from "@/lib/utils";
@@ -686,6 +687,40 @@ const Sandbox = () => {
     }
   };
 
+  const [imageBusy, setImageBusy] = useState(false);
+  const [imageCopied, setImageCopied] = useState(false);
+
+  // Captures the off-screen <ShareImageCard/> to a PNG. html-to-image is loaded on
+  // demand so it never weighs on the initial bundle.
+  const handleCopyImage = async () => {
+    const node = document.getElementById('share-image-card');
+    if (!node || imageBusy) return;
+    setImageBusy(true);
+    try {
+      const { toBlob } = await import('html-to-image');
+      const blob = await toBlob(node, { pixelRatio: 2, cacheBust: true });
+      if (!blob) throw new Error('empty blob');
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        setImageCopied(true);
+        setTimeout(() => setImageCopied(false), 2000);
+        toast.success("Image copied", { description: "Paste it straight into Discord or X." });
+      } catch {
+        // Clipboard images are unavailable (Firefox < 127, insecure context…) — download instead.
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `aoe4-${unit1?.id ?? 'unit'}-vs-${unit2?.id ?? 'unit'}.png`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+        toast.success("Image downloaded", { description: "This browser cannot copy images to the clipboard." });
+      }
+    } catch {
+      toast.error("Could not generate the image");
+    } finally {
+      setImageBusy(false);
+    }
+  };
+
 
   // Filter bonusDamage entries by weapon type — prevents ranged bonuses (e.g. Howdahs) from
   // applying to melee weapons (e.g. Tusks) and vice-versa.
@@ -1236,6 +1271,40 @@ const Sandbox = () => {
     return { dps1: res.attacker.dps ?? undefined, dps2: res.defender.dps ?? undefined };
   })() : null;
 
+  // Per-side payload for the shareable PNG (see ShareImageCard). The card itself is
+  // the real <UnitCard/> element, injected at the call site so the image is a copy
+  // of what is on screen; here we only collect the identity + selected icons.
+  const buildSharePanel = (
+    unit: AoE4Unit | null, count: number, age: number,
+    slotTechs: { id: string; name: string; icon: string }[],
+    slotAbilities: { id: string; name: string; icon: string }[],
+    activeTechs: Set<string>, activeAbis: Set<string>, counters: Map<string, number>,
+  ) => {
+    if (!unit) return null;
+    return {
+      name: unit.name,
+      count,
+      age,
+      techs: slotTechs.filter(t => activeTechs.has(t.id)).map(t => ({ id: t.id, name: t.name, icon: t.icon })),
+      abilities: slotAbilities.filter(a => activeAbis.has(a.id)).map(a => ({
+        id: a.id, name: a.name, icon: a.icon, counter: counters.get(a.id) || undefined,
+      })),
+    };
+  };
+
+  const sharePanel1 = buildSharePanel(unit1, count1, selectedAge1, techs1, abilities1, activeTechnologies1, activeAbilities1, abilityCounters1);
+  const sharePanel2 = buildSharePanel(unit2, count2, selectedAge2, techs2, abilities2, activeTechnologies2, activeAbilities2, abilityCounters2);
+
+  // Fight conditions, so the image says under which settings the result was computed.
+  const shareBadges = [
+    ...(isVersus && activePreset === 'cost' ? ['⚖ Equal Cost'] : []),
+    ...(isVersus && activePreset === 'pop' ? ['👥 Equal Pop'] : []),
+    ...(isVersus && allowKiting ? [`Kiting · ${startDistance} tiles`] : []),
+    ...(isVersus && count1 > 1 && count2 > 1
+      ? [multiUnitModelKey === 'focusFire' ? 'Target focus' : multiUnitModelKey === 'focusFireBatchesMC' ? 'Attack move' : 'Aggregated DPS']
+      : []),
+  ];
+
   // Build aligned bonus lists for each unit
   // 1. First the shared bonuses (same target)
   // 2. Then the unique bonuses for each side
@@ -1380,6 +1449,78 @@ const Sandbox = () => {
   }
 
   const maxBonusDamageLines = alignedBonuses1.length;
+
+  // Comparative-mode cards, declared once so the off-screen share image can reuse
+  // the exact same element (see the versus block for its counterpart).
+  const comparativeCard1 = unit1 ? (
+    <UnitCard
+      className="w-full"
+      variation={modifiedVariation1!}
+      unit={modifiedUnit1 || unit1}
+      side="left"
+      isSelected={true}
+      compareHp={stats2?.hp}
+      compareAttack={stats2?.attack}
+      compareMeleeArmor={stats2?.meleeArmor}
+      compareRangedArmor={stats2?.rangedArmor}
+      compareSpeed={stats2?.speed}
+      compareAttackSpeed={stats2?.attackSpeed}
+      compareMaxRange={stats2?.maxRange}
+      dps={comparativeDps?.dps1}
+      compareDps={comparativeDps?.dps2}
+      bonusDamage={alignedBonuses1}
+      compareBonusDamage={alignedBonuses2}
+      maxBonusDamageLines={maxBonusDamageLines}
+      chargeBonus={stats1?.chargeBonus}
+      compareChargeBonus={stats2?.chargeBonus}
+      compareCost={stats2?.cost}
+      comparePopulation={stats2?.population}
+      compareProductionTime={stats2?.productionTime}
+      secondaryWeapons={modifiedVariation1?.secondaryWeapons ?? secondaryWeapons1}
+      showSecondaryWeaponRow={secondaryWeapons1.length > 0 || secondaryWeapons2.length > 0}
+      maxHpBonusFraction={modifiedStats1.maxHpBonusFraction ?? 0}
+      opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
+      opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
+      opponentVersusDebuff={(modifiedStats2.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(variation1?.classes || unit1?.classes || [], [...activeAbilities2], [...activeTechnologies2], variation2?.baseId || unit2?.id)}
+      opponentBonusDamageReduction={modifiedStats2.bonusDamageReduction ?? 0}
+      opponentClasses={variation2?.classes || unit2?.classes || []}
+    />
+  ) : null;
+
+  const comparativeCard2 = unit2 ? (
+    <UnitCard
+      className="w-full"
+      variation={modifiedVariation2!}
+      unit={modifiedUnit2 || unit2}
+      side="right"
+      isSelected={true}
+      compareHp={stats1?.hp}
+      compareAttack={stats1?.attack}
+      compareMeleeArmor={stats1?.meleeArmor}
+      compareRangedArmor={stats1?.rangedArmor}
+      compareSpeed={stats1?.speed}
+      compareAttackSpeed={stats1?.attackSpeed}
+      compareMaxRange={stats1?.maxRange}
+      dps={comparativeDps?.dps2}
+      compareDps={comparativeDps?.dps1}
+      bonusDamage={alignedBonuses2}
+      compareBonusDamage={alignedBonuses1}
+      maxBonusDamageLines={maxBonusDamageLines}
+      chargeBonus={stats2?.chargeBonus}
+      compareChargeBonus={stats1?.chargeBonus}
+      compareCost={stats1?.cost}
+      comparePopulation={stats1?.population}
+      compareProductionTime={stats1?.productionTime}
+      secondaryWeapons={modifiedVariation2?.secondaryWeapons ?? secondaryWeapons2}
+      showSecondaryWeaponRow={secondaryWeapons1.length > 0 || secondaryWeapons2.length > 0}
+      maxHpBonusFraction={modifiedStats2.maxHpBonusFraction ?? 0}
+      opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
+      opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
+      opponentVersusDebuff={(modifiedStats1.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(variation2?.classes || unit2?.classes || [], [...activeAbilities1], [...activeTechnologies1], variation1?.baseId || unit1?.id)}
+      opponentBonusDamageReduction={modifiedStats1.bonusDamageReduction ?? 0}
+      opponentClasses={variation1?.classes || unit1?.classes || []}
+    />
+  ) : null;
 
   // If no units are loaded, display a message
   if (!aoe4Units || aoe4Units.length === 0) {
@@ -1716,38 +1857,7 @@ const Sandbox = () => {
                   transition={{ duration: 0.3 }}
                   className="order-1 sm:order-2 min-w-0 w-full"
                 >
-                  <UnitCard
-                    className="w-full"
-                    variation={modifiedVariation1!}
-                    unit={modifiedUnit1 || unit1}
-                    side="left"
-                    isSelected={true}
-                    compareHp={stats2?.hp}
-                    compareAttack={stats2?.attack}
-                    compareMeleeArmor={stats2?.meleeArmor}
-                    compareRangedArmor={stats2?.rangedArmor}
-                    compareSpeed={stats2?.speed}
-                    compareAttackSpeed={stats2?.attackSpeed}
-                    compareMaxRange={stats2?.maxRange}
-                    dps={comparativeDps?.dps1}
-                    compareDps={comparativeDps?.dps2}
-                    bonusDamage={alignedBonuses1}
-                    compareBonusDamage={alignedBonuses2}
-                    maxBonusDamageLines={maxBonusDamageLines}
-                    chargeBonus={stats1?.chargeBonus}
-                    compareChargeBonus={stats2?.chargeBonus}
-                    compareCost={stats2?.cost}
-                    comparePopulation={stats2?.population}
-                    compareProductionTime={stats2?.productionTime}
-                    secondaryWeapons={modifiedVariation1?.secondaryWeapons ?? secondaryWeapons1}
-                    showSecondaryWeaponRow={secondaryWeapons1.length > 0 || secondaryWeapons2.length > 0}
-                    maxHpBonusFraction={modifiedStats1.maxHpBonusFraction ?? 0}
-                    opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
-                    opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
-                    opponentVersusDebuff={(modifiedStats2.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(variation1?.classes || unit1?.classes || [], [...activeAbilities2], [...activeTechnologies2], variation2?.baseId || unit2?.id)}
-                    opponentBonusDamageReduction={modifiedStats2.bonusDamageReduction ?? 0}
-                    opponentClasses={variation2?.classes || unit2?.classes || []}
-                  />
+                  {comparativeCard1}
                 </motion.div>
               </>
             )}
@@ -1760,38 +1870,7 @@ const Sandbox = () => {
                   transition={{ duration: 0.3 }}
                   className="order-2 sm:order-3 min-w-0 w-full"
                 >
-                  <UnitCard
-                    className="w-full"
-                    variation={modifiedVariation2!}
-                    unit={modifiedUnit2 || unit2}
-                    side="right"
-                    isSelected={true}
-                    compareHp={stats1?.hp}
-                    compareAttack={stats1?.attack}
-                    compareMeleeArmor={stats1?.meleeArmor}
-                    compareRangedArmor={stats1?.rangedArmor}
-                    compareSpeed={stats1?.speed}
-                    compareAttackSpeed={stats1?.attackSpeed}
-                    compareMaxRange={stats1?.maxRange}
-                    dps={comparativeDps?.dps2}
-                    compareDps={comparativeDps?.dps1}
-                    bonusDamage={alignedBonuses2}
-                    compareBonusDamage={alignedBonuses1}
-                    maxBonusDamageLines={maxBonusDamageLines}
-                    chargeBonus={stats2?.chargeBonus}
-                    compareChargeBonus={stats1?.chargeBonus}
-                    compareCost={stats1?.cost}
-                    comparePopulation={stats1?.population}
-                    compareProductionTime={stats1?.productionTime}
-                    secondaryWeapons={modifiedVariation2?.secondaryWeapons ?? secondaryWeapons2}
-                    showSecondaryWeaponRow={secondaryWeapons1.length > 0 || secondaryWeapons2.length > 0}
-                    maxHpBonusFraction={modifiedStats2.maxHpBonusFraction ?? 0}
-                    opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
-                    opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
-                    opponentVersusDebuff={(modifiedStats1.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(variation2?.classes || unit2?.classes || [], [...activeAbilities1], [...activeTechnologies1], variation1?.baseId || unit1?.id)}
-                    opponentBonusDamageReduction={modifiedStats1.bonusDamageReduction ?? 0}
-                    opponentClasses={variation1?.classes || unit1?.classes || []}
-                  />
+                  {comparativeCard2}
                 </motion.div>
                 <div className="order-4 sm:order-4 flex flex-col items-start sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
                   <div id="tour-age2">
@@ -2095,6 +2174,44 @@ const Sandbox = () => {
                 loserUnitsToWinApprox: (!rightIsWinner && !isDraw) ? (count1 > 1 && count2 > 1) : undefined,
                 opponentName: versusData.attacker.name,
               };
+
+              // The two cards are rendered once and reused by the off-screen share image,
+              // so the PNG is a pixel-for-pixel copy of what is on screen.
+              const versusCard1 = (
+                <UnitCard
+                  className="w-full"
+                  variation={modifiedVariation1!}
+                  unit={modifiedUnit1 || unit1}
+                  side="left"
+                  mode="versus"
+                  versusMetrics={leftMetrics}
+                  secondaryWeapons={modifiedVariation1?.secondaryWeapons ?? secondaryWeapons1}
+                  maxHpBonusFraction={modifiedStats1.maxHpBonusFraction ?? 0}
+                  opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
+                  opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
+                  opponentVersusDebuff={(modifiedStats2.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(unit1?.classes || [], [...activeAbilities2], [...activeTechnologies2], unit2?.id)}
+                  opponentBonusDamageReduction={modifiedStats2.bonusDamageReduction ?? 0}
+                  opponentClasses={modifiedVariation2?.classes || unit2?.classes || []}
+                />
+              );
+              const versusCard2 = (
+                <UnitCard
+                  className="w-full"
+                  variation={modifiedVariation2!}
+                  unit={modifiedUnit2 || unit2}
+                  side="right"
+                  mode="versus"
+                  versusMetrics={rightMetrics}
+                  secondaryWeapons={modifiedVariation2?.secondaryWeapons ?? secondaryWeapons2}
+                  maxHpBonusFraction={modifiedStats2.maxHpBonusFraction ?? 0}
+                  opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
+                  opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
+                  opponentVersusDebuff={(modifiedStats1.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(unit2?.classes || [], [...activeAbilities1], [...activeTechnologies1], unit1?.id)}
+                  opponentBonusDamageReduction={modifiedStats1.bonusDamageReduction ?? 0}
+                  opponentClasses={modifiedVariation1?.classes || unit1?.classes || []}
+                />
+              );
+
               return (
                 <>
                   {/* Mobile-only: per-card unit count steppers above each card (desktop uses the centered strip) */}
@@ -2153,21 +2270,7 @@ const Sandbox = () => {
                     transition={{ duration: 0.3 }}
                     className="order-1 sm:order-2 min-w-0 w-full"
                   >
-                    <UnitCard
-                      className="w-full"
-                      variation={modifiedVariation1!}
-                      unit={modifiedUnit1 || unit1}
-                      side="left"
-                      mode="versus"
-                      versusMetrics={leftMetrics}
-                      secondaryWeapons={modifiedVariation1?.secondaryWeapons ?? secondaryWeapons1}
-                      maxHpBonusFraction={modifiedStats1.maxHpBonusFraction ?? 0}
-                      opponentArmorPenetration={modifiedStats2.armorPenetration ?? 0}
-                      opponentAttackSpeedDebuff={modifiedStats2.opponentAttackSpeedDebuff ?? 0}
-                      opponentVersusDebuff={(modifiedStats2.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(unit1?.classes || [], [...activeAbilities2], [...activeTechnologies2], unit2?.id)}
-                      opponentBonusDamageReduction={modifiedStats2.bonusDamageReduction ?? 0}
-                      opponentClasses={modifiedVariation2?.classes || unit2?.classes || []}
-                    />
+                    {versusCard1}
                   </motion.div>
                   <motion.div
                     initial={{ opacity: 0, x: 50 }}
@@ -2175,21 +2278,7 @@ const Sandbox = () => {
                     transition={{ duration: 0.3 }}
                     className="order-2 sm:order-3 min-w-0 w-full"
                   >
-                    <UnitCard
-                      className="w-full"
-                      variation={modifiedVariation2!}
-                      unit={modifiedUnit2 || unit2}
-                      side="right"
-                      mode="versus"
-                      versusMetrics={rightMetrics}
-                      secondaryWeapons={modifiedVariation2?.secondaryWeapons ?? secondaryWeapons2}
-                      maxHpBonusFraction={modifiedStats2.maxHpBonusFraction ?? 0}
-                      opponentArmorPenetration={modifiedStats1.armorPenetration ?? 0}
-                      opponentAttackSpeedDebuff={modifiedStats1.opponentAttackSpeedDebuff ?? 0}
-                      opponentVersusDebuff={(modifiedStats1.versusOpponentDamageDebuff ?? 1) * getVersusDebuffMultiplier(unit2?.classes || [], [...activeAbilities1], [...activeTechnologies1], unit1?.id)}
-                      opponentBonusDamageReduction={modifiedStats1.bonusDamageReduction ?? 0}
-                      opponentClasses={modifiedVariation1?.classes || unit1?.classes || []}
-                    />
+                    {versusCard2}
                   </motion.div>
                   <div className="order-4 sm:order-4 flex flex-col items-start sm:items-stretch gap-2 sm:gap-3 sm:flex-shrink-0 min-w-0 overflow-x-auto sm:overflow-visible">
                     <div id="tour-age2">
@@ -2232,14 +2321,40 @@ const Sandbox = () => {
                       />
                     </div>
                   </div>
+                  {/* Off-screen source for the "Copy image" PNG — never visible, but must be
+                      laid out (not display:none) for html-to-image to capture it. */}
+                  <div aria-hidden className="pointer-events-none fixed left-[-10000px] top-0">
+                    <ShareImageCard
+                      left={sharePanel1 && { ...sharePanel1, card: versusCard1 }}
+                      right={sharePanel2 && { ...sharePanel2, card: versusCard2 }}
+                      badges={shareBadges}
+                      winRates={versusData.mcDistribution ? {
+                        a: versusData.mcDistribution.winRateA,
+                        b: versusData.mcDistribution.winRateB,
+                        draw: versusData.mcDistribution.drawRate,
+                      } : undefined}
+                      patch={PATCH_VERSION}
+                    />
+                  </div>
                 </>
               );
             })()}
           </div>
         )}
 
+        {!isVersus && (unit1 || unit2) && (
+          <div aria-hidden className="pointer-events-none fixed left-[-10000px] top-0">
+            <ShareImageCard
+              left={sharePanel1 && comparativeCard1 ? { ...sharePanel1, card: comparativeCard1 } : null}
+              right={sharePanel2 && comparativeCard2 ? { ...sharePanel2, card: comparativeCard2 } : null}
+              badges={shareBadges}
+              patch={PATCH_VERSION}
+            />
+          </div>
+        )}
+
         {(unit1 || unit2) && (
-          <div className="flex justify-center mt-8">
+          <div className="flex flex-col sm:flex-row justify-center items-stretch sm:items-center gap-2 mt-8">
             <button
               type="button"
               onClick={handleShare}
@@ -2248,6 +2363,16 @@ const Sandbox = () => {
             >
               {shareCopied ? <Check className="w-4 h-4 text-primary" /> : <Share2 className="w-4 h-4" />}
               {shareCopied ? "Copied!" : "Share the matchup"}
+            </button>
+            <button
+              type="button"
+              onClick={handleCopyImage}
+              disabled={imageBusy}
+              title="Copy a PNG recap card of this matchup (cards, techs and abilities) to the clipboard"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-border bg-card text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50 disabled:cursor-wait w-full sm:w-auto"
+            >
+              {imageCopied ? <Check className="w-4 h-4 text-primary" /> : <ImageIcon className="w-4 h-4" />}
+              {imageBusy ? "Rendering…" : imageCopied ? "Copied!" : "Copy matchup card"}
             </button>
           </div>
         )}

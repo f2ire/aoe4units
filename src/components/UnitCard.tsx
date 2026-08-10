@@ -719,6 +719,7 @@ export const UnitCard = ({
               {/* ── Show Calculation button ── */}
               <button
                 onClick={() => setShowFormula(!showFormula)}
+                data-hide-in-share
                 className="w-full text-xs px-2 py-1 rounded bg-primary/10 hover:bg-primary/20 transition-colors text-primary font-medium"
               >
                 {showFormula ? '📊 Hide Calculation' : '🔍 Show Calculation'}

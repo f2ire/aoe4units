@@ -213,3 +213,8 @@ All colors MUST be HSL.
 .driver-popover-arrow-side-right { border-left-color:   transparent; border-bottom-color: transparent; border-top-color:    transparent; }
 .driver-popover-arrow-side-top   { border-right-color:  transparent; border-bottom-color: transparent; border-left-color:   transparent; }
 .driver-popover-arrow-side-bottom{ border-left-color:   transparent; border-top-color:    transparent; border-right-color:  transparent; }
+
+/* Interactive-only bits are dropped from the shareable PNG (see ShareImageCard) */
+#share-image-card [data-hide-in-share] {
+  display: none !important;
+}
