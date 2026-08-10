@@ -1553,8 +1553,8 @@ const Sandbox = () => {
           />
           <div>
             <h1 className="text-4xl font-serif font-bold text-primary mb-2">AoE4 Units</h1>
-            <p className="text-muted-foreground text-lg">Compare any two units from any civilizations!</p>
-            <div className="flex items-center justify-center gap-2 mt-2">
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
+              <p className="text-muted-foreground text-lg">Compare any two units from any civilizations!</p>
               <span
                 className="inline-flex items-center rounded-full border border-border bg-card px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
                 title="Game balance patch currently modeled by the simulator"
