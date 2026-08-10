@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   categorizeTechnology,
@@ -12,6 +12,7 @@ import type { Technology } from "@/data/unified-technologies";
 import { foreignEngineeringTechIds } from "@/data/patches/technologies";
 import type { Ability } from "@/data/unified-abilities";
 import { ABILITY_ROW_GROUPS } from "@/data/patches/abilities";
+import { getCounterMin } from "@/hooks/useUnitSlot";
 import { cn } from "@/lib/utils";
 import { assetUrl } from "./assetUrl";
 
@@ -38,8 +39,8 @@ interface CompactLoadoutProps {
   onToggleAbility: (abilityId: string) => void;
   lockedAbilities?: Set<string>;
   abilityCounters?: Map<string, number>;
-  onIncrement?: (abilityId: string) => void;
-  onDecrement?: (abilityId: string) => void;
+  /** Selected unit id — resolves per-unit counter minimums (getCounterMin). */
+  unitId?: string;
   onSetCounter?: (abilityId: string, value: number) => void;
 }
 
@@ -169,39 +170,82 @@ function IconToggle({
   );
 }
 
-// Icon + count badge + tiny −/+ stepper (tiered/counter techs & abilities).
+// Values listed in a counter's quick-pick grid. Counters with a sentinel max
+// (kill-tracking abilities cap at 200/999) are truncated to this — the text field
+// still accepts any value up to the real max.
+const QUICK_PICK_LIMIT = 50;
+
+// Icon + count badge + quick-pick value (tiered/counter techs & abilities).
 function CounterCell({
   src,
   name,
   description,
   count,
   max,
+  min = 0,
   hideMax,
   fill,
-  onInc,
-  onDec,
   onReset,
+  onSet,
 }: {
   src: string;
   name: string;
   description?: string;
   count: number;
   max: number;
+  /** Lower bound accepted by the quick-pick (per-unit counter minimums). */
+  min?: number;
   hideMax?: boolean;
   // When true the cell stretches to its parent width (used by spanning tech
   // counters that cover several age columns); otherwise it stays a 34px square.
   fill?: boolean;
-  onInc: () => void;
-  onDec: () => void;
-  // When provided, clicking the icon while active resets the counter to 0 (with a
-  // red hover), mirroring the base app's counter-ability button. Without it the
-  // icon increments (tech counters keep the click-to-add behaviour).
+  // Clicking the icon while active resets the counter to 0 (with a red hover),
+  // mirroring the base app's counter-ability button.
   onReset?: () => void;
+  // Jump straight to a value — powers the quick-pick panel, which is now the only
+  // way to change a counter.
+  onSet?: (value: number) => void;
 }) {
   const active = count > 0;
-  const iconClick = onReset ? (active ? onReset : undefined) : onInc;
   const btnRef = useRef<HTMLButtonElement>(null);
   const [tipPos, setTipPos] = useState<{ x: number; y: number } | null>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const valueRef = useRef<HTMLButtonElement>(null);
+  // Anchor of the open quick-pick, in viewport coords (null = closed).
+  const [pickPos, setPickPos] = useState<{ x: number; y: number } | null>(null);
+  const [draft, setDraft] = useState("");
+
+  const commit = (raw: string) => {
+    const n = parseInt(raw, 10);
+    if (Number.isFinite(n)) onSet?.(Math.max(min, Math.min(max, n)));
+    setPickPos(null);
+  };
+
+  // Anchored under the value; falls back to the icon when the picker is opened
+  // from there (an inactive counter has no other affordance left).
+  const openPicker = () => {
+    if (pickPos) { setPickPos(null); return; }
+    const r = (valueRef.current ?? btnRef.current)?.getBoundingClientRect();
+    if (!r) return;
+    setDraft(String(count));
+    setPickPos({ x: r.left + r.width / 2, y: r.bottom });
+  };
+
+  // Active + resettable → the icon clears the counter (as before); otherwise it is
+  // a second way into the quick-pick, now that −/+ are gone.
+  const iconClick = active && onReset ? onReset : onSet ? openPicker : undefined;
+
+  // Close on any pointer press outside the panel or its trigger.
+  useEffect(() => {
+    if (!pickPos) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (pickerRef.current?.contains(t) || valueRef.current?.contains(t)) return;
+      setPickPos(null);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [pickPos]);
   const showTip = () => {
     if (!btnRef.current) return;
     const r = btnRef.current.getBoundingClientRect();
@@ -252,25 +296,80 @@ function CounterCell({
           </div>,
           document.body,
         )}
-      <div className={cn("flex items-center justify-between", fill ? "w-full" : "w-[34px]")}>
-        <button
-          type="button"
-          onClick={onDec}
-          disabled={count === 0}
-          className="flex h-3.5 w-3.5 items-center justify-center rounded border border-zinc-700 bg-zinc-800 text-[10px] leading-none text-zinc-300 disabled:opacity-20"
-        >
-          −
-        </button>
-        <span className="text-[8px] tabular-nums text-zinc-500">{hideMax ? count : `${count}/${max}`}</span>
-        <button
-          type="button"
-          onClick={onInc}
-          disabled={count >= max}
-          className="flex h-3.5 w-3.5 items-center justify-center rounded border border-zinc-700 bg-zinc-800 text-[10px] leading-none text-zinc-300 disabled:opacity-20"
-        >
-          +
-        </button>
+      {/* No −/+ buttons: repeatedly clicking targets that small registers as a double
+          click on the Twitch player underneath (which toggles fullscreen). The value
+          is the quick-pick trigger — one click or a typed value sets any stack. */}
+      <div className={cn("flex items-center justify-center", fill ? "w-full" : "w-[34px]")}>
+        {onSet ? (
+          <button
+            ref={valueRef}
+            type="button"
+            title="Set a value"
+            onClick={openPicker}
+            className="rounded px-1 text-[9px] tabular-nums text-zinc-400 underline decoration-dotted decoration-zinc-600 underline-offset-2 hover:bg-amber-500/20 hover:text-amber-300"
+          >
+            {hideMax ? count : `${count}/${max}`}
+          </button>
+        ) : (
+          <span className="text-[9px] tabular-nums text-zinc-500">{hideMax ? count : `${count}/${max}`}</span>
+        )}
       </div>
+
+      {/* Quick-pick panel. Portaled to the body: the loadout lives in a scrollable
+          drawer, which would clip an absolutely-positioned dropdown. Coordinates come
+          from getBoundingClientRect, so the panel's scale transform is already baked in. */}
+      {pickPos &&
+        createPortal(
+          <div
+            ref={pickerRef}
+            className="fixed z-[99999] w-[140px] -translate-x-1/2 rounded-md border border-amber-500/40 bg-zinc-950/95 shadow-2xl backdrop-blur"
+            style={{ left: pickPos.x, top: pickPos.y + 4 }}
+          >
+            <div className="flex items-center gap-1 border-b border-amber-500/20 p-1">
+              <input
+                autoFocus
+                type="text"
+                inputMode="numeric"
+                value={draft}
+                placeholder={`${min}–${max}`}
+                onChange={(e) => setDraft(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commit((e.target as HTMLInputElement).value);
+                  if (e.key === "Escape") setPickPos(null);
+                }}
+                className="w-full rounded border border-zinc-700 bg-black/40 px-1 py-0.5 text-center text-[11px] tabular-nums text-amber-200 placeholder:text-zinc-600 focus:border-amber-500/60 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => commit(draft)}
+                className="shrink-0 rounded border border-amber-500/40 px-1 py-0.5 text-[10px] font-bold text-amber-400 hover:bg-amber-500/15"
+              >
+                OK
+              </button>
+            </div>
+            <div className="grid max-h-[112px] grid-cols-5 gap-0.5 overflow-y-auto p-1">
+              {Array.from(
+                { length: Math.min(max - min + 1, QUICK_PICK_LIMIT) },
+                (_, i) => min + i,
+              ).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => { onSet?.(n); setPickPos(null); }}
+                  className={cn(
+                    "rounded py-0.5 text-[10px] font-semibold tabular-nums transition-colors",
+                    n === count
+                      ? "bg-amber-500 text-black"
+                      : "bg-black/40 text-zinc-300 hover:bg-amber-500/20 hover:text-amber-200",
+                  )}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -291,8 +390,7 @@ export function CompactLoadout({
   onToggleAbility,
   lockedAbilities,
   abilityCounters,
-  onIncrement,
-  onDecrement,
+  unitId,
   onSetCounter,
 }: CompactLoadoutProps) {
   // --- Technologies: group by category → tier-line (mirrors TechnologySelector). ---
@@ -320,7 +418,7 @@ export function CompactLoadout({
     kind: "counter"; key: string; label: string;
     startAge: number; endAge: number; count: number; max: number;
     src: string; name: string; description?: string; hideMax?: boolean;
-    onInc: () => void; onDec: () => void; onReset: () => void;
+    onReset: () => void; onSet: (n: number) => void;
   };
   const rows: (IconRow | CounterRow)[] = [];
   const iconRowIndex = new Map<string, number>();
@@ -352,11 +450,16 @@ export function CompactLoadout({
         rows.push({
           kind: "counter", key: lineKey, label, startAge, endAge, count, max,
           src: techIconPath(cur.icon), name: cur.name, hideMax: first.counterHideMax,
-          onInc: () => count < max && onToggleTech(techs[count].id),
-          onDec: () => count > 0 && onToggleTech(techs[count - (count === 1 ? 1 : 2)].id),
           // Clicking the icon resets the line to 0 (toggles the active tier off),
           // mirroring the base app's tech counter; + still increments.
           onReset: () => count > 0 && onToggleTech(techs[count - 1].id),
+          // A tech counter is "tier N active", so jumping to N is a single toggle of
+          // tier N (0 = toggle the current tier off) — not a loop of increments.
+          onSet: (n: number) => {
+            if (n === count) return;
+            if (n <= 0) { if (count > 0) onToggleTech(techs[count - 1].id); return; }
+            if (n <= max) onToggleTech(techs[n - 1].id);
+          },
         });
         continue;
       }
@@ -409,10 +512,10 @@ export function CompactLoadout({
             description={abilityDesc}
             count={count}
             max={a.counterMax}
+            min={getCounterMin(unitId, a.id)}
             hideMax={a.counterHideMax}
-            onInc={() => onIncrement?.(a.id)}
-            onDec={() => onDecrement?.(a.id)}
             onReset={() => onSetCounter?.(a.id, 0)}
+            onSet={onSetCounter ? (n) => onSetCounter(a.id, n) : undefined}
           />,
         );
       } else {
@@ -483,9 +586,8 @@ export function CompactLoadout({
                 count={row.count}
                 max={row.max}
                 hideMax={row.hideMax}
-                onInc={row.onInc}
-                onDec={row.onDec}
                 onReset={row.onReset}
+                onSet={row.onSet}
               />
             </div>
           );

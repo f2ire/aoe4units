@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ChevronDown, ChevronRight, ChevronUp, GripHorizontal, Lock, LockOpen, Search, Settings2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, GripHorizontal, Lock, LockOpen, Search, Settings2, Swords } from "lucide-react";
 import { getAvailableAges, getTotalCost } from "@/data/unified-units";
 import type { AoE4Unit } from "@/data/unified-units";
 import { getTechnologyTier, getTechnologyBaseName } from "@/data/unified-technologies";
 import { CIVILIZATIONS } from "@/data/civilizations";
 import { useUnitSlot } from "@/hooks/useUnitSlot";
 import { buildModifiedVariation } from "@/lib/buildVariation";
+import { getVersusDebuffMultiplier, type MCOutcomeStats } from "@/lib/combat";
 import { cn } from "@/lib/utils";
 import { CompactUnitCard, type CompareStats, type VSSlotInfo } from "./CompactUnitCard";
 import type { ResizeHandle } from "./useDraggablePanel";
@@ -72,30 +73,51 @@ export interface VSResultData {
   winnerHp?: number;
   winnerMaxHp?: number;
   loserUnitsToWin?: number;
-  /** Equal-cost group sizes — present only in equal-cost mode. */
+  /** The loser can't win within the search cap — show "More than 100". */
+  loserUnitsToWinExceeded?: boolean;
+  /** Both sides have several units — the flip point is fuzzy, flag it as approximate. */
+  loserUnitsToWinApprox?: boolean;
+  /** Units of this side needed to one-shot one opponent unit. */
+  unitsToOS1?: number;
+  unitsToOS2?: number;
+  /** Group sizes — present only when either side has more than one unit. */
   multA?: number;
   multB?: number;
-  /** Winner group units remaining (equal-cost mode; MC median when available). */
+  /** Winner group units remaining (multi-unit; MC median when available). */
   winnerUnits?: number;
   /** Monte-Carlo win rates (Attack move model / capped melee crowds). */
   winRateA?: number;
   winRateB?: number;
   drawRate?: number;
+  /** Per-outcome MC stats (median ±std of units/HP/resources when that side wins). */
+  whenAWins?: MCOutcomeStats;
+  whenBWins?: MCOutcomeStats;
 }
 
 export type MultiUnitModelKey = "aggregated" | "focusFire" | "focusFireBatchesMC";
 
-/** Toggle/selector state rendered inside the VS card (equal cost, kiting, model). */
+/** Toggle/selector state rendered inside the VS card (unit counts, presets, kiting, model). */
 export interface VSCardControls {
-  atEqualCost: boolean;
-  onToggleEqualCost: () => void;
-  /** Same cost or zero cost — equal-cost mode is a no-op, toggle disabled. */
-  equalCostDisabled?: boolean;
-  equalCostDisabledTitle?: string;
+  /** Unit counts per side — 1/1 keeps the full-fidelity 1v1 path. */
+  count1: number;
+  count2: number;
+  onCount1: (n: number) => void;
+  onCount2: (n: number) => void;
+  /** Equal-cost / equal-pop ratio presets — mutually exclusive toggles (mirrors the Sandbox). */
+  activePreset: 'cost' | 'pop' | null;
+  onTogglePreset: (key: 'cost' | 'pop') => void;
+  /** A unit has no cost — the equal-cost ratio is meaningless. */
+  costDisabled?: boolean;
+  /** A unit has no population value. */
+  popDisabled?: boolean;
   allowKiting: boolean;
   onToggleKiting: () => void;
+  /** Both units are melee — there is no approach phase to simulate, toggle disabled. */
+  kitingDisabled?: boolean;
   modelKey: MultiUnitModelKey;
   onModelChange: (key: MultiUnitModelKey) => void;
+  /** Hide the model selector when either side is a lone unit (grouping is forced). */
+  modelSelectorVisible?: boolean;
 }
 
 // "aggregated" stays a valid key for the combat plumbing but is not exposed
@@ -118,6 +140,11 @@ function vsStatColors(v1: number | null, v2: number | null, higherIsBetter: bool
 
 function fmtN(v: number | null, precision = 1): string {
   return v == null ? "—" : v.toFixed(precision);
+}
+
+// Standard deviations are only informative to ~1 significant step here.
+function fmtStd(v: number): string {
+  return v >= 10 ? String(Math.round(v)) : v.toFixed(1);
 }
 
 // Integer percentages that sum to exactly 100 (largest-remainder method) —
@@ -216,34 +243,132 @@ export function ResizeHandles({ onResizeStart, className }: {
   );
 }
 
-// Small amber soldier pictogram used to visualize unit counts.
-function SoldierChip({ size = 14 }: { size?: number }) {
+const MAX_UNIT_COUNT = 100;
+// Values offered in the quick-pick list. The field itself still accepts anything
+// up to MAX_UNIT_COUNT — the list only covers the range viewers actually use.
+const QUICK_PICK_MAX = 50;
+const SITE_URL = "https://aoe4units.com/";
+
+// Unit-count control: −/+ buttons, a directly editable field, and a scrollable
+// quick-pick list. Repeated clicks on a small +/- button register as a double
+// click on the Twitch player underneath (which toggles fullscreen), so typing or
+// picking a value in one click is the primary path here, not a convenience.
+function CountStepper({ count, onChange }: { count: number; onChange: (n: number) => void }) {
+  const [open, setOpen] = useState(false);
+  // While the field is focused it holds a free-text draft ("" is a legal
+  // intermediate state); it is clamped and committed on blur/Enter.
+  const [draft, setDraft] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  const clampCount = (n: number) => Math.max(1, Math.min(MAX_UNIT_COUNT, n));
+  const step = (d: number) => onChange(clampCount(count + d));
+  const commit = (raw: string) => {
+    setDraft(null);
+    const n = parseInt(raw, 10);
+    if (Number.isFinite(n)) onChange(clampCount(n));
+  };
+
+  // Close the quick-pick on any pointer press outside it. A fixed/absolute
+  // backdrop would not work: the card sits inside a scaled (transformed)
+  // container, which re-anchors fixed positioning.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [open]);
+
+  const btn = "flex h-4 w-4 shrink-0 items-center justify-center rounded border border-amber-500/40 bg-black/40 text-[10px] leading-none text-amber-400 transition-colors hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:border-zinc-700 disabled:text-zinc-600";
+
   return (
-    <div
-      style={{
-        width: size, height: size, borderRadius: 2,
-        background: "rgba(245,158,11,0.13)", border: "1px solid rgba(245,158,11,0.5)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}
+    <div ref={rootRef} className="relative flex items-center justify-center gap-0.5">
+      <button type="button" onClick={() => step(-1)} disabled={count <= 1} title="Remove one unit" className={btn}>−</button>
+      {/* The field is capped at 24px: the row must fit two steppers plus the "vs"
+          separator inside the card's 185px (16+24+16+12 + gaps ≈ 74px per side). */}
+      <input
+        type="text"
+        inputMode="numeric"
+        value={draft ?? String(count)}
+        title="Type a unit count"
+        onChange={(e) => setDraft(e.target.value.replace(/\D/g, "").slice(0, 3))}
+        onFocus={(e) => { setDraft(String(count)); e.target.select(); }}
+        onBlur={(e) => commit(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { commit((e.target as HTMLInputElement).value); (e.target as HTMLInputElement).blur(); }
+          if (e.key === "Escape") { setDraft(null); (e.target as HTMLInputElement).blur(); }
+        }}
+        className="w-[24px] rounded border border-transparent bg-transparent p-0 text-center text-sm font-bold leading-none tabular-nums text-amber-300 outline-none hover:border-amber-500/30 focus:border-amber-500/60 focus:bg-black/40"
+      />
+      <button type="button" onClick={() => step(1)} disabled={count >= MAX_UNIT_COUNT} title="Add one unit" className={btn}>+</button>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title="Pick a unit count"
+        className="flex h-4 w-3 shrink-0 items-center justify-center rounded text-amber-400/70 transition-colors hover:text-amber-300"
+      >
+        <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="absolute left-1/2 top-full z-50 mt-1 w-[132px] -translate-x-1/2 rounded-md border border-amber-500/40 bg-zinc-950/95 shadow-2xl backdrop-blur">
+          <div className="grid max-h-[124px] grid-cols-5 gap-0.5 overflow-y-auto p-1">
+            {Array.from({ length: QUICK_PICK_MAX }, (_, i) => i + 1).map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => { onChange(n); setOpen(false); }}
+                className={cn(
+                  "rounded py-0.5 text-[10px] font-semibold tabular-nums transition-colors",
+                  n === count
+                    ? "bg-amber-500 text-black"
+                    : "bg-black/40 text-zinc-300 hover:bg-amber-500/20 hover:text-amber-200",
+                )}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <a
+            href={SITE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block border-t border-amber-500/20 px-1.5 py-1 text-center text-[9px] leading-tight text-amber-400/80 hover:text-amber-300"
+          >
+            More options on aoe4units.com
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Equal-cost / equal-pop ratio preset — an exclusive toggle, not a mode switch.
+function PresetButton({ label, title, disabled, active, onClick }: {
+  label: string; title: string; disabled?: boolean; active: boolean; onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => { if (!disabled) onClick(); }}
+      disabled={disabled}
+      title={title}
+      className={cn(
+        "rounded border px-1.5 py-0.5 text-[10px] font-bold transition-colors",
+        disabled
+          ? "cursor-not-allowed border-zinc-700 bg-black/40 text-zinc-600"
+          : active
+            ? "border-amber-500 bg-amber-500 text-black"
+            : "border-amber-500/40 bg-black/40 text-amber-400 hover:border-amber-500/70 hover:bg-amber-500/10",
+      )}
     >
-      <svg width={Math.round(size * 0.57)} height={Math.round(size * 0.57)} viewBox="0 0 10 10" fill="none">
-        <circle cx="5" cy="3" r="2" fill="rgba(245,158,11,0.85)" />
-        <rect x="1" y="5.5" width="8" height="4.5" rx="1" fill="rgba(245,158,11,0.85)" />
-      </svg>
-    </div>
+      {label}
+    </button>
   );
 }
 
-// One side of the equal-cost unit-count display: just the unit count.
-function UnitCountSide({ count }: { count: number }) {
-  return (
-    <div className="flex flex-col items-center">
-      <span className="text-base font-bold leading-none tabular-nums text-amber-300">{count}</span>
-    </div>
-  );
-}
-
-export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, hitsToKill2, dpsPerCost1, dpsPerCost2, ttk1, ttk2, winnerHp, winnerMaxHp, loserUnitsToWin, multA, multB, winnerUnits, winRateA, winRateB, drawRate, controls }: VSResultData & { controls?: VSCardControls }) {
+export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, hitsToKill2, dpsPerCost1, dpsPerCost2, ttk1, ttk2, winnerHp, winnerMaxHp, loserUnitsToWin, loserUnitsToWinExceeded, loserUnitsToWinApprox, unitsToOS1, unitsToOS2, multA, multB, winnerUnits, winRateA, winRateB, drawRate, whenAWins, whenBWins, controls }: VSResultData & { controls?: VSCardControls }) {
   const dpsCols = vsStatColors(dps1, dps2, true);
   const htkCols = vsStatColors(hitsToKill1, hitsToKill2, false);
   const dpcCols = vsStatColors(dpsPerCost1, dpsPerCost2, true);
@@ -261,6 +386,8 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
   const isDraw = winner === "draw";
   const hpPct = winnerHp != null && winnerMaxHp ? Math.max(0, Math.round((winnerHp / winnerMaxHp) * 100)) : null;
   const loserName = slot1Wins ? unit2Name : unit1Name;
+  // MC spread for the winning side (undefined outside Monte-Carlo models).
+  const winnerStats = slot1Wins ? whenAWins : slot2Wins ? whenBWins : undefined;
 
   return (
     <div className="w-[185px] rounded-lg border border-amber-500/30 bg-zinc-950/65 text-zinc-100 shadow-2xl ring-1 ring-black/30 backdrop-blur-md">
@@ -269,38 +396,54 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
       </div>
       {controls && (
         <div className="pointer-events-auto border-b border-amber-500/15 px-2 py-1.5 space-y-1">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
+            <CountStepper count={controls.count1} onChange={controls.onCount1} />
+            <span className="text-[9px] font-semibold uppercase tracking-wide text-zinc-500">vs</span>
+            <CountStepper count={controls.count2} onChange={controls.onCount2} />
+          </div>
           <div className="flex items-center justify-center gap-1">
+            <PresetButton
+              label="⚖ Cost"
+              disabled={controls.costDisabled}
+              active={controls.activePreset === "cost"}
+              title={controls.costDisabled
+                ? "A unit has no cost"
+                : controls.activePreset === "cost"
+                  ? "Equal-cost ratio applied — click to reset to 1v1"
+                  : "Fill both counts with an equal-cost ratio"}
+              onClick={() => controls.onTogglePreset("cost")}
+            />
+            <PresetButton
+              label="👥 Pop"
+              disabled={controls.popDisabled}
+              active={controls.activePreset === "pop"}
+              title={controls.popDisabled
+                ? "A unit has no population value"
+                : controls.activePreset === "pop"
+                  ? "Equal-population ratio applied — click to reset to 1v1"
+                  : "Fill both counts so each side uses the same total population"}
+              onClick={() => controls.onTogglePreset("pop")}
+            />
             <button
               type="button"
-              onClick={() => { if (!controls.equalCostDisabled) controls.onToggleEqualCost(); }}
-              disabled={controls.equalCostDisabled}
-              title={controls.equalCostDisabledTitle ?? "Compare equal-cost groups (approx.)"}
+              onClick={() => { if (!controls.kitingDisabled) controls.onToggleKiting(); }}
+              disabled={controls.kitingDisabled}
+              title={controls.kitingDisabled
+                ? "Both units are melee — no approach phase to kite"
+                : "Ranged units kite while melee closes the gap"}
               className={cn(
                 "rounded border px-1.5 py-0.5 text-[10px] font-bold transition-colors",
-                controls.equalCostDisabled
+                controls.kitingDisabled
                   ? "cursor-not-allowed border-zinc-700 bg-black/40 text-zinc-600"
-                  : controls.atEqualCost
+                  : controls.allowKiting
                     ? "border-amber-500 bg-amber-500 text-black"
                     : "border-amber-500/40 bg-black/40 text-amber-400 hover:border-amber-500/70 hover:bg-amber-500/10",
-              )}
-            >
-              = Cost
-            </button>
-            <button
-              type="button"
-              onClick={controls.onToggleKiting}
-              title="Ranged units kite while melee closes the gap"
-              className={cn(
-                "rounded border px-1.5 py-0.5 text-[10px] font-bold transition-colors",
-                controls.allowKiting
-                  ? "border-amber-500 bg-amber-500 text-black"
-                  : "border-amber-500/40 bg-black/40 text-amber-400 hover:border-amber-500/70 hover:bg-amber-500/10",
               )}
             >
               Kiting
             </button>
           </div>
-          {(controls.atEqualCost || controls.allowKiting) && (
+          {controls.modelSelectorVisible && (
             <div className="flex items-center justify-center">
               <div className="flex overflow-hidden rounded border border-amber-500/30">
                 {MODEL_OPTIONS.map((opt) => (
@@ -322,24 +465,12 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
               </div>
             </div>
           )}
-          {(controls.atEqualCost || controls.allowKiting) && (
+          {(controls.count1 > 1 || controls.count2 > 1 || controls.allowKiting) && (
             <div className="flex items-center justify-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-300">
               <span aria-hidden>⚠</span>
               May be imprecise
             </div>
           )}
-        </div>
-      )}
-      {multA != null && multB != null && (
-        <div className="border-b border-amber-500/15 px-2 py-1.5">
-          <div className="mb-1 text-center text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
-            Units per side
-          </div>
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1">
-            <UnitCountSide count={multA} />
-            <span className="text-[10px] font-semibold uppercase text-zinc-500">vs</span>
-            <UnitCountSide count={multB} />
-          </div>
         </div>
       )}
       <div className="pointer-events-auto px-2 py-2 space-y-1.5">
@@ -353,6 +484,23 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
             </span>
           </div>
         ))}
+        {/* Units needed to one-shot one opponent unit — emphasized: it is the most
+            actionable number on the card. */}
+        {(unitsToOS1 != null || unitsToOS2 != null) && (
+          <div
+            className="group relative flex cursor-help items-center gap-0.5 border-t border-amber-500/10 pt-1.5 text-[12px]"
+            title="Units of this side needed to one-shot one opponent unit"
+          >
+            <span className="w-[44px] text-right font-bold tabular-nums leading-none text-amber-300">{unitsToOS1 ?? "—"}</span>
+            <span className="mx-1 min-w-[56px] text-center text-[11px] font-semibold uppercase tracking-wide text-amber-400/70 underline decoration-dotted decoration-amber-600/50 underline-offset-2">
+              Units to OS
+            </span>
+            <span className="w-[44px] text-left font-bold tabular-nums leading-none text-amber-300">{unitsToOS2 ?? "—"}</span>
+            <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-0.5 hidden w-40 -translate-x-1/2 rounded border border-amber-500/40 bg-zinc-950/95 px-1.5 py-0.5 text-[10px] font-medium text-zinc-200 shadow-xl backdrop-blur group-hover:block">
+              Units needed to kill one opponent unit in a single volley
+            </span>
+          </div>
+        )}
       </div>
       <div className="border-t border-amber-500/15 px-2 py-1.5 space-y-1">
         {winRateA != null && winRateB != null && (() => {
@@ -405,10 +553,24 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
             {winnerUnits != null && (
               <div className="text-center text-[11px] text-zinc-400">
                 <span className="font-medium text-green-400">{winnerUnits}</span>
+                {winnerStats && winnerStats.unitsStd > 0 && (
+                  <span className="text-[9px] text-zinc-500"> ±{fmtStd(winnerStats.unitsStd)}</span>
+                )}
                 {(slot1Wins ? multA : multB) != null && (
                   <span> of {slot1Wins ? multA : multB}</span>
                 )}{" "}
                 units left
+              </div>
+            )}
+            {/* Monte-Carlo outcome detail: median (±std) HP and resource swing across the runs
+                where this side wins — the single displayed run alone would be misleading. */}
+            {winnerStats && (
+              <div className="text-center text-[10px] tabular-nums text-zinc-500">
+                {Math.round(winnerStats.hpMedian)} HP
+                {winnerStats.hpStd > 0 && <span> ±{fmtStd(winnerStats.hpStd)}</span>}
+                {" · "}
+                {Math.round(winnerStats.resourceMedian)} res
+                {winnerStats.resourceStd > 0 && <span> ±{fmtStd(winnerStats.resourceStd)}</span>}
               </div>
             )}
             {hpPct != null && (
@@ -443,20 +605,18 @@ export function VSCard({ winner, unit1Name, unit2Name, dps1, dps2, hitsToKill1, 
                 </div>
               </>
             )}
-            {loserUnitsToWin != null && (
-              <>
-                <div className="text-center text-[11px] text-zinc-400">
-                  <span className="text-amber-300/90 font-medium">{loserUnitsToWin}</span> <span className="text-amber-300/90 font-medium">{loserName}</span> to win
-                </div>
-                <div className="flex items-center justify-center gap-1">
-                  {Array.from({ length: Math.min(loserUnitsToWin, 7) }).map((_, i) => (
-                    <SoldierChip key={i} />
-                  ))}
-                  {loserUnitsToWin > 7 && (
-                    <span className="text-[9px] text-amber-500/60">+{loserUnitsToWin - 7}</span>
-                  )}
-                </div>
-              </>
+            {(loserUnitsToWin != null || loserUnitsToWinExceeded) && (
+              <div className="text-center text-[11px] text-zinc-400">
+                <span className="font-medium text-amber-300/90">
+                  {loserUnitsToWinExceeded ? "More than 100" : loserUnitsToWin}
+                </span>{" "}
+                <span className="font-medium text-amber-300/90">{loserName}</span> to win
+                {loserUnitsToWinApprox && (
+                  <span className="ml-1 rounded border border-amber-500/40 px-1 text-[8px] font-semibold uppercase text-amber-400/80">
+                    approx.
+                  </span>
+                )}
+              </div>
             )}
           </>
         )}
@@ -503,6 +663,22 @@ function buildCompareStats(compareSlot?: Slot): CompareStats | undefined {
     population: variation?.costs?.popcap,
     productionTime: variation?.costs?.time,
   };
+}
+
+// Multiplier applied to THIS slot's damage output because of the opponent's
+// versusOpponentDamageDebuff (unit-owned value × class/tech-conditional effects).
+// Mirrors the Sandbox's `opponentVersusDebuff` prop. 1 = no debuff.
+function buildVersusDebuff(slot: Slot, compareSlot?: Slot): number | undefined {
+  if (!compareSlot?.unit) return undefined;
+  const attackerClasses = (slot.variation as any)?.classes ?? slot.unit?.classes ?? [];
+  const defenderBaseId = (compareSlot.variation as any)?.baseId ?? compareSlot.unit.id;
+  const base = (compareSlot.modifiedStats as any).versusOpponentDamageDebuff ?? 1;
+  return base * getVersusDebuffMultiplier(
+    attackerClasses,
+    [...compareSlot.activeAbilities],
+    [...compareSlot.activeTechnologies],
+    defenderBaseId,
+  );
 }
 
 export function SlotPanel({
@@ -632,7 +808,7 @@ export function SlotPanel({
   const q = search.trim().toLowerCase();
 
   return (
-    <div ref={panelRef} className="relative w-[260px]">
+    <div ref={panelRef} className="relative w-[288px]">
       <div className="relative overflow-hidden rounded-lg border border-amber-500/30 bg-zinc-950/65 text-zinc-100 shadow-2xl ring-1 ring-black/30 backdrop-blur-md">
         {/* Header: drag handle when primary, static header when versus */}
         <div
@@ -681,11 +857,7 @@ export function SlotPanel({
               onPointerDown={(e) => e.stopPropagation()}
               onClick={onToggleCivLock}
               className="flex h-6 shrink-0 items-center gap-1.5 rounded px-1 transition-colors hover:bg-white/10"
-              title={
-                civLocked
-                  ? `Auto: civilization follows the ${opponentMode ? "opponent" : "streamer"} — click to pick freely`
-                  : `Manual civilization — click to auto-follow the ${opponentMode ? "opponent" : "streamer"}`
-              }
+              title={`To track ${opponentMode ? "the opponent's" : "streamer"} game during rank`}
             >
               <span className={cn("text-[10px] font-medium", civLocked ? "text-amber-400" : "text-zinc-500")}>
                 {opponentMode ? "Opponent" : "Streamer"}
@@ -729,6 +901,7 @@ export function SlotPanel({
               onVsClick={onVsClick}
               vsActive={vsActive}
               compare={buildCompareStats(compareSlot)}
+              opponentVersusDebuff={buildVersusDebuff(slot, compareSlot)}
               vsInfo={vsInfo}
             />
 
@@ -770,8 +943,7 @@ export function SlotPanel({
                     onToggleAbility={slot.toggleAbility}
                     lockedAbilities={slot.lockedAbilities}
                     abilityCounters={slot.abilityCounters}
-                    onIncrement={slot.incrementAbility}
-                    onDecrement={slot.decrementAbility}
+                    unitId={slot.unit?.id}
                     onSetCounter={slot.setAbilityCounter}
                   />
                 </div>
@@ -796,6 +968,23 @@ export function SlotPanel({
               <ChevronDown className="h-4 w-4" />
             </button>
           </div>
+        )}
+
+        {/* Footer credit — primary panel only (it would be duplicated on the versus
+            panel) and only when the drawer is closed, so it never competes with the
+            loadout for vertical space. */}
+        {!opponentMode && !drawerOpen && (
+          <a
+            href={SITE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onPointerDown={(e) => e.stopPropagation()}
+            title="For any feedback or all functionality please visit aoe4units.com"
+            className="flex items-center justify-center gap-1 border-t border-amber-500/15 bg-zinc-900/50 px-2 py-1 text-[10px] leading-tight text-zinc-400 transition-colors hover:bg-amber-500/10 hover:text-amber-300"
+          >
+            <Swords className="h-2.5 w-2.5 shrink-0 text-amber-500/70" />
+            Feedback &amp; all features on <span className="text-amber-400/80">aoe4units.com</span>
+          </a>
         )}
       </div>
 

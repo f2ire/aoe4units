@@ -66,6 +66,8 @@ interface CompactUnitCardProps {
   vsActive?: boolean;
   /** Opponent stats — when set, versus comparison colors replace the tech tint. */
   compare?: CompareStats;
+  /** Opponent's versusOpponentDamageDebuff — multiplies this unit's damage output (1 = none). */
+  opponentVersusDebuff?: number;
   /** VS combat result for this slot — HP remaining (winner) or units to win (loser). */
   vsInfo?: VSSlotInfo;
 }
@@ -164,6 +166,7 @@ export function CompactUnitCard({
   onVsClick,
   vsActive = false,
   compare,
+  opponentVersusDebuff,
   vsInfo,
 }: CompactUnitCardProps) {
   const weapon = getPrimaryWeapon(modified);
@@ -171,6 +174,10 @@ export function CompactUnitCard({
 
   const burst = weapon?.burst?.count && weapon.burst.count > 1 ? weapon.burst.count : 0;
   const attack = Math.round(weapon?.damage ?? 0);
+  // Opponent-side damage reduction (e.g. Ruinous Blinding): show what this unit actually
+  // lands against THAT opponent, in orange, like the main app's UnitCard.
+  const versusDebuff = opponentVersusDebuff ?? 1;
+  const debuffedAttack = versusDebuff < 1 && weapon ? Math.round((weapon.damage || 0) * versusDebuff) : null;
   const baseAttack = Math.round(baseWeapon?.damage ?? 0);
 
   const meleeArmor = Math.round(getArmorValue(modified, "melee"));
@@ -335,7 +342,11 @@ export function CompactUnitCard({
           comparison={cmpAttack}
           tooltip={attackTooltip}
         >
-          {attack}
+          {debuffedAttack !== null ? (
+            <span className="text-orange-400" title={`Reduced to ${Math.round(versusDebuff * 100)}% by the opponent`}>
+              {debuffedAttack}
+            </span>
+          ) : attack}
           {burst > 0 && <span className="text-zinc-400"> × {burst}</span>}
         </Chip>
         {atkSpeed != null && (

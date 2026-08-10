@@ -99,6 +99,12 @@ function slimUnitVariation(v) {
   const o = pick(v, [
     'id', 'baseId', 'age', 'civs', 'classes', 'displayClasses',
     'hitpoints', 'costs', 'icon', 'name', 'armor', 'resistance', 'movement',
+    // Combat fields that today only ever come from patches/units.ts (never from the
+    // upstream JSON) — listed anyway so they survive if upstream ever ships them.
+    // `pick` skips absent keys, so this costs nothing in the current output.
+    'healingRate', 'healingRatePerSecond', 'opponentHealingRateDebuff',
+    'maxHpBonusFraction', 'hpStartFraction', 'dpsVsMeleeASCoeff',
+    'continuousMovement', 'selfDestructs',
   ]);
   o.weapons = (v.weapons || []).map(slimWeapon);
   if (v.secondaryWeapons) o.secondaryWeapons = v.secondaryWeapons.map(slimWeapon);

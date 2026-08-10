@@ -1,6 +1,9 @@
 import { useState, useRef, useCallback, useLayoutEffect } from "react";
 
-export const PANEL_BASE_WIDTH = 260;
+// Wide enough for the loadout drawer's natural width (label column + 4 age columns
+// + the Reset button ≈ 238px, plus the drawer's p-3 padding) — below this the drawer
+// gets a horizontal scrollbar. Must stay in sync with SlotPanel's `w-[...]`.
+export const PANEL_BASE_WIDTH = 288;
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 4;
 const PANEL_WIDTH_FRACTION = 0.22;
