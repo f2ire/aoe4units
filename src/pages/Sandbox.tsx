@@ -461,6 +461,22 @@ const COUNT_SYNCED_COUNTERS: Record<string, { abilityId: string; useN: boolean }
   'atgeirmadr': { abilityId: 'ability-stronger-together', useN: false },
 };
 
+// Fires a GoatCounter event. count.js is loaded `async` from index.html, so on a cold
+// load it may not have defined `window.goatcounter` yet — retry for a few seconds, then
+// give up (an ad blocker means it never arrives, which is fine: the call is best-effort).
+const countEvent = (path: string, title: string) => {
+  let tries = 0;
+  const fire = () => {
+    const count = window.goatcounter?.count;
+    if (count) {
+      count({ path, title, event: true });
+      return;
+    }
+    if (++tries < 20) setTimeout(fire, 250);
+  };
+  fire();
+};
+
 const Sandbox = () => {
   const [isVersus, setIsVersus] = useState<boolean>(false);
   const [multiUnitModelKey, setMultiUnitModelKey] = useState<'aggregated' | 'focusFire' | 'focusFireBatchesMC'>('focusFire');
@@ -581,6 +597,16 @@ const Sandbox = () => {
   });
   const [sharePhase, setSharePhase] = useState<0 | 1 | 2 | 3>(shareRestore ? 1 : 0);
 
+  // Count how many shared links actually get opened. The app never writes the share
+  // params into the address bar, so `shareRestore` being set IS the arrival-from-a-link
+  // signal — a plain `/` pageview is indistinguishable otherwise.
+  const shareOpenCounted = useRef(false);
+  useEffect(() => {
+    if (!shareRestore || shareOpenCounted.current) return;
+    shareOpenCounted.current = true;
+    countEvent('share-link-open', 'Shared matchup opened');
+  }, [shareRestore]);
+
   useEffect(() => {
     if (!shareRestore || sharePhase === 0) return;
     const { slot1: s1, slot2: s2 } = shareRestore;
@@ -647,6 +673,12 @@ const Sandbox = () => {
 
   const [shareCopied, setShareCopied] = useState(false);
 
+  // Both share buttons are counted once per page load: spamming a button would otherwise
+  // inflate the hit count, and these are meant to read as "someone shared this session",
+  // matching `share-link-open` (also once per load) so the two numbers stay comparable.
+  const shareLinkCounted = useRef(false);
+  const shareImageCounted = useRef(false);
+
   const handleShare = async () => {
     const buildSlot = (
       unit: AoE4Unit | null, civ: string, age: number,
@@ -677,6 +709,11 @@ const Sandbox = () => {
       preset: activePreset,
     }, window.location.origin);
 
+    if (!shareLinkCounted.current) {
+      shareLinkCounted.current = true;
+      countEvent('share-link-copy', 'Share link copied');
+    }
+
     try {
       await navigator.clipboard.writeText(url);
       setShareCopied(true);
@@ -696,6 +733,10 @@ const Sandbox = () => {
     const node = document.getElementById('share-image-card');
     if (!node || imageBusy) return;
     setImageBusy(true);
+    if (!shareImageCounted.current) {
+      shareImageCounted.current = true;
+      countEvent('share-image-copy', 'Matchup card copied');
+    }
     try {
       const { toBlob } = await import('html-to-image');
       const blob = await toBlob(node, { pixelRatio: 2, cacheBust: true });
