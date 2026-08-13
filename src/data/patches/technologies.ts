@@ -172,7 +172,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     update: {
       effects: [{
         property: 'rangedAttack',
-        select: { class: [['handcannon']], excludeId: ['militia-handcannoneer'] },
+        select: { class: [['handcannon']], excludeId: ['militia-handcannoneer', 'black-rider'] },
         effect: 'change',
         value: 5,
         type: 'bonus',
@@ -2331,7 +2331,8 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
   {
     id: "knight-poleaxes",
-    reason: 'Available for Mongols. Extended to khaganate-knight.',
+    reason: 'Available for Mongols. Extended to khaganate-knight. Hidden for keshik.',
+    excludedUnits: ['keshik'],
     after: (tech) => ({
       ...tech,
       civs: [...tech.civs, 'mo'],
