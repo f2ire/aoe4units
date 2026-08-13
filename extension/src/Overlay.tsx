@@ -149,7 +149,8 @@ function useDraggableLogo() {
 function Overlay() {
   const slot = useUnitSlot();
   const slot2 = useUnitSlot();
-  const [open, setOpen] = useState(true);
+  // Closed by default: the viewer only sees the swords logo until they click it.
+  const [open, setOpen] = useState(false);
   const [vsOpen, setVsOpen] = useState(false);
   // Versus options — mirror the Sandbox's unit counts / presets / allowKiting / model selector.
   // There is no `atEqualCost` boolean any more: the counts ARE the mode (1v1 = full-fidelity

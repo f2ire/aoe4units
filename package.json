@@ -8,7 +8,7 @@
     "build": "vite-react-ssg build",
     "build:dev": "vite-react-ssg build --mode development",
     "build:ext": "vite build -c vite.extension.config.ts",
-    "zip:ext": "vite build -c vite.extension.config.ts && python3 -c \"import zipfile,pathlib; d=pathlib.Path('dist-extension'); z=zipfile.ZipFile('aoe4-overlay_0.0.3.zip','w',zipfile.ZIP_DEFLATED); [z.write(f,f.relative_to(d).as_posix()) for f in sorted(d.rglob('*')) if f.is_file()]; z.close()\"",
+    "zip:ext": "vite build -c vite.extension.config.ts && python3 -c \"import zipfile,pathlib; d=pathlib.Path('dist-extension'); z=zipfile.ZipFile('aoe4-overlay_0.0.4.zip','w',zipfile.ZIP_DEFLATED); [z.write(f,f.relative_to(d).as_posix()) for f in sorted(d.rglob('*')) if f.is_file()]; z.close()\"",
     "build:ext-data": "node scripts/build-twitch-data.mjs",
     "dev:ext": "vite -c vite.extension.config.ts",
     "preview:ext": "vite preview -c vite.extension.config.ts",
