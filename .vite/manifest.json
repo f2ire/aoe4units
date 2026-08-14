@@ -1,6 +1,6 @@
 {
-  "_data-BKOJdm1z.js": {
-    "file": "assets/data-BKOJdm1z.js",
+  "_data-D49hMOIP.js": {
+    "file": "assets/data-D49hMOIP.js",
     "name": "data"
   },
   "_vendor-DB0Q8XAf.css": {
@@ -16,13 +16,13 @@
     ]
   },
   "index.html": {
-    "file": "assets/app-CYO4xUJK.js",
+    "file": "assets/app-BKvmdyeE.js",
     "name": "app",
     "src": "index.html",
     "isEntry": true,
     "imports": [
       "_vendor-DseYP-fN.js",
-      "_data-BKOJdm1z.js"
+      "_data-D49hMOIP.js"
     ],
     "dynamicImports": [
       "_vendor-DseYP-fN.js"
