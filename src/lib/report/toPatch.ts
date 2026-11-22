@@ -128,9 +128,16 @@ const effectsDump = (u: UpgradeSummary) => u.effects.length
   ? u.effects.map((e, i) => `//   [${i}] ${describeEffect(e)}`).join('\n')
   : '//   (no effects in the app)';
 
+// Tiers of one line ("Sharpening Stones (3/6)") share a base name.
+const lineName = (name: string) => name.replace(/\s*\(\d+\/\d+\)\s*$/, '');
+
+// One id → a patch object; several (tiers reported the same way) → one generator.
+const emit = (ids: string[], make: (idExpr: string) => string) =>
+  ids.length === 1 ? make(lit(ids[0])) : `...(${lit(ids)} as const).map(id => (${make('id').replace(/,\s*$/, '')})),`;
+
 // Rewrites matching effects at both levels. Unit scope keeps the original for every other
 // unit (excludeId) and adds a copy with the new value restricted to the reported unit.
-function effectChangePatch(u: UpgradeSummary, body: UpgradeReport, reason: string): string {
+function effectChangePatch(idExpr: string, body: UpgradeReport, reason: string): string {
   const unit = body.unitId;
   const changes = body.changes.map(c => `[${lit(c.property)}, ${num(c.from)}, ${num(c.to)}]`).join(', ');
   const replace = body.scope === 'unit' && unit
@@ -138,7 +145,7 @@ function effectChangePatch(u: UpgradeSummary, body: UpgradeReport, reason: strin
     : '[{ ...e, value: to }]';
   return [
     '{',
-    `  id: ${lit(u.id)},`,
+    `  id: ${idExpr},`,
     `  reason: ${reason},`,
     '  after: (x) => {',
     `    const changes: [string, number, number][] = [${changes}];`,
@@ -150,18 +157,18 @@ function effectChangePatch(u: UpgradeSummary, body: UpgradeReport, reason: strin
   ].join('\n');
 }
 
-function hidePatch(u: UpgradeSummary, body: UpgradeReport, reason: string): string {
+function hidePatch(u: UpgradeSummary, idExpr: string, body: UpgradeReport, reason: string): string {
   if (body.scope === 'all') {
     return u.kind === 'tech'
-      ? `{\n  id: ${lit(u.id)},\n  reason: ${reason},\n  after: (t) => ({ ...t, effects: [], variations: t.variations.map(v => ({ ...v, effects: [] })) }),\n},`
-      : `{\n  id: ${lit(u.id)},\n  reason: ${reason},\n  after: (a) => ({ ...a, hidden: true }),\n},`;
+      ? `{\n  id: ${idExpr},\n  reason: ${reason},\n  after: (t) => ({ ...t, effects: [], variations: t.variations.map(v => ({ ...v, effects: [] })) }),\n},`
+      : `{\n  id: ${idExpr},\n  reason: ${reason},\n  after: (a) => ({ ...a, hidden: true }),\n},`;
   }
   if (u.kind === 'tech') {
-    return `// If '${u.id}' already has a patch, add the unit to its excludedUnits instead.\n{\n  id: ${lit(u.id)},\n  reason: ${reason},\n  excludedUnits: [${lit(body.unitId ?? '??')}],\n},`;
+    return `{\n  id: ${idExpr},\n  reason: ${reason},\n  excludedUnits: [${lit(body.unitId ?? '??')}],\n},`;
   }
   return [
     '{',
-    `  id: ${lit(u.id)},`,
+    `  id: ${idExpr},`,
     `  reason: ${reason},`,
     '  after: (a) => {',
     `    const ex = (e: TechnologyEffect) => ({ ...e, select: { ...e.select, excludeId: [...(e.select?.excludeId ?? []), ${lit(body.unitId ?? '??')}] } });`,
@@ -171,25 +178,32 @@ function hidePatch(u: UpgradeSummary, body: UpgradeReport, reason: string): stri
   ].join('\n');
 }
 
-function upgradePatch(r: Report, body: UpgradeReport): BuiltReport {
+function upgradePatch(r: Report, group: UpgradeReport[]): BuiltReport {
+  const body = group[0];
   const u = body.upgrade;
+  const ids = group.map(b => b.upgrade.id);
+  const name = ids.length > 1 ? `${lineName(u.name)} (${ids.length} tiers)` : u.name;
   const scopeText = body.scope === 'unit' ? `only for ${body.unitName ?? body.unitId}` : 'for every unit it affects';
   const kindText = u.kind === 'tech' ? 'Tech' : 'Ability';
   const what = body.hide
     ? (body.scope === 'unit' ? `should not apply to ${body.unitName ?? body.unitId}` : 'should not exist')
     : body.changes.length ? `${body.changes.length} wrong value${body.changes.length > 1 ? 's' : ''}` : 'note';
-  const title = `${kindText} — ${u.name}: ${what}`;
+  const title = `${kindText} — ${name}: ${what}`;
   const summary = [
-    `\`${u.id}\` · ${scopeText}`,
+    `${ids.map(id => `\`${id}\``).join(', ')} · ${scopeText}`,
     ...body.changes.map(c => `• ${effectText(u.effects[c.index] ?? { property: c.property, effect: 'change', value: c.from }, c.from)} → **${effectValueText(u.effects[c.index] ?? { property: c.property, effect: 'change', value: c.to }, c.to)}**`),
     ...(body.note ? [`> ${body.note}`] : []),
   ];
   const reasonText = body.hide ? what : body.changes.map(c => `${c.property} ${num(c.from)} → ${num(c.to)}`).join(', ') || 'see note';
   const reason = lit(`Community report ${r.id}: ${reasonText} (${scopeText}).${r.source ? ` Source: ${r.source}` : ''}`);
-  const head = `// → ${fileFor(u)}\n// Current effects in the app (${u.level}-level):\n${effectsDump(u)}`;
+  const head = [
+    `// → ${fileFor(u)} — if ${ids.length > 1 ? 'these ids already have a patch' : `'${u.id}' already has a patch`}, merge into it.`,
+    `// Effects in the app${ids.length > 1 ? ' (each tier)' : ''}:`,
+    effectsDump(u),
+  ].join('\n');
   const note = body.note ? `\n// Reporter note:\n${body.note.split('\n').map(l => `//   ${l}`).join('\n')}` : '';
-  const code = body.hide ? hidePatch(u, body, reason)
-    : body.changes.length ? effectChangePatch(u, body, reason)
+  const code = body.hide ? emit(ids, x => hidePatch(u, x, body, reason))
+    : body.changes.length ? emit(ids, x => effectChangePatch(x, body, reason))
       : '// TODO — no structured change, see the note.';
   return { title, summary, patch: `${head}${note}\n${code}` };
 }
@@ -298,15 +312,40 @@ function missingPatch(r: Report, body: MissingReport): BuiltReport {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-function buildOne(r: Report, b: ReportBody): BuiltReport {
+function buildOne(r: Report, group: ReportBody[]): BuiltReport {
+  const b = group[0];
   return b.kind === 'value' ? valuePatch(r, b)
-    : b.kind === 'upgrade' ? upgradePatch(r, b)
+    : b.kind === 'upgrade' ? upgradePatch(r, group as UpgradeReport[])
       : b.kind === 'icon' ? iconPatch(r, b)
         : missingPatch(r, b);
 }
 
+// Tiers of one tech line corrected identically (same scope / hide / changes / note) become one section.
+function groupCorrections(list: ReportBody[]): ReportBody[][] {
+  const groups = new Map<string, ReportBody[]>();
+  list.forEach((b, i) => {
+    const key = b.kind === 'upgrade'
+      ? JSON.stringify([b.upgrade.kind, lineName(b.upgrade.name), b.scope, b.unitId, b.hide, b.note, b.changes.map(c => [c.property, c.from, c.to])])
+      : `#${i}`;
+    groups.set(key, [...(groups.get(key) ?? []), b]);
+  });
+  return [...groups.values()];
+}
+
+// Raw report without the bulk: upgrades reduced to ids, card context to what reproduces it.
+function slimReport(r: Report) {
+  const ctx = r.context;
+  return {
+    id: r.id, createdAt: r.createdAt, appVersion: r.appVersion, reporter: r.reporter, source: r.source,
+    unit: ctx && { civ: ctx.civ, unitId: ctx.unitId, age: ctx.age, link: ctx.link, activeUpgrades: ctx.upgrades.filter(u => u.active).map(u => u.id) },
+    corrections: r.corrections.map(c => (c.kind === 'upgrade'
+      ? { ...c, upgrade: { kind: c.upgrade.kind, id: c.upgrade.id, name: c.upgrade.name } }
+      : c)),
+  };
+}
+
 export function buildReport(r: Report): BuiltReport {
-  const pieces = r.corrections.map(b => buildOne(r, b));
+  const pieces = groupCorrections(r.corrections).map(g => buildOne(r, g));
   const ctx = r.context;
   const title = pieces.length === 1
     ? pieces[0].title
@@ -326,6 +365,6 @@ export function buildReport(r: Report): BuiltReport {
     .map((p, i) => (pieces.length > 1 ? `// ━━ ${i + 1}/${pieces.length} — ${p.title} ━━\n${p.patch}` : p.patch))
     .join('\n\n');
   // The raw report is kept so the patch can be regenerated / double-checked; "*/" would close the comment.
-  const json = JSON.stringify(r, null, 2).replace(/\*\//g, '*\\/');
-  return { title, summary, patch: `${header}\n\n${body}\n\n/* REPORT JSON\n${json}\n*/\n` };
+  const json = JSON.stringify(slimReport(r)).replace(/\*\//g, '*\\/');
+  return { title, summary, patch: `${header}\n\n${body}\n\n/* REPORT JSON (raw input, for re-checking)\n${json}\n*/\n` };
 }
