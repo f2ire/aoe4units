@@ -6,6 +6,7 @@ import { TechnologySelector } from "@/components/TechnologySelector";
 import { AbilitySelector } from "@/components/AbilitySelector";
 import { useUnitSlot } from "@/hooks/useUnitSlot";
 import { buildModifiedVariation } from "@/lib/buildVariation";
+import { buildReportContext } from "@/lib/report/context";
 import { getUnitById, getAvailableAges, getUnitGroup } from "@/data/unified-units";
 import { getCivilizationName } from "@/data/civilizations";
 
@@ -18,6 +19,8 @@ function UnitDetailView({ civ, id }: { civ?: string; id?: string }) {
   // Hook must run unconditionally; seeded with the unit + civ so SSG renders the
   // real, civ-specific stats and technologies.
   const slot = useUnitSlot(unit ?? null, civ);
+  // SSG has no window — fall back to the production origin for the "reopen in Sandbox" link.
+  const reportContext = buildReportContext(slot, typeof window !== "undefined" ? window.location.origin : "https://aoe4units.com");
 
   if (!unit || !civValid) {
     return (
@@ -140,6 +143,7 @@ function UnitDetailView({ civ, id }: { civ?: string; id?: string }) {
           <div className="min-w-0 w-full max-w-sm">
             <UnitCard
               className="w-full"
+              reportContext={reportContext}
               variation={isVariation ? (modified as any) : undefined} // eslint-disable-line @typescript-eslint/no-explicit-any
               unit={isVariation ? slot.unit! : (modified as any)} // eslint-disable-line @typescript-eslint/no-explicit-any
               side="left"

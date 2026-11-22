@@ -1,0 +1,5 @@
+# Copy to .dev.vars for `npx wrangler dev` (git-ignored).
+# Cloudflare's documented Turnstile test secret: always passes, pairs with the test site key the app uses in dev.
+TURNSTILE_SECRET=1x0000000000000000000000000000000AA
+# A webhook of a private test channel.
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/XXX/YYY

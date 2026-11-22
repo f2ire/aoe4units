@@ -1,5 +1,7 @@
-import React, { useState, useRef, useEffect } from "react";
-import { Github, ChevronDown, Coffee, Share2, Check, Image as ImageIcon } from "lucide-react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { Github, ChevronDown, Coffee, Share2, Check, Image as ImageIcon, Flag } from "lucide-react";
+import { ReportDialog } from "@/components/report/ReportDialog";
+import { buildReportContext } from "@/lib/report/context";
 import { toast } from "sonner";
 import { aoe4Units, AoE4Unit, getAvailableAges, getPrimaryWeapon, getTotalCost } from "@/data/unified-units";
 import type { UnifiedVariation } from "@/data/unified-units";
@@ -24,7 +26,7 @@ import { unitNameMatchScore, cn } from "@/lib/utils";
 
 
 // Game patch version currently modeled. Update this single line each balance patch.
-const PATCH_VERSION = "17.0.12260";
+import { PATCH_VERSION } from "@/lib/patchVersion";
 
 const categoryNames: Record<string, string> = {
   jeanne: "Jeanne d'Arc",
@@ -492,6 +494,18 @@ const Sandbox = () => {
 
   const civ1 = useUnitSlot();
   const civ2 = useUnitSlot();
+
+  // Community report context per slot (base vs shown stats + resolved upgrades) for the card "Report" button.
+  const reportContext1 = useMemo(
+    () => buildReportContext(civ1, window.location.origin),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [civ1.unit, civ1.selectedCiv, civ1.selectedAge, civ1.variation, civ1.modifiedStats, civ1.techs, civ1.abilities, civ1.activeTechnologies, civ1.activeAbilities, civ1.abilityCounters],
+  );
+  const reportContext2 = useMemo(
+    () => buildReportContext(civ2, window.location.origin),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [civ2.unit, civ2.selectedCiv, civ2.selectedAge, civ2.variation, civ2.modifiedStats, civ2.techs, civ2.abilities, civ2.activeTechnologies, civ2.activeAbilities, civ2.abilityCounters],
+  );
 
   const {
     unit: unit1, setUnit: setUnit1,
@@ -1496,6 +1510,7 @@ const Sandbox = () => {
   const comparativeCard1 = unit1 ? (
     <UnitCard
       className="w-full"
+      reportContext={reportContext1}
       variation={modifiedVariation1!}
       unit={modifiedUnit1 || unit1}
       side="left"
@@ -1531,6 +1546,7 @@ const Sandbox = () => {
   const comparativeCard2 = unit2 ? (
     <UnitCard
       className="w-full"
+      reportContext={reportContext2}
       variation={modifiedVariation2!}
       unit={modifiedUnit2 || unit2}
       side="right"
@@ -2255,6 +2271,7 @@ const Sandbox = () => {
               const versusCard1 = (
                 <UnitCard
                   className="w-full"
+                  reportContext={reportContext1}
                   variation={modifiedVariation1!}
                   unit={modifiedUnit1 || unit1}
                   side="left"
@@ -2272,6 +2289,7 @@ const Sandbox = () => {
               const versusCard2 = (
                 <UnitCard
                   className="w-full"
+                  reportContext={reportContext2}
                   variation={modifiedVariation2!}
                   unit={modifiedUnit2 || unit2}
                   side="right"
@@ -2460,6 +2478,17 @@ const Sandbox = () => {
               <Github className="h-4 w-4" />
               Bug report
             </a>
+            <ReportDialog
+              trigger={
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground hover:border-foreground/40"
+                >
+                  <Flag className="h-4 w-4" />
+                  Suggest a missing unit / tech
+                </button>
+              }
+            />
             <a
               href="https://ko-fi.com/aoe4units"
               target="_blank"

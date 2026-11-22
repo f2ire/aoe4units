@@ -1,0 +1,20 @@
+name = "aoe4units-report"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+
+[vars]
+ALLOWED_ORIGINS = "https://aoe4units.com,https://www.aoe4units.com,http://localhost:8080"
+
+# Max 3 reports per IP per 60 s (Workers Rate Limiting binding; period must be 10 or 60).
+[[ratelimits]]
+name = "REPORT_LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 3
+  period = 60
+
+# Secrets (never in this file):
+#   npx wrangler secret put DISCORD_WEBHOOK_URL
+#   npx wrangler secret put TURNSTILE_SECRET
+# Local `wrangler dev`: copy .dev.vars.example to .dev.vars

@@ -33,3 +33,7 @@ PROGRAMMER_GUIDE.md
 TODO.txt
 .claude/
 aoe4-overlay*.zip
+
+# Cloudflare Worker local secrets
+.dev.vars
+.wrangler/

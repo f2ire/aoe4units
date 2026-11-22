@@ -4,6 +4,9 @@ import type { UnifiedVariation } from '@/data/unified-units';
 import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card';
 import { cn, formatClassNames } from '@/lib/utils';
 import { useState } from 'react';
+import { Flag } from 'lucide-react';
+import { ReportDialog } from '@/components/report/ReportDialog';
+import type { ReportContext } from '@/lib/report/types';
 
 interface VersusMetricsProps {
   dps: number | null;
@@ -84,6 +87,7 @@ interface UnitCardProps {
   opponentVersusDebuff?: number; // opponent's versusOpponentDamageDebuff — multiplies this unit's damage output
   opponentBonusDamageReduction?: number; // opponent's bonusDamageReduction — reduces this unit's effective bonus damage
   opponentClasses?: string[]; // defender's classes — filters which bonus damage entries show the reduction
+  reportContext?: ReportContext; // enables the community "Report" button (hidden in the share image)
 }
 
 // Returns true if the modifier's target classes match any of the opponent's classes
@@ -242,6 +246,7 @@ export const UnitCard = ({
   opponentVersusDebuff,
   opponentBonusDamageReduction,
   opponentClasses,
+  reportContext,
   side,
   className
 }: UnitCardProps) => {
@@ -352,6 +357,23 @@ export const UnitCard = ({
             {versusMetrics.isDraw && <span className="rounded bg-blue-500 px-2 py-1 text-xs font-semibold text-white shadow">Draw</span>}
           </div>
         </>
+      )}
+      {reportContext && (
+        <div className="absolute top-2 left-2 z-30" data-hide-in-share>
+          <ReportDialog
+            context={reportContext}
+            trigger={
+              <button
+                type="button"
+                onClick={(e) => e.stopPropagation()}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:text-xs"
+                title="Report wrong data for this unit"
+              >
+                <Flag className="h-3 w-3" /> Report
+              </button>
+            }
+          />
+        </div>
       )}
       <div className="relative z-20 flex flex-col gap-2.5 sm:gap-4">
         {/* Header */}
