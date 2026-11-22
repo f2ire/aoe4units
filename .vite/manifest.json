@@ -7,8 +7,8 @@
     "file": "assets/vendor-DB0Q8XAf.css",
     "src": "_vendor-DB0Q8XAf.css"
   },
-  "_vendor-DseYP-fN.js": {
-    "file": "assets/vendor-DseYP-fN.js",
+  "_vendor-O7q-LHhn.js": {
+    "file": "assets/vendor-O7q-LHhn.js",
     "name": "vendor",
     "isDynamicEntry": true,
     "css": [
@@ -16,19 +16,19 @@
     ]
   },
   "index.html": {
-    "file": "assets/app-BWuztl8U.js",
+    "file": "assets/app-J1zeIeOd.js",
     "name": "app",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "_vendor-DseYP-fN.js",
+      "_vendor-O7q-LHhn.js",
       "_data-COfjpZkZ.js"
     ],
     "dynamicImports": [
-      "_vendor-DseYP-fN.js"
+      "_vendor-O7q-LHhn.js"
     ],
     "css": [
-      "assets/app-DHhylonN.css"
+      "assets/app-COQX0Yge.css"
     ]
   }
 }
