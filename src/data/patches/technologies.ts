@@ -1885,7 +1885,8 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   ...(['sharpening-stones-tier1', 'sharpening-stones-tier2', 'sharpening-stones-tier3',
     'sharpening-stones-tier4', 'sharpening-stones-tier5', 'sharpening-stones-tier6'] as const).map((id, i) => ({
       id,
-      reason: `Raw effects empty. Tier ${i + 1}/6: +1 meeleAttack.${i === 0 ? ' counterMax on tier1 signals counter widget rendering.' : ''}`,
+      reason: `Raw effects empty. Tier ${i + 1}/6: +1 meeleAttack.${i === 0 ? ' counterMax on tier1 signals counter widget rendering.' : ''} Handcannoneer excluded: arrows and bolts only, not gunpowder (community report ieeo7z).`,
+      excludedUnits: ['handcannoneer'],
       update: {
         displayClasses: [`Sharpening Stones ${i + 1}/6`],
         counterMax: i === 0 ? 6 : undefined,
