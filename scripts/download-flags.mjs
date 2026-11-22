@@ -29,6 +29,8 @@ const FLAGS = {
   zx: 'https://static.aoe4world.com/vite/assets/zhuxi-f21662c7.png',
   sen: 'https://static.aoe4world.com/vite/assets/sengoku-1cf1ebfb.png',
   tug: 'https://static.aoe4world.com/vite/assets/tughlaq-fe1414db.png',
+  sco: 'https://static.aoe4world.com/vite/assets/sco-599ed5e2.png',
+  vik: 'https://static.aoe4world.com/vite/assets/vik-0dfbc686.png',
 };
 
 const outputDir = path.join(__dirname, '..', 'public', 'flags');

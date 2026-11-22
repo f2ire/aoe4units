@@ -24,7 +24,7 @@ import { unitNameMatchScore, cn } from "@/lib/utils";
 
 
 // Game patch version currently modeled. Update this single line each balance patch.
-const PATCH_VERSION = "16.2.10604";
+const PATCH_VERSION = "17.0.12260";
 
 const categoryNames: Record<string, string> = {
   jeanne: "Jeanne d'Arc",

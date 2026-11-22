@@ -273,7 +273,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: 'steeled-arrow',
     reason: "Gunpowder units don't shot arrow arrows.",
-    excludedUnits: ['sultans-elite-tower-elephant', 'black-rider', 'jeanne-darc-markswoman'],
+    excludedUnits: ['sultans-elite-tower-elephant', 'black-rider', 'jeanne-darc-markswoman', 'border-reiver'],
     after: (tech: any) => ({
       ...tech,
       effects: [...(tech.effects || []), { property: 'rangedAttack', select: { id: ['earls-guard', 'donso', 'naginata-samurai'] }, effect: 'change', value: 1, type: 'passive' }],
@@ -282,7 +282,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: 'balanced-projectiles',
     reason: "Gunpowder units don't shot arrow arrows.",
-    excludedUnits: ['sultans-elite-tower-elephant', 'black-rider', 'jeanne-darc-markswoman'],
+    excludedUnits: ['sultans-elite-tower-elephant', 'black-rider', 'jeanne-darc-markswoman', 'border-reiver'],
     after: (tech: any) => ({
       ...tech,
       effects: [...(tech.effects || []), { property: 'rangedAttack', select: { id: ['earls-guard', 'donso', 'naginata-samurai'] }, effect: 'change', value: 1, type: 'passive' }],
@@ -291,7 +291,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   {
     id: 'platecutter-point',
     reason: "Gunpowder units don't shot arrow arrows.",
-    excludedUnits: ['sultans-elite-tower-elephant', 'black-rider', 'jeanne-darc-markswoman'],
+    excludedUnits: ['sultans-elite-tower-elephant', 'black-rider', 'jeanne-darc-markswoman', 'border-reiver'],
     after: (tech: any) => ({
       ...tech,
       effects: [...(tech.effects || []), { property: 'rangedAttack', select: { id: ['earls-guard', 'donso', 'naginata-samurai'] }, effect: 'change', value: 1, type: 'passive' }],
@@ -1020,12 +1020,12 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
 
   {
     id: 'khan-and-torguuds',
-    reason: 'Raw hitpoints effect has no select (applies to all). Patched to target batu-khan and torguud. Cost reduction (-20%) missing from raw data — added.',
+    reason: 'Raw hitpoints effect has no select (applies to all). Patched to target batu-khan and torguud. Cost reduction missing from raw data — added. Patch 17.0: +30 → +25 HP, −20% → −15% cost.',
     update: {
       unique: true,
       effects: [
-        { property: 'hitpoints', select: { id: ['batu-khan', 'torguud'] }, effect: 'change', value: 30, type: 'passive' },
-        { property: 'costReduction', select: { id: ['batu-khan', 'torguud'] }, effect: 'multiply', value: 0.8, type: 'passive' },
+        { property: 'hitpoints', select: { id: ['batu-khan', 'torguud'] }, effect: 'change', value: 25, type: 'passive' },
+        { property: 'costReduction', select: { id: ['batu-khan', 'torguud'] }, effect: 'multiply', value: 0.85, type: 'passive' },
       ]
     }
   },
@@ -2400,7 +2400,7 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
   },
 
   {
-    id: 'upgrade-miltia-3',
+    id: 'upgrade-militia-3',
     reason: 'No UI value, age up covered automatically.',
     after: (tech) => ({
       ...tech,
@@ -2749,7 +2749,226 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     }),
   },
 
+  //_________
+  //
+  // VIKINGS  (patch 17.0 — values from game files via jeandogaming explorer + aoe4world descriptions)
+  //
+  //_________
+
+  // Vikings have no Blacksmith: the Longhouse Smithy / Pasture & Loom attachments research these
+  // 3-tier lines (+1 per tier, cumulative). Raw effects are empty → Vikings had 0 forge bonus.
+  // displayClasses "X n/3" chain the tiers (tier 3 auto-includes 1 and 2).
+  ...([
+    ['forge-welding', 1], ['bone-ash-steel', 2], ['crucible-steel', 3],
+  ] as const).map(([id, tier]) => ({
+    id,
+    reason: `Raw effects empty. Viking Smithy damage tier ${tier}/3: +1 damage to infantry, cavalry, villagers and Longships (game files: smithy_damage_${tier}_vik).`,
+    update: { displayClasses: [`Viking Smithy Damage Technology ${tier}/3`] },
+    after: replaceTechEffects([
+      { property: 'meleeAttack', select: { class: [['infantry'], ['cavalry'], ['worker']] }, effect: 'change', value: 1, type: 'passive' },
+      { property: 'rangedAttack', select: { class: [['infantry'], ['cavalry'], ['worker']], id: ['longship'] }, effect: 'change', value: 1, type: 'passive' },
+    ]),
+  })),
+  ...([
+    ['heavy-tunics', 1], ['mail-shirts', 2], ['lamellar-plating', 3],
+  ] as const).map(([id, tier]) => ({
+    id,
+    reason: `Raw effects empty. Viking Pasture & Loom armor tier ${tier}/3: +1 melee and +1 ranged armor to all non-siege (game files: loom_armor_${tier}_vik).`,
+    update: { displayClasses: [`Viking Loom Armor Technology ${tier}/3`] },
+    after: replaceTechEffects([
+      { property: 'meleeArmor', select: { class: [['infantry'], ['cavalry'], ['worker'], ['monk']] }, effect: 'change', value: 1, type: 'passive' },
+      { property: 'rangedArmor', select: { class: [['infantry'], ['cavalry'], ['worker'], ['monk']] }, effect: 'change', value: 1, type: 'passive' },
+    ]),
+  })),
+
+  {
+    id: 'leikr-training',
+    reason: 'Raw effects have no select (would hit every unit, incl. ranged/siege). Melee infantry: +15% damage, +20% HP. +15% also scales bonus damage, same convention as elite-army-tactics. The +0.3 tile weapon range is not modelled (no effect on melee contact).',
+    after: replaceTechEffects([
+      { property: 'meleeAttack', select: { class: [['melee', 'infantry']] }, effect: 'multiply', value: 1.15, type: 'passive' },
+      { property: 'bonusDamageMultiplier', select: { class: [['melee', 'infantry']] }, effect: 'multiply', value: 1.15, type: 'passive' },
+      { property: 'hitpoints', select: { class: [['melee', 'infantry']] }, effect: 'multiply', value: 1.2, type: 'passive' },
+    ]),
+  },
+
+  {
+    id: 'turnshoes',
+    reason: 'Raw effects empty. Melee infantry: +15% move speed, +30% charge damage. Infantry charge strike = same damage as the base weapon (game files), so +30% = chargeMultiplier 0.3 (first-hit bonus, requires charge-attack).',
+    after: replaceTechEffects([
+      { property: 'moveSpeed', select: { class: [['melee', 'infantry']] }, effect: 'multiply', value: 1.15, type: 'passive' },
+      { property: 'chargeMultiplier', select: { class: [['melee', 'infantry']] }, effect: 'change', value: 0.3, type: 'passive' },
+    ]),
+  },
+
+  {
+    id: 'ulfberht-swords',
+    reason: 'Raw effects empty. Hirdman +5 damage (Sword 16 → Ulfberht Sword 21 in unit data).',
+    after: replaceTechEffects([
+      { property: 'meleeAttack', select: { id: ['hirdman'] }, effect: 'change', value: 5, type: 'passive' },
+    ]),
+  },
+
+  {
+    id: 'hamrammr',
+    reason: 'Raw effects empty. Only meaningful with Berserkergang: the +50% healing is applied by a techAbilityInteraction (patches/abilities.ts). The 25% → 50% trigger threshold is not modelled (Berserkergang is a manual toggle). Synthetic healingRatePerSecond:0 makes the tech visible for the Berserker.',
+    after: replaceTechEffects([
+      { property: 'healingRatePerSecond', select: { id: ['berserker'] }, effect: 'change', value: 0, type: 'passive' },
+    ]),
+  },
+
+  {
+    id: 'bjorn-saga',
+    reason: 'Raw effects empty. Saga reward: all infantry +10% HP. The +2 tile charge range is not modelled.',
+    after: replaceTechEffects([
+      { property: 'hitpoints', select: { class: [['infantry']] }, effect: 'multiply', value: 1.1, type: 'passive' },
+    ]),
+  },
+
+  {
+    id: 'extra-oars',
+    reason: 'Raw effects have no select. Longship +1 weapon damage (hold size +6 not modelled).',
+    after: replaceTechEffects([
+      { property: 'rangedAttack', select: { id: ['longship'] }, effect: 'change', value: 1, type: 'passive' },
+    ]),
+  },
+
+  {
+    id: 'snaerisspjot',
+    reason: 'Raw effects empty. Drakkar throwing axes → throwing spears: +2 damage, +1 range (Throwing Axe 6 / 5.25 → Snaerisspjot 8 / 6.25 in unit data).',
+    after: replaceTechEffects([
+      { property: 'meleeAttack', select: { id: ['drakkar'] }, effect: 'change', value: 2, type: 'passive' },
+      { property: 'maxRange', select: { id: ['drakkar'] }, effect: 'change', value: 1, type: 'passive' },
+    ]),
+  },
+
+  {
+    id: 'reinforced-keel',
+    reason: 'Raw effects have no select and HP ×1.15 (description and game files: +25%). Replaces Armored Hull for Vikings: military ships +25% HP, +1 ranged armor.',
+    after: replaceTechEffects([
+      { property: 'hitpoints', select: { class: [['naval_military']] }, effect: 'multiply', value: 1.25, type: 'passive' },
+      { property: 'rangedArmor', select: { class: [['naval_military']] }, effect: 'change', value: 1, type: 'passive' },
+    ]),
+  },
+
+  {
+    id: 'ship-barding',
+    reason: 'Raw effects have no select. Replaces Shipwrights for Vikings: military ships +25% HP, +1 ranged armor.',
+    after: replaceTechEffects([
+      { property: 'hitpoints', select: { class: [['naval_military']] }, effect: 'multiply', value: 1.25, type: 'passive' },
+      { property: 'rangedArmor', select: { class: [['naval_military']] }, effect: 'change', value: 1, type: 'passive' },
+    ]),
+  },
+
+  {
+    id: 'shipwrights',
+    reason: 'Vikings get Ship Barding instead (same slot, +25% instead of +20%); raw data still lists vik → both could stack.',
+    after: (tech) => ({
+      ...tech,
+      civs: tech.civs.filter(c => c !== 'vik'),
+      variations: tech.variations.filter(v => !(v.civs.length === 1 && v.civs[0] === 'vik')).map(v => ({ ...v, civs: v.civs.filter(c => c !== 'vik') })),
+    }),
+  },
+
+  {
+    id: 'sunstones',
+    reason: 'Raw effects empty. Ships +15% move speed (+50% sight not modelled).',
+    after: replaceTechEffects([
+      { property: 'moveSpeed', select: { class: [['naval_military']] }, effect: 'multiply', value: 1.15, type: 'passive' },
+    ]),
+  },
+
+  //_________
+  //
+  // SCOTS  (patch 17.0)
+  //
+  //_________
+
+  {
+    id: 'clan-traditions',
+    reason: 'Raw effects have no select (would hit every unit incl. ranged/siege). Highland tier 2: melee infantry +15% damage, same convention as elite-army-tactics (also scales bonus damage). Game files: highland_tier2_sco all_damage ×1.15 @melee_infantry.',
+    after: replaceTechEffects([
+      { property: 'meleeAttack', select: { class: [['melee', 'infantry']] }, effect: 'multiply', value: 1.15, type: 'passive' },
+      { property: 'bonusDamageMultiplier', select: { class: [['melee', 'infantry']] }, effect: 'multiply', value: 1.15, type: 'passive' },
+    ]),
+  },
+
+  {
+    id: 'lochaber-axes',
+    reason: 'Raw meleeAttack +3 has no select and the +4 anti-cavalry damage is missing. Men-at-Arms: +3 damage, +4 vs cavalry. Brace vs cavalry charges not modelled.',
+    after: replaceTechEffects([
+      { property: 'meleeAttack', select: { id: ['man-at-arms'] }, effect: 'change', value: 3, type: 'passive' },
+      { property: 'meleeAttack', select: { id: ['man-at-arms'] }, effect: 'change', value: 4, type: 'bonus', target: { class: [['cavalry']] } },
+    ]),
+  },
+
+  {
+    id: 'basket-hilted-broadswords',
+    reason: 'Raw meleeArmor +2 has no select and the +25% attack speed is missing. Cateran: +25% attack speed (cycle ×1/1.25), +2 melee armor.',
+    after: replaceTechEffects([
+      { property: 'attackSpeed', select: { id: ['cateran'] }, effect: 'multiply', value: 1 / 1.25, type: 'passive' },
+      { property: 'meleeArmor', select: { id: ['cateran'] }, effect: 'change', value: 2, type: 'passive' },
+    ]),
+  },
+
+  {
+    id: 'feuds-aside',
+    reason: 'Raw effects empty. Highland tier 4: Tacksman, Border Reiver and gunpowder siege +20% attack speed (cycle ×1/1.2).',
+    after: replaceTechEffects([
+      { property: 'attackSpeed', select: { id: ['tacksman', 'border-reiver'], class: [['gunpowder', 'siege']] }, effect: 'multiply', value: 1 / 1.2, type: 'passive' },
+    ]),
+  },
+
+  {
+    id: 'snaphance-locks',
+    reason: 'Raw effects empty. Tacksman and Border Reiver +5 damage vs melee infantry (post-shot move-speed burst not modelled).',
+    after: replaceTechEffects([
+      { property: 'rangedAttack', select: { id: ['tacksman', 'border-reiver'] }, effect: 'change', value: 5, type: 'bonus', target: { class: [['melee', 'infantry']] } },
+    ]),
+  },
+
+  {
+    id: 'lions-duty',
+    reason: 'Raw effects empty. Lowland tier 1: infantry +1 melee and +1 ranged armor when near Landmarks, Keeps, Tower Houses and Stone Wall Towers — toggle it when the fight happens in that range.',
+    after: replaceTechEffects([
+      { property: 'meleeArmor', select: { class: [['infantry']] }, effect: 'change', value: 1, type: 'passive' },
+      { property: 'rangedArmor', select: { class: [['infantry']] }, effect: 'change', value: 1, type: 'passive' },
+    ]),
+  },
+
+  {
+    id: 'caterans-trail',
+    reason: 'Raw effects empty. Highland tier 1: infantry +15% move speed (Cateran aura). The 1 HP/s regen only applies out of combat in Stealth Forests — not modelled.',
+    after: replaceTechEffects([
+      { property: 'moveSpeed', select: { class: [['infantry']] }, effect: 'multiply', value: 1.15, type: 'passive' },
+    ]),
+  },
+
+  {
+    id: 'birlinn-crews',
+    reason: 'Raw effects empty. Galleys +15% move speed, +20% attack speed (cycle ×1/1.2).',
+    after: replaceTechEffects([
+      { property: 'moveSpeed', select: { id: ['galley'] }, effect: 'multiply', value: 1.15, type: 'passive' },
+      { property: 'attackSpeed', select: { id: ['galley'] }, effect: 'multiply', value: 1 / 1.2, type: 'passive' },
+    ]),
+  },
+
+  {
+    id: 'we-stand-alone',
+    reason: 'Building/emplacement tech — raw effects have no select and would multiply every unit HP ×1.3 and damage ×1.667. Cleared.',
+    after: replaceTechEffects([]),
+  },
+
 ];
+
+// Replaces a tech's effects at top level and clears variation-level effects
+// (top-level wins in getTechnologyVariation; clearing avoids stale unselected raw effects).
+function replaceTechEffects(effects: TechnologyEffect[]) {
+  return (tech: Technology): Technology => ({
+    ...tech,
+    effects,
+    variations: tech.variations.map(v => ({ ...v, effects: [] })),
+  });
+}
 
 //__________________
 //

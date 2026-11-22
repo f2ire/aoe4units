@@ -1,6 +1,6 @@
 import { TechnologyPatch, deepMerge } from "./types";
 import { Ability, AbilityVariation } from "../unified-abilities";
-import type { UnitStats } from "../unified-technologies";
+import type { UnitStats, TechnologyEffect } from "../unified-technologies";
 
 
 
@@ -47,6 +47,14 @@ export const techAbilityInteractions: TechAbilityInteraction[] = [
     requiredAbility: "ability-royal-knight-charge-damage",
     unitId: "jeanne-darc-knight",
     apply: (stats) => ({ ...stats, meleeAttack: stats.meleeAttack + 7 }),
+  },
+  {
+    // Hamrammr: Berserkergang heals +50% more (3.5 → 5.25 HP/s). Multiplicative so it scales only the
+    // rage regen — in modifiedStatsNoTimer the 10 s rage effect is stripped, 0 × 1.5 stays 0.
+    requiredTech: 'hamrammr',
+    requiredAbility: 'ability-berserkergang',
+    unitId: 'berserker',
+    apply: (stats) => ({ ...stats, healingRatePerSecond: (stats.healingRatePerSecond ?? 0) * 1.5 }),
   },
   {
     requiredTech: 'enlistment-incentives',
@@ -712,7 +720,7 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
 
   {
     id: "ability-inspired-warriors",
-    reason: "Change active always to manual. Duration 60s. Added civ 'od'.",
+    reason: "Change active always to manual. Duration 90s (patch 17.0, was 60s). Added civ 'od'.",
     after: (ability: Ability) => ({
       ...ability,
       civs: [...ability.civs, 'od'],
@@ -720,11 +728,11 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         ...v,
         civs: [...(v.civs || []), 'od'],
         effects: [
-          { property: 'meleeArmor', select: { class: [['infantry'], ['cavalry', 'melee'], ['cavalry', 'ranged'], ['siege']] }, effect: 'change', value: 1, type: 'ability', duration: 60 },
-          { property: 'rangedArmor', select: { class: [['infantry'], ['cavalry', 'melee'], ['cavalry', 'ranged'], ['siege']] }, effect: 'change', value: 1, type: 'ability', duration: 60 },
-          { property: 'meleeAttack', select: { id: ['melee'] }, effect: 'multiply', value: 1.1, type: 'ability', duration: 60 },
-          { property: 'rangedAttack', select: { id: ['ranged', 'siege'] }, effect: 'multiply', value: 1.1, type: 'ability', duration: 60 },
-          { property: 'siegeAttack', select: { id: ['siege'] }, effect: 'multiply', value: 1, type: 'ability', duration: 60 }
+          { property: 'meleeArmor', select: { class: [['infantry'], ['cavalry', 'melee'], ['cavalry', 'ranged'], ['siege']] }, effect: 'change', value: 1, type: 'ability', duration: 90 },
+          { property: 'rangedArmor', select: { class: [['infantry'], ['cavalry', 'melee'], ['cavalry', 'ranged'], ['siege']] }, effect: 'change', value: 1, type: 'ability', duration: 90 },
+          { property: 'meleeAttack', select: { id: ['melee'] }, effect: 'multiply', value: 1.1, type: 'ability', duration: 90 },
+          { property: 'rangedAttack', select: { id: ['ranged', 'siege'] }, effect: 'multiply', value: 1.1, type: 'ability', duration: 90 },
+          { property: 'siegeAttack', select: { id: ['siege'] }, effect: 'multiply', value: 1, type: 'ability', duration: 90 }
         ],
         active: 'manual'
       }))
@@ -1630,6 +1638,51 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         ]
       }))
     })
+  },
+
+  //_________
+  //
+  // VIKINGS / SCOTS  (patch 17.0)
+  //
+  //_________
+
+  {
+    id: 'ability-hamingja',
+    reason: 'Raw effects empty. Sacred Grove aura: nearby units +1 melee and +1 ranged armor (building_sacred_grove_vik). Raw active:"always" → manual, it depends on fighting near a Grove.',
+    after: (ability: Ability) => ({
+      ...ability,
+      effects: [],
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        active: 'manual',
+        effects: [
+          { property: 'meleeArmor', select: { class: [['land_military']] }, effect: 'change', value: 1, type: 'ability' },
+          { property: 'rangedArmor', select: { class: [['land_military']] }, effect: 'change', value: 1, type: 'ability' },
+        ],
+      })),
+    }),
+  },
+
+  {
+    id: 'ability-living-off-the-land',
+    reason: 'Out-of-combat heal (consumes a Food source) — no combat effect. Raw effect is property "unknown".',
+    after: (ability) => ({ ...ability, hidden: true }),
+  },
+
+  {
+    id: 'ability-kings-blessing',
+    reason: 'Raw attackSpeed "change 15" adds 15 s to the cycle. Description: units from Barracks +15% attack speed (cycle ×1/1.15) — Barracks = Pikeman, Man-at-Arms, Cateran, Gallowglass (Highland Archer is from the Archery Range). Landmark-dependent → manual.',
+    after: (ability: Ability) => ({
+      ...ability,
+      effects: [],
+      variations: ability.variations.map((v: AbilityVariation) => ({
+        ...v,
+        active: 'manual',
+        effects: [
+          { property: 'attackSpeed', select: { id: ['pikeman', 'man-at-arms', 'cateran', 'gallowglass'] }, effect: 'multiply', value: 1 / 1.15, type: 'ability' },
+        ],
+      })),
+    }),
   },
 
 ];
@@ -3936,6 +3989,85 @@ function createAkritoiDefense(age: 1 | 2 | 3 | 4, meleeAttack: number): Ability 
   } as Ability;
 }
 
+//_____________________
+//
+// VIKINGS / SCOTS  (patch 17.0)
+//
+//_____________________
+
+// Minimal synthetic manual ability (one variation, effects at top level only).
+function createManualAbility(o: { id: string; name: string; civ: string; age: number; icon: string; description: string; pbgid: number; effects: TechnologyEffect[] }): Ability {
+  return {
+    id: o.id,
+    name: o.name,
+    type: 'ability',
+    civs: [o.civ],
+    displayClasses: [], classes: [],
+    minAge: o.age, active: 'manual',
+    icon: o.icon,
+    description: o.description,
+    unique: true,
+    effects: o.effects,
+    variations: [{
+      id: `${o.id}-${o.age}`,
+      baseId: o.id,
+      type: 'ability',
+      name: o.name,
+      pbgid: o.pbgid,
+      attribName: o.id,
+      age: o.age, civs: [o.civ],
+      description: o.description,
+      classes: [], displayClasses: [], unique: true,
+      costs: { food: 0, wood: 0, stone: 0, gold: 0, vizier: 0, oliveoil: 0, total: 0, popcap: 0, time: 0 },
+      producedBy: [], effects: [],
+    }],
+    shared: {}
+  } as Ability;
+}
+
+// Game files (berserker_rage_vik): under 25% HP → weapon damage +40%, regen 3.5 HP/s for 10 s, 60 s cooldown.
+// The HP-threshold trigger is not modelled: toggling it = the Berserker fights its first 10 s enraged.
+const createBerserkergang = () => createManualAbility({
+  id: 'ability-berserkergang', name: 'Berserkergang', civ: 'vik', age: 1, pbgid: 999901,
+  icon: 'https://data.aoe4world.com/images/technologies/hamrammr-2.png',
+  description: 'When health is under 25% (50% with Hamrammr), weapon damage +40% and health regenerates 3.5/s for 10 seconds (60 s cooldown). Toggle = enraged during the first 10 s of the fight.',
+  effects: [
+    { property: 'meleeAttack', select: { id: ['berserker'] }, effect: 'multiply', value: 1.4, type: 'ability', duration: 10 },
+    { property: 'healingRatePerSecond', select: { id: ['berserker'] }, effect: 'change', value: 3.5, type: 'ability', duration: 10 },
+  ],
+});
+
+const createBondiShieldWall = () => createManualAbility({
+  id: 'ability-bondi-shield-wall', name: 'Shield Wall (Bondi)', civ: 'vik', age: 1, pbgid: 999902,
+  icon: 'https://data.aoe4world.com/images/units/bondi-1.png',
+  description: 'Bondi near at least one other Bondi form a shield wall: +10 health (not cumulative). Lost 15 s after being isolated.',
+  effects: [
+    { property: 'hitpoints', select: { id: ['bondi'] }, effect: 'change', value: 10, type: 'ability' },
+  ],
+});
+
+const createShieldMaidenNearBuildings = () => createManualAbility({
+  id: 'ability-shield-maiden-near-buildings', name: 'Near allied buildings', civ: 'vik', age: 1, pbgid: 999903,
+  icon: 'https://data.aoe4world.com/images/units/shield-maiden-2.png',
+  description: 'Shield Maidens have +2 damage and +25% move speed when near allied buildings.',
+  effects: [
+    { property: 'rangedAttack', select: { id: ['shield-maiden'] }, effect: 'change', value: 2, type: 'ability' },
+    { property: 'moveSpeed', select: { id: ['shield-maiden'] }, effect: 'multiply', value: 1.25, type: 'ability' },
+  ],
+});
+
+// building_landmark_age3_tower_of_skye_sco: "increases infantry damage by 15% while in Stealth Forests".
+const createTowerOfSkyeForest = () => createManualAbility({
+  id: 'ability-tower-of-skye-forest', name: 'Tower of Skye — Stealth Forest', civ: 'sco', age: 3, pbgid: 999904,
+  icon: 'https://data.aoe4world.com/images/technologies/fairys-protection-3.png',
+  description: 'With the Tower of Skye (Highland Castle Age landmark), infantry deal +15% damage while in Stealth Forests.',
+  effects: [
+    { property: 'meleeAttack', select: { class: [['infantry']] }, effect: 'multiply', value: 1.15, type: 'ability' },
+    { property: 'rangedAttack', select: { class: [['infantry']] }, effect: 'multiply', value: 1.15, type: 'ability' },
+    { property: 'bonusDamageMultiplier', select: { class: [['infantry']] }, effect: 'multiply', value: 1.15, type: 'ability' },
+  ],
+});
+
 export function applyAbilityPatches(abilities: Ability[]): Ability[] {
   // Add the created synthetic abilities
   const chargeAttackAbility = createChargeAttackAbility();
@@ -4000,6 +4132,10 @@ export function applyAbilityPatches(abilities: Ability[]): Ability[] {
     createElephantFormations(),
     createGrasslandInfluence(),
     createGoldenAgeTier5Ab(),
+    createBerserkergang(),
+    createBondiShieldWall(),
+    createShieldMaidenNearBuildings(),
+    createTowerOfSkyeForest(),
   ];
 
   return allAbilitiesMerged.map(ability => {

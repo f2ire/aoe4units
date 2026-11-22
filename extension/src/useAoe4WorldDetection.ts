@@ -28,6 +28,8 @@ const CIV_MAP: Record<string, string> = {
   order_of_the_dragon: "od", order_of_the_dragon_vlad: "od", dragon: "od",
   ottomans: "ot",
   rus: "ru",
+  scots: "sco",
+  vikings: "vik",
   sengoku_dynasty: "sen", sengoku: "sen", sengoku_daimyo: "sen",
   tughlaq_dynasty: "tug", tughlaq: "tug",
   zhu_xi_s_legacy: "zx", zhuxi: "zx",
