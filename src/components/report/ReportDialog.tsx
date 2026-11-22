@@ -117,7 +117,11 @@ export function ReportDialog({ context, trigger }: ReportDialogProps) {
 
   const n = entries.length;
   return (
-    <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o && view === "sent") resetAll(); }}>
+    <Dialog open={open} onOpenChange={o => {
+      setOpen(o);
+      if (o && context) setView("card"); // reopening from a unit card always starts on that unit
+      if (!o && view === "sent") resetAll();
+    }}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-h-[92dvh] w-[calc(100vw-1rem)] max-w-xl grid-cols-[minmax(0,1fr)] gap-0 overflow-y-auto overscroll-contain p-0">
         <DialogHeader className="sticky top-0 z-10 border-b border-border/40 bg-background/95 px-4 pb-3 pt-4 text-left backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6">

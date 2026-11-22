@@ -37,3 +37,6 @@ aoe4-overlay*.zip
 # Cloudflare Worker local secrets
 .dev.vars
 .wrangler/
+
+# Community reports downloaded from Discord
+public-report-fixes/
