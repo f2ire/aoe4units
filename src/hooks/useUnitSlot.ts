@@ -70,6 +70,25 @@ function applyCounterFlatHp(
   return result;
 }
 
+// Flat HP (change) from these abilities is added to the base BEFORE the tech HP multipliers,
+// like applyCounterFlatHp. In game: Jeanne's Elite Rider 205 + 300 (Strength of Heaven)
+// × 1.35 (Royal Bloodlines) × 1.2 (Companion Equipment) = 818.1 — not 205 × 1.62 + 300 = 632.1.
+const PRE_MULTIPLIER_FLAT_HP_ABILITY_IDS = new Set(['ability-strength-of-heaven']);
+
+const isFlatHpEffect = (e: any) => e.property === 'hitpoints' && e.effect === 'change'; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+// Splits ability variations into { pre: flat-HP effects to fold into the base, rest: everything else }.
+function splitPreMultiplierFlatHp<V extends { baseId?: string; effects?: any[] }>(variations: V[]): { pre: V[]; rest: V[] } { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const pre: V[] = [];
+  const rest: V[] = [];
+  for (const v of variations) {
+    if (!PRE_MULTIPLIER_FLAT_HP_ABILITY_IDS.has(v.baseId)) { rest.push(v); continue; }
+    pre.push({ ...v, effects: (v.effects || []).filter(isFlatHpEffect) });
+    rest.push({ ...v, effects: (v.effects || []).filter(e => !isFlatHpEffect(e)) });
+  }
+  return { pre, rest };
+}
+
 // Upgrade groups: ordered arrays where index 0 = tier 1, index 1 = tier 2, etc.
 // Only one ability in a group can be active at a time; clicking one deactivates the others.
 // Unlike WEAPON_SWAP_GROUPS, clicking the active ability deactivates it.
@@ -817,10 +836,13 @@ export function useUnitSlot(initialUnit?: AoE4Unit | null, initialCiv?: string) 
     // as a final multiplier rather than stacking additively with Ming Dynasty etc.
     const BASE_MODIFYING_ABILITY_IDS = new Set(['ability-astronomical-clocktower']);
     const baseAbilityVariations = abilityVariations.filter(v => BASE_MODIFYING_ABILITY_IDS.has(v.baseId));
-    const regularAbilityVariations = abilityVariations.filter(v => !BASE_MODIFYING_ABILITY_IDS.has(v.baseId));
+    const { pre: preFlatHpVariations, rest: regularAbilityVariations } = splitPreMultiplierFlatHp(
+      abilityVariations.filter(v => !BASE_MODIFYING_ABILITY_IDS.has(v.baseId)),
+    );
 
     const baseWithCounterHp = applyCounterFlatHp(baseStats, effectiveClasses, abilities, activeAbilities, abilityCounters, selectedCiv, unit?.id);
-    const withTechs = applyTechnologyEffects(baseWithCounterHp, effectiveClasses, techVariations, unit?.id, selectedCiv);
+    const baseWithFlatHp = applyTechnologyEffects(baseWithCounterHp, effectiveClasses, preFlatHpVariations, unit?.id, selectedCiv);
+    const withTechs = applyTechnologyEffects(baseWithFlatHp, effectiveClasses, techVariations, unit?.id, selectedCiv);
     const withAbilities = applyTechnologyEffects(withTechs, effectiveClasses, regularAbilityVariations, unit?.id, selectedCiv);
     let result = applyTechnologyEffects(withAbilities, effectiveClasses, baseAbilityVariations, unit?.id, selectedCiv);
 
@@ -975,9 +997,12 @@ export function useUnitSlot(initialUnit?: AoE4Unit | null, initialCiv?: string) 
       .map(v => ({ ...v, effects: (v.effects || []).filter((e: any) => !('duration' in e)) })); // eslint-disable-line @typescript-eslint/no-explicit-any
     const BASE_MODIFYING_ABILITY_IDS = new Set(['ability-astronomical-clocktower']);
     const baseAbilityVariations = abilityVariations.filter(v => BASE_MODIFYING_ABILITY_IDS.has(v.baseId));
-    const regularAbilityVariations = abilityVariations.filter(v => !BASE_MODIFYING_ABILITY_IDS.has(v.baseId));
+    const { pre: preFlatHpVariations, rest: regularAbilityVariations } = splitPreMultiplierFlatHp(
+      abilityVariations.filter(v => !BASE_MODIFYING_ABILITY_IDS.has(v.baseId)),
+    );
     const baseWithCounterHp = applyCounterFlatHp(baseStats, effectiveClasses, abilities, activeAbilities, abilityCounters, selectedCiv, unit?.id);
-    const withTechs = applyTechnologyEffects(baseWithCounterHp, effectiveClasses, techVariations, unit?.id, selectedCiv);
+    const baseWithFlatHp = applyTechnologyEffects(baseWithCounterHp, effectiveClasses, preFlatHpVariations, unit?.id, selectedCiv);
+    const withTechs = applyTechnologyEffects(baseWithFlatHp, effectiveClasses, techVariations, unit?.id, selectedCiv);
     const withAbilities = applyTechnologyEffects(withTechs, effectiveClasses, regularAbilityVariations, unit?.id, selectedCiv);
     let result = applyTechnologyEffects(withAbilities, effectiveClasses, baseAbilityVariations, unit?.id, selectedCiv);
     for (const interaction of techAbilityInteractions) {
